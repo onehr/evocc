@@ -1642,6 +1642,90 @@ int main(void) { return 0; }
 
 Use the replacement that the declaration names, or select a deployment target where the declaration is available.
 
+### E2963: unsupported-blocks
+
+The source uses Clang's Blocks extension, which EvoCC does not implement.
+A `^` in a declarator, such as `void (^handler)(int)`, or a block literal, such as `^{ ... }`, needs it.
+EvoCC compiles as Apple clang does with `-fno-blocks`, so `__BLOCKS__` is not defined and the SDK leaves out its block interfaces.
+
+Flags: --target=aarch64-apple-darwin
+
+```c
+typedef void (^handler_t)(int);
+int main(void) { return 0; }
+```
+
+```c
+typedef void (*handler_t)(void *context, int value);
+int main(void) { return 0; }
+```
+
+Pass a function pointer and a context pointer instead of a block.
+
+### E2964: unsupported-overloadable-attribute
+
+The source uses Clang's `overloadable` attribute, which EvoCC does not implement.
+With it, declarations of one name can differ in type, and Clang gives each one a mangled symbol name.
+EvoCC refuses the attribute rather than give the functions an ordinary C name.
+
+Flags: --target=aarch64-apple-darwin
+
+```c
+int twice(int x) __attribute__((overloadable));
+int main(void) { return 0; }
+```
+
+```c
+int twice_int(int x);
+int main(void) { return 0; }
+```
+
+Give each function its own name, or select the function with `_Generic`.
+
+### E2965: unsupported-os-log-builtin
+
+The source calls Clang's `__builtin_os_log_format` or `__builtin_os_log_format_buffer_size`, which EvoCC does not implement.
+The signpost macros of `<os/signpost.h>` call them to lay out the log buffer.
+`__has_builtin` reports them on Darwin, so that `<os/log.h>` compiles and only a call is refused.
+
+Flags: --target=aarch64-apple-darwin
+
+```c
+int main(void) { return (int)__builtin_os_log_format_buffer_size("%d", 1); }
+```
+
+Fix: none
+
+Write the message with the C library, such as `fprintf` or `syslog`, instead of the signpost macros.
+
+### E2966: unsupported-acle-builtin
+
+The source calls one of Clang's ACLE builtins of `<arm_acle.h>`, which EvoCC does not implement.
+They are the `__builtin_arm_` builtins and the intrinsics that `<arm_acle.h>` declares, such as `__dmb`.
+An intrinsic body that the unit does not keep is not refused, so the header compiles.
+
+Flags: --target=aarch64-apple-darwin
+
+```c
+#include <arm_acle.h>
+int main(void) { return __rbit(1u) == 0x80000000u ? 0 : 1; }
+```
+
+```c
+#include <stdint.h>
+static uint32_t reverse_bits(uint32_t x) {
+    uint32_t r = 0;
+    for (int i = 0; i < 32; i++) {
+        r = (r << 1) | (x & 1u);
+        x >>= 1;
+    }
+    return r;
+}
+int main(void) { return reverse_bits(1u) == 0x80000000u ? 0 : 1; }
+```
+
+Write the operation in C, or use inline assembly for the instruction.
+
 ## E3xxx
 
 ### E3001: read-of-uninitialized-object

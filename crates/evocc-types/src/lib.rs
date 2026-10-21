@@ -1980,6 +1980,7 @@ pub struct TargetDataLayout {
     long_long_masks: bool,
     bfloat16_constants: bool,
     mixed_half_composites: bool,
+    clang_extensions: bool,
 }
 
 impl TargetDataLayout {
@@ -1999,6 +2000,7 @@ impl TargetDataLayout {
             long_long_masks: false,
             bfloat16_constants: true,
             mixed_half_composites: true,
+            clang_extensions: false,
         }
     }
 
@@ -2022,7 +2024,17 @@ impl TargetDataLayout {
             long_long_masks: true,
             bfloat16_constants: false,
             mixed_half_composites: false,
+            clang_extensions: true,
         }
+    }
+
+    /// Whether the target's headers are written for Clang, so the front end
+    /// refuses Clang's extensions by name: Blocks, `overloadable`,
+    /// `__builtin_os_log_format` and the ACLE builtins (EvoIR 10.1.9 and
+    /// 10.1.14). GCC 14 on Linux has none of them.
+    #[must_use]
+    pub const fn names_clang_extensions(&self) -> bool {
+        self.clang_extensions
     }
 
     /// Whether complex multiplication and division call compiler-rt's

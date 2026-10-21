@@ -441,6 +441,59 @@ const PARENTHESIZED_EFFECT_ATTRIBUTES: [&str; 24] = [
     "no_stack_protector",
 ];
 
+/// The ACLE intrinsics that Clang's `<arm_acle.h>` declares as functions.
+const ACLE_FUNCTIONS: [&str; 8] = [
+    "__dmb", "__dsb", "__isb", "__wfi", "__wfe", "__sev", "__sevl", "__yield",
+];
+
+/// The type of each ACLE builtin that `<arm_acle.h>` and `<arm64/mte.h>`
+/// call, as Apple clang 21 types it: the result and the parameters. Clang
+/// types `ldrex` and `strex` by their operands; the entries take any pointer.
+/// A call of one is refused, so the type only keeps the unused header bodies
+/// well formed (EvoIR 10.1.14).
+const ACLE_BUILTINS: [(&str, &str, &[&str]); 40] = [
+    ("__builtin_arm_chkfeat", "u64", &["u64"]),
+    ("__builtin_arm_cls", "u32", &["u32"]),
+    ("__builtin_arm_cls64", "u32", &["u64"]),
+    ("__builtin_arm_clz", "u32", &["u32"]),
+    ("__builtin_arm_clz64", "u32", &["u64"]),
+    ("__builtin_arm_crc32b", "u32", &["u32", "u8"]),
+    ("__builtin_arm_crc32cb", "u32", &["u32", "u8"]),
+    ("__builtin_arm_crc32cd", "u32", &["u32", "u64"]),
+    ("__builtin_arm_crc32ch", "u32", &["u32", "u16"]),
+    ("__builtin_arm_crc32cw", "u32", &["u32", "u32"]),
+    ("__builtin_arm_crc32d", "u32", &["u32", "u64"]),
+    ("__builtin_arm_crc32h", "u32", &["u32", "u16"]),
+    ("__builtin_arm_crc32w", "u32", &["u32", "u32"]),
+    ("__builtin_arm_gcspopm", "u64", &["u64"]),
+    ("__builtin_arm_gcsss", "void*", &["void*"]),
+    ("__builtin_arm_gmi", "u64", &["void*", "u64"]),
+    ("__builtin_arm_irg", "void*", &["void*", "u64"]),
+    ("__builtin_arm_jcvt", "i32", &["f64"]),
+    ("__builtin_arm_ld64b", "void", &["const void*", "u64*"]),
+    ("__builtin_arm_ldg", "void*", &["void*"]),
+    ("__builtin_arm_ldrex", "u64", &["const volatile void*"]),
+    ("__builtin_arm_nop", "void", &[]),
+    ("__builtin_arm_rbit", "u32", &["u32"]),
+    ("__builtin_arm_rbit64", "u64", &["u64"]),
+    ("__builtin_arm_rint32x", "f64", &["f64"]),
+    ("__builtin_arm_rint32xf", "f32", &["f32"]),
+    ("__builtin_arm_rint32z", "f64", &["f64"]),
+    ("__builtin_arm_rint32zf", "f32", &["f32"]),
+    ("__builtin_arm_rint64x", "f64", &["f64"]),
+    ("__builtin_arm_rint64xf", "f32", &["f32"]),
+    ("__builtin_arm_rint64z", "f64", &["f64"]),
+    ("__builtin_arm_rint64zf", "f32", &["f32"]),
+    ("__builtin_arm_rndr", "i32", &["u64*"]),
+    ("__builtin_arm_rndrrs", "i32", &["u64*"]),
+    ("__builtin_arm_rsr64", "u64", &["const char*"]),
+    ("__builtin_arm_st64b", "void", &["void*", "const u64*"]),
+    ("__builtin_arm_st64bv", "u64", &["void*", "const u64*"]),
+    ("__builtin_arm_st64bv0", "u64", &["void*", "const u64*"]),
+    ("__builtin_arm_stg", "void", &["void*"]),
+    ("__builtin_arm_strex", "i32", &["u64", "volatile void*"]),
+];
+
 /// What kind of declaration settles a deferred list attribute.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Settlement {
@@ -626,6 +679,7 @@ struct ConventionRecords {
 fn convention_refusals(
     unit: &CHirUnit<'_>,
     records: ConventionRecords,
+    defer_internal_definitions: bool,
 ) -> (Vec<(&'static str, SourceSpan, usize)>, Vec<DeferredRefusal>) {
     let ConventionRecords {
         mut unsettled,
@@ -634,9 +688,13 @@ fn convention_refusals(
         uses,
     } = records;
     let mut marks = HashMap::<SymbolId, HashSet<&'static str>>::new();
+    let mut internal = HashSet::new();
     if !accepted.is_empty() {
         evocc_chir::inline::for_each_declaration(unit, |declaration| {
             if let CHirDecl::Function(function) = declaration {
+                if function.storage.base() == StorageClass::Static {
+                    internal.insert(function.symbol);
+                }
                 for attribute in &function.attributes {
                     if let Some((name, _)) = accepted
                         .contains(&span_key(attribute.span))
@@ -659,12 +717,28 @@ fn convention_refusals(
         .iter()
         .map(|(symbol, names)| (*symbol, (refusal(names, true), refusal(names, false))))
         .collect::<HashMap<_, _>>();
+    let mut deferred = Vec::new();
     for definition in definitions {
         if let Some((Some(message), _)) = functions.get(&definition.function) {
-            unsettled.push((message, definition.span, definition.preceding));
+            // On Darwin, Clang's resource headers define their intrinsics as
+            // internal functions with `target`. Such a definition is refused
+            // only when the unit keeps the function (EvoIR 10.1.9).
+            if defer_internal_definitions && internal.contains(&definition.function) {
+                deferred.push((
+                    evocc_chir::ProfileRefusal {
+                        function: definition.function,
+                        code: "E2952",
+                        message,
+                        span: definition.span,
+                    },
+                    definition.preceding,
+                    None,
+                ));
+            } else {
+                unsettled.push((message, definition.span, definition.preceding));
+            }
         }
     }
-    let mut deferred = Vec::new();
     for usage in uses {
         let Some((_, Some(message))) = functions.get(&usage.function) else {
             continue;
@@ -1249,7 +1323,11 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         }
         let mut inline_refusals =
             always_inline_returns_twice(&unit, &conventions.uses, self.diagnostics.len());
-        let (late_refusals, mut convention_uses) = convention_refusals(&unit, conventions);
+        let (late_refusals, mut convention_uses) = convention_refusals(
+            &unit,
+            conventions,
+            self.target_layout.names_clang_extensions(),
+        );
         unit.set_gnu_inline(self.gnu_inline);
         if self.lint_declarations {
             self.lint_findings.extend(evocc_chir::lints::check(
@@ -2806,7 +2884,17 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             )
             && self.peek_kind() == Some(TokenKind::LBrace)
         {
-            self.settle_convention_attributes(&attributes, Settlement::Definition);
+            // On Darwin an internal definition settles its list attributes
+            // like a prototype, and the definition is refused only when the
+            // unit keeps the function (EvoIR 10.1.9).
+            let settlement = if self.target_layout.names_clang_extensions()
+                && storage.base() == StorageClass::Static
+            {
+                Settlement::Prototype
+            } else {
+                Settlement::Definition
+            };
+            self.settle_convention_attributes(&attributes, settlement);
             let (mut parameters, parameter_scope, inherited_from_specifier) =
                 self.function_declaration_parameters(&declarator, &specifier, full_type)?;
             // An unspecified declaration can compose with a prototype, but
@@ -6241,18 +6329,38 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 // that function are checked when the unit is complete. Every
                 // other placement is refused here: a type, a typedef or an
                 // object must not hide an unsupported convention.
+                // Apple clang moves such an attribute after the `*` of a
+                // function's result type to the function, as Clang's
+                // `<arm_acle.h>` writes `void *__attribute__((target("gcs")))
+                // __gcsss(void *)`; the declaration settles it.
                 let declaration_position = matches!(
                     placement,
                     AttributePlacement::DeclarationSpecifiers
                         | AttributePlacement::BeforeDeclarator
                         | AttributePlacement::AfterDeclarator
                         | AttributePlacement::FunctionDefinition
-                );
+                ) || (placement
+                    == AttributePlacement::PointerDeclarator
+                    && self.target_layout.names_clang_extensions());
                 let mut convention = convention_attribute(&name)
                     .filter(|(attribute, _)| gnu_name && *attribute != "optimize");
                 let preceding = self.diagnostics.len();
                 if let Some((_, message)) = convention.filter(|_| !declaration_position) {
                     self.report("E2952", message, name_token.span);
+                }
+                // Clang's `overloadable` changes the symbol name and lets
+                // declarations of one name differ in type (EvoIR 10.1.9).
+                let clang_name = gnu_name
+                    || matches!(&syntax, AttributeSyntax::Brackets { namespace: Some(ns) } if matches!(ns.as_str(), "clang" | "_Clang"));
+                if clang_name
+                    && name == "overloadable"
+                    && self.target_layout.names_clang_extensions()
+                {
+                    self.report(
+                        "E2964",
+                        "unsupported-overloadable-attribute",
+                        name_token.span,
+                    );
                 }
                 if gnu_name && name == "scalar_storage_order" {
                     self.defer_profile_refusal(
@@ -9053,6 +9161,14 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             });
         }
 
+        if self.peek_kind() == Some(TokenKind::LParen)
+            && self.tokens.get(self.pos + 1).map(|token| token.kind) == Some(TokenKind::Caret)
+            && self.target_layout.names_clang_extensions()
+        {
+            self.advance();
+            self.refuse_block_caret();
+            return None;
+        }
         let grouped = self.peek_kind() == Some(TokenKind::LParen)
             && matches!(
                 self.tokens.get(self.pos + 1).map(|token| token.kind),
@@ -9180,10 +9296,33 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         }
     }
 
+    /// Clang's Blocks extension: `^` in a declarator or as a block literal
+    /// is `E2963` on a target whose headers are written for Clang. EvoCC
+    /// defines no `__BLOCKS__`, as Apple clang with `-fno-blocks`.
+    fn refuse_block_caret(&mut self) -> bool {
+        if self.target_layout.names_clang_extensions() && self.peek_kind() == Some(TokenKind::Caret)
+        {
+            // A declaration that is parsed again meets the same `^`.
+            let span = self.span();
+            if !self
+                .diagnostics
+                .iter()
+                .any(|earlier| earlier.code == "E2963" && earlier.span == span)
+            {
+                self.report("E2963", "unsupported-blocks", span);
+            }
+            return true;
+        }
+        false
+    }
+
     fn parse_declarator(
         &mut self,
         function_definition_possible: bool,
     ) -> Option<ParsedDeclarator<'arena>> {
+        if self.refuse_block_caret() {
+            return None;
+        }
         let mut pointers = Vec::new();
         let mut symbol_attributes = Vec::new();
         while self.peek_kind() == Some(TokenKind::Star) {
@@ -9195,12 +9334,17 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             // never its pointer type. Keep their written position/span, but put
             // them in the declaration inventory shared by linkage and attribute
             // queries. Other pointer attributes remain on the written pointer layer.
+            let darwin = self.target_layout.names_clang_extensions();
             let (linkage, attributes): (Vec<_>, Vec<_>) =
                 attributes.into_iter().partition(|attribute| {
                     matches!(
                         attribute.semantic_name(),
                         Some("weak" | "alias" | "section" | "used" | "retain")
-                    )
+                    ) || (darwin
+                        && attribute
+                            .semantic_name()
+                            .and_then(convention_attribute)
+                            .is_some())
                 });
             symbol_attributes.extend(linkage);
             let end = self
@@ -13141,6 +13285,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
 
     fn parse_unary(&mut self) -> Option<&'arena CHirExpr<'arena>> {
         self.parse_extension_prefix();
+        if self.refuse_block_caret() {
+            return None;
+        }
         if let Some(token) = self
             .tokens
             .get(self.pos)
@@ -13945,6 +14092,29 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 let reserved = reserved_builtin_spelling(resolved_spelling)
                     || (self.target_layout.provides_clang_atomic_builtins()
                         && resolved_spelling.starts_with("__c11_atomic_"));
+                let clang_extensions = self.target_layout.names_clang_extensions();
+                if resolved.is_none()
+                    && clang_extensions
+                    && self.peek_kind() == Some(TokenKind::LParen)
+                {
+                    // Clang's `__builtin_os_log_format` lays out the buffer
+                    // of `os_log`; EvoCC has no model of it (EvoIR 10.1.14).
+                    if matches!(
+                        resolved_spelling,
+                        "__builtin_os_log_format" | "__builtin_os_log_format_buffer_size"
+                    ) {
+                        self.report(
+                            "E2965",
+                            format!("unsupported-os-log-builtin: {spelling}"),
+                            tok.span,
+                        );
+                        return None;
+                    }
+                    // Clang's ACLE builtins of `<arm_acle.h>`.
+                    if resolved_spelling.starts_with("__builtin_arm_") {
+                        return self.parse_acle_builtin(tok);
+                    }
+                }
                 if resolved.is_none() && reserved && self.peek_kind() == Some(TokenKind::LParen) {
                     // An implicit declaration cannot supply a builtin. Name
                     // the builtin where it is spelled, before any lint about
@@ -13983,6 +14153,17 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 self.note_function_use(symbol, tok.span);
                 if let Some(reason) = self.symbol_unavailable(symbol) {
                     self.use_unavailable(resolved_spelling, &reason, tok.span);
+                }
+                // `<arm_acle.h>` declares these ACLE intrinsics, which Clang
+                // compiles to instructions; there is no library function.
+                if clang_extensions
+                    && ACLE_FUNCTIONS.contains(&resolved_spelling)
+                    && self
+                        .symbols
+                        .symbol(symbol)
+                        .is_ok_and(|entry| entry.kind() == SymbolKind::Function)
+                {
+                    self.defer_profile_refusal("E2966", "unsupported-acle-builtin", tok.span);
                 }
                 let facts = self.facts_for_symbol(symbol);
                 CHirExpr::Ident {
@@ -15549,6 +15730,116 @@ impl<'src, 'arena> Parser<'src, 'arena> {
 
     fn parse_builtin_strlen(&mut self, keyword: Token) -> Option<&'arena CHirExpr<'arena>> {
         self.parse_builtin_library_call(keyword)
+    }
+
+    /// One of the ACLE types of [`ACLE_BUILTINS`].
+    fn acle_type(&mut self, name: &str) -> TypeId {
+        let integer =
+            |parser: &mut Self, rank| parser.intern(TypeKind::Int(rank), Qualifiers::default());
+        let pointer = |parser: &mut Self, pointee: TypeId| {
+            parser.intern(TypeKind::Pointer(pointee), Qualifiers::default())
+        };
+        let qualified = |parser: &mut Self, kind, constant, volatile| {
+            parser.intern(
+                kind,
+                Qualifiers {
+                    is_const: constant,
+                    is_volatile: volatile,
+                    ..Qualifiers::default()
+                },
+            )
+        };
+        match name {
+            "u8" => integer(self, IntRank::UChar),
+            "u16" => integer(self, IntRank::UShort),
+            "u32" => integer(self, IntRank::UInt),
+            "i32" => integer(self, IntRank::Int),
+            "u64" => integer(self, IntRank::ULongLong),
+            "f32" => self.intern(TypeKind::Float(FloatKind::F32), Qualifiers::default()),
+            "f64" => self.intern(TypeKind::Float(FloatKind::F64), Qualifiers::default()),
+            "void" => self.intern(TypeKind::Void, Qualifiers::default()),
+            "void*" => {
+                let void = self.intern(TypeKind::Void, Qualifiers::default());
+                pointer(self, void)
+            }
+            "const void*" | "const volatile void*" | "volatile void*" => {
+                let void = qualified(
+                    self,
+                    TypeKind::Void,
+                    name.starts_with("const"),
+                    name.contains("volatile"),
+                );
+                pointer(self, void)
+            }
+            "u64*" => {
+                let element = integer(self, IntRank::ULongLong);
+                pointer(self, element)
+            }
+            "const u64*" => {
+                let element = qualified(self, TypeKind::Int(IntRank::ULongLong), true, false);
+                pointer(self, element)
+            }
+            "const char*" => {
+                let element = qualified(self, TypeKind::Int(IntRank::Char), true, false);
+                pointer(self, element)
+            }
+            _ => unreachable!("the ACLE table names known types"),
+        }
+    }
+
+    /// A call of a Clang ACLE builtin is `E2966`. Inside a function body the
+    /// refusal is deferred, so the unused intrinsics of `<arm_acle.h>` keep
+    /// their bodies; a builtin that the table does not type is refused at
+    /// once (EvoIR 10.1.14).
+    fn parse_acle_builtin(&mut self, keyword: Token) -> Option<&'arena CHirExpr<'arena>> {
+        let builtin = self.token_text(&keyword).to_owned();
+        let Some(&(_, result, parameters)) = ACLE_BUILTINS
+            .iter()
+            .find(|(name, _, _)| *name == builtin)
+            .filter(|_| self.function_owner().is_some())
+        else {
+            self.report(
+                "E2966",
+                format!("unsupported-acle-builtin: {builtin}"),
+                keyword.span,
+            );
+            return None;
+        };
+        self.defer_profile_refusal("E2966", "unsupported-acle-builtin", keyword.span);
+        self.advance();
+        let (arguments, pack) = self.parse_call_arguments()?;
+        let close = self.expect(TokenKind::RParen)?;
+        if pack.is_some() || arguments.len() != parameters.len() {
+            self.report("E2909", "builtin-arity", keyword.span);
+            return None;
+        }
+        let span = self.merge_span(keyword.span, close.span);
+        let return_ty = self.acle_type(result);
+        let parameter_types = parameters
+            .iter()
+            .map(|name| self.acle_type(name))
+            .collect::<Vec<_>>();
+        self.validate_builtin_argument_types(&arguments, &parameter_types)?;
+        let function_ty = self.intern(
+            TypeKind::Function {
+                return_type: return_ty,
+                parameters: FunctionParameters::Prototype {
+                    types: parameter_types,
+                    variadic: false,
+                },
+            },
+            Qualifiers::default(),
+        );
+        let symbol =
+            self.resolve_builtin_library_function(&builtin, function_ty, return_ty, keyword.span)?;
+        let facts = self.facts_for_symbol(symbol);
+        let callee = self.alloc_node(CHirExpr::Ident {
+            symbol,
+            spelling: builtin,
+            facts,
+            span: keyword.span,
+        });
+        Some(self.alloc_node(CHirExpr::Call(callee, arguments, span)))
     }
 
     fn parse_builtin_library_call(&mut self, keyword: Token) -> Option<&'arena CHirExpr<'arena>> {

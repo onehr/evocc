@@ -36,6 +36,13 @@ const FEATURES: [&str; 10] = [
     "attribute_availability_swift",
 ];
 
+/// The os_log builtins that `__has_builtin` answers 1 for, as Apple clang
+/// does, although each call is refused.
+const OS_LOG_BUILTINS: [&str; 2] = [
+    "__builtin_os_log_format",
+    "__builtin_os_log_format_buffer_size",
+];
+
 /// Turn the Linux profile of `pp` into the Darwin profile for the macOS
 /// deployment target `deployment`.
 pub(crate) fn apply_predefined_profile(
@@ -61,6 +68,10 @@ pub(crate) fn apply_predefined_profile(
     }
     // The SDK's <stdatomic.h> is Clang's, which calls these builtins.
     pp.add_target_builtins(evocc_parser::builtins::CLANG_ATOMICS.iter().copied());
+    // <os/log.h> requires the os_log builtins; each call of one is a named
+    // refusal, E2965, so a unit that includes the header still compiles
+    // (EvoIR 10.1.14).
+    pp.add_target_builtins(OS_LOG_BUILTINS);
     // The SDK marks declarations with Clang's availability attribute only
     // when the compiler reports it (EvoIR 10.1.9).
     pp.add_target_attributes(ATTRIBUTES);

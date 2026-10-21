@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 2.26.0** | **Pinned ground truth** | availability attributes on 2026-10-21
+**Revision 2.27.0** | **Pinned ground truth** | Clang extension refusals on 2026-10-21
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract of the parser, the C lowering, equality saturation,
@@ -2852,6 +2852,10 @@ for them. Codes `E4xxx` belong to EvoMIR (`spec/evomir.md`).
 | `E2960` | `unmodeled-complex-constant` | front end |
 | `E2961` | `mixed-half-formats` | front end |
 | `E2962` | `unavailable-declaration` | front end |
+| `E2963` | `unsupported-blocks` | front end |
+| `E2964` | `unsupported-overloadable-attribute` | front end |
+| `E2965` | `unsupported-os-log-builtin` | front end |
+| `E2966` | `unsupported-acle-builtin` | front end |
 | `E3001` | `read-of-uninitialized-object` | runtime |
 | `E3002` | `integer-division-by-zero` | runtime |
 | `E3003` | `integer-remainder-by-zero` | runtime |
@@ -5192,6 +5196,33 @@ preserved without effect, as GCC 14 has none of them.
   of the SDK's `strchrnul`, introduced in macOS 15.4, is a weak reference, and
   `strchrnul != NULL` is tested at run time, as with Apple clang.
 
+**Clang extensions.** On `aarch64-apple-darwin` the SDK and Clang's resource
+headers use Clang extensions that EvoCC does not implement. Each is a named
+refusal at its first use; none is approximated. Linux keeps the diagnostics of
+GCC 14's dialect, which has none of them.
+
+- Blocks: a `^` that begins a declarator, an abstract declarator in a type
+  name, or a unary operand, such as `void (^handler)(int)` or `^{ ... }`, is
+  `E2963` (`unsupported-blocks`) at the `^`. EvoCC defines no `__BLOCKS__`, so
+  it compiles the SDK as Apple clang does with `-fno-blocks`, and it refuses
+  at the positions where that compiler refuses. A header that needs a type
+  that the SDK declares only with `__BLOCKS__`, such as `os_block_t`, stops
+  at the unknown name, as with `-fno-blocks`.
+- `overloadable`: the attribute, in the GNU spelling or as
+  `[[clang::overloadable]]`, is `E2964` (`unsupported-overloadable-attribute`)
+  at its name, in every position. Clang lets declarations of one name differ
+  in type and gives each a mangled symbol name, so no ordinary function can
+  stand in for one.
+- A list attribute of the convention rule above after the `*` of a function
+  declarator's result type belongs to the function, as Apple clang moves it
+  there, and its declaration settles it; an object or a type name with one
+  keeps `E2952`. Clang's `<arm_acle.h>` writes
+  `void *__attribute__((target("gcs"))) __gcsss(void *)`.
+- The definition of an internal function with such an attribute is refused
+  only when the unit keeps the function, as a use in a body is: Clang's
+  resource headers define their intrinsics as `static __inline__` functions
+  with `target`, and a unit that does not call one compiles.
+
 **Scalar storage order.** `scalar_storage_order`, with or without surrounding
 underscores, is `E2940` (`unsupported-scalar-storage-order`); it is never
 preserved as an ignored attribute.
@@ -5239,7 +5270,9 @@ member and a statement. A function that any declaration marks is checked
 when the unit is complete, in any declaration order:
 
 - Each definition is `E2952`, at the attribute when the definition carries
-  it and at the defined name otherwise. `returns_twice` is the exception.
+  it and at the defined name otherwise. `returns_twice` is the exception, and
+  on Darwin an internal definition that the unit drops is not refused (Clang
+  extensions, below).
 - Each use of the function's designator is `E2952`: a call, an address or
   any other operand, evaluated or not. A call through a pointer cannot be
   checked, so a call is not the only use that counts. A use outside a
@@ -5462,6 +5495,10 @@ compound literals, and a front end must not emit it.
 | `E2960` | a translation-time product or quotient of floating complex values on a target whose complex helpers have no model, Darwin in this revision (3.13.5, 10.1.14) |
 | `E2961` | an arithmetic, relational, equality or conditional operator, or a compound assignment, with a `_Float16` operand and a `__bf16` operand (3.13.6) |
 | `E2962` | a use of a declaration that is unavailable for the macOS deployment target, outside an unavailable context (10.1.9) |
+| `E2963` | on Darwin, a `^` that begins a declarator or a unary operand: Clang's Blocks (10.1.9) |
+| `E2964` | on Darwin, the attribute `overloadable` (10.1.9) |
+| `E2965` | on Darwin, a call of `__builtin_os_log_format` or `__builtin_os_log_format_buffer_size` (10.1.14) |
+| `E2966` | on Darwin, a call of a Clang ACLE builtin or a use of an ACLE intrinsic that `<arm_acle.h>` declares (10.1.14) |
 
 #### 10.1.10 `typeof` and `_Generic`
 
@@ -6205,6 +6242,25 @@ and at every warning level, `-w` included. On `aarch64-apple-darwin`, whose
 supply a compiler builtin, so such a call is never an external call. For an
 identifier from a macro expansion, the location is the macro use, as for every
 expanded token.
+
+**Clang builtins without a model.** On `aarch64-apple-darwin`:
+
+- A call of `__builtin_os_log_format` or `__builtin_os_log_format_buffer_size`
+  is `E2965` (`unsupported-os-log-builtin`) at the builtin. `__has_builtin`
+  answers 1 for both, as Apple clang does, because `<os/log.h>` stops at an
+  `#error` without them; the header compiles and its other declarations are
+  usable. Example: `os_signpost_event_emit` calls them and is refused at the
+  macro use.
+- A call of a `__builtin_arm_` builtin is `E2966` (`unsupported-acle-builtin`)
+  at the builtin, and so is a use of `__dmb`, `__dsb`, `__isb`, `__wfi`,
+  `__wfe`, `__sev`, `__sevl` or `__yield`, which `<arm_acle.h>` declares as
+  functions and Clang compiles to instructions. In a function body the
+  refusal is deferred, so a body that the unit drops is not refused; such a
+  call of a builtin that `<arm_acle.h>` or `<arm64/mte.h>` calls takes the
+  type that Apple clang 21 gives it. Any other one is refused at once. The
+  target predefines `__ARM_ACLE` as `202420` and `__ARM_ACLE_VERSION` as
+  Apple clang does, and none of the `__ARM_FEATURE_` macros of the optional
+  instructions, so `<arm_acle.h>` and `<arm64/mte.h>` compile.
 
 **Integer complex.** GNU integer `_Complex T` has two adjacent components of
 integer type `T`, real then imaginary. Arithmetic works per component at
@@ -7609,7 +7665,9 @@ header name; anything else is `E0106` (`feature-query-malformed`).
   intrinsic answers `1` when it lowers to a target operation and its
   prototype needs no tuple type of the `arm_neon.h` pragma.
   `crates/evocc-parser/tests/builtin_inventory.rs` checks the list against
-  the front end in both directions.
+  the front end in both directions. On `aarch64-apple-darwin` the answer is
+  also 1 for the fourteen `__c11_atomic_*` builtins of 10.1.21 and for the two
+  os_log builtins, whose calls are `E2965` (10.1.14).
 - `__has_feature(name)`: `name` with a surrounding `__` pair stripped. The
   answer is `0` for every name, as in GCC 14, except on Darwin.
 - On `aarch64-apple-darwin`, `__has_attribute` answers `1` for
@@ -8740,6 +8798,16 @@ to the signature spelling.
 ---
 
 ## Revision
+
+**Revision 2.27.0, 2026-10-21.** Sections 10.1.9 and 10.1.14 refuse the Clang
+extensions of Apple's SDK by name on Darwin, at their first use: Blocks are the
+new `E2963`, `overloadable` the new `E2964`, the os_log builtins the new
+`E2965`, and the ACLE builtins and intrinsics of `<arm_acle.h>` the new
+`E2966`. `__has_builtin` answers 1 for the two os_log builtins, and the
+target predefines `__ARM_ACLE`. On Darwin, a list attribute after the `*` of a
+function's result type belongs to the function, and the definition of an
+internal function with one is refused only when the unit keeps it. Linux does
+not change. No grammar production, registry or Lean rule domain changes.
 
 **Revision 2.26.0, 2026-10-21.** Section 10.1.9 gives Clang's `availability`,
 `unavailable` and `weak_import` attributes the meaning of Apple clang on

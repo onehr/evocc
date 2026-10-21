@@ -44,6 +44,12 @@
 #define __CLANG_ATOMIC_LLONG_LOCK_FREE 2
 #define __CLANG_ATOMIC_POINTER_LOCK_FREE 2
 
+/* Clang's <arm_acle.h> requires the ACLE macros. Each ACLE builtin is a
+ * named refusal at its use, and none of the __ARM_FEATURE_ macros of the
+ * optional instructions is defined. */
+#define __ARM_ACLE 202420
+#define __ARM_ACLE_VERSION(year,quarter,patch) (100 * (year) + 10 * (quarter) + (patch))
+
 /* The 64-bit integer types are long long. */
 #undef __INT64_TYPE__
 #define __INT64_TYPE__ long long int

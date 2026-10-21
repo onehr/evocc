@@ -78,6 +78,10 @@ E2959	Use a `float`, `double` or `long double` complex argument.
 E2960	Write the value of the product or quotient, or compute it at run time.
 E2961	Convert one operand to the format of the other, or convert both operands to `float`.
 E2962	Use the replacement API, or select a deployment target where the declaration is available.
+E2963	Pass a function pointer and a context pointer instead of a block.
+E2964	Give each function its own name, or select the function with `_Generic`.
+E2965	Write the message with the C library instead of the os_log builtins.
+E2966	Write the operation in C, or use inline assembly for the instruction.
 E3001	Initialize the object on every path before reading it.
 E3002	Check the divisor and choose the required error behavior before dividing.
 E3003	Handle zero separately before evaluating `%`.
