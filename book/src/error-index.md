@@ -1574,6 +1574,31 @@ int main(void) { return product == -5.0 + 10.0i ? 0 : 1; }
 
 Write the value of the product or quotient, or compute it at run time.
 
+### E2961: mixed-half-formats
+
+An operator has a `_Float16` operand and a `__bf16` operand.
+The two half formats have no common real type, because neither value set contains the other.
+
+Binary16 has more significand bits, and bfloat16 has a larger exponent range.
+C23 H.4.2 leaves such a mixture undefined, and the reference compilers do not agree on it.
+Convert one operand to the format of the other, or convert both operands to `float`.
+
+```c
+int main(void) {
+    _Float16 a = 1;
+    __bf16 b = 2;
+    return a + b > 2;
+}
+```
+
+```c
+int main(void) {
+    _Float16 a = 1;
+    __bf16 b = 2;
+    return (float)a + (float)b > 2;
+}
+```
+
 ## E3xxx
 
 ### E3001: read-of-uninitialized-object
@@ -2083,7 +2108,7 @@ Each anonymous argument must be passed and retrieved using its real ABI classifi
 EvoCC refuses unsupported forms instead of assigning them an unrelated scalar layout.
 
 ```c
-struct S { __fp16 half; int tag; };
+struct S { _Float32 value; int tag; };
 int take(int n, ...) {
     __builtin_va_list ap;
     __builtin_va_start(ap, n);
@@ -2375,6 +2400,8 @@ Support for `float`, `double` and `long double` does not imply support for `_Flo
 
 Arguments and results must keep their actual representation and calling convention.
 EvoCC refuses an unsupported interface instead of substituting another type.
+An HFA of `__bf16` members is refused too: GCC 14 passes it in general registers, and AAPCS64 uses vector registers.
+On Darwin, a record that mixes `__bf16` and `_Float16` members is refused, because Apple clang passes it in vector registers.
 
 ```c
 _Float32 identity(_Float32 value) { return value; }

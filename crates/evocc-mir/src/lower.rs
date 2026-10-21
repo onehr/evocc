@@ -361,6 +361,8 @@ fn class_of(ty: &EvoIRType) -> Result<RegClass, (&'static str, &'static str)> {
             _ => Err(E4003),
         },
         EvoIRType::Ptr(_) | EvoIRType::FnPtr { .. } => Ok(RegClass::Gpr64),
+        // Section 2.6: a half value is its representation bits.
+        EvoIRType::F16 | EvoIRType::BF16 => Ok(RegClass::Gpr32),
         EvoIRType::F32 => Ok(RegClass::Simd32),
         EvoIRType::F64 => Ok(RegClass::Simd64),
         EvoIRType::F128 => Ok(RegClass::Simd128),
@@ -492,8 +494,12 @@ fn narrow_apple_result(
     dst
 }
 
+/// The SIMD bytes an argument of type `ty` takes. A half value travels in
+/// the low two bytes of a vector register (AAPCS64 C.1), through the `s`
+/// view of a `simd32` transport register (Section 6.3).
 fn simd_argument_bytes(ty: &EvoIRType) -> Option<u64> {
     match ty {
+        EvoIRType::F16 | EvoIRType::BF16 => Some(2),
         EvoIRType::F32 => Some(4),
         EvoIRType::F64 => Some(8),
         EvoIRType::F128 => Some(16),
@@ -503,7 +509,7 @@ fn simd_argument_bytes(ty: &EvoIRType) -> Option<u64> {
 
 fn simd_class(bytes: u64) -> RegClass {
     match bytes {
-        4 => RegClass::Simd32,
+        2 | 4 => RegClass::Simd32,
         8 => RegClass::Simd64,
         16 => RegClass::Simd128,
         _ => unreachable!("validated SIMD size"),
@@ -511,6 +517,7 @@ fn simd_class(bytes: u64) -> RegClass {
 }
 fn simd_load(bytes: u64) -> LoadKind {
     match bytes {
+        2 => LoadKind::Hv,
         4 => LoadKind::S,
         8 => LoadKind::D,
         16 => LoadKind::Q,
@@ -519,11 +526,19 @@ fn simd_load(bytes: u64) -> LoadKind {
 }
 fn simd_store(bytes: u64) -> StoreKind {
     match bytes {
+        2 => StoreKind::Hv,
         4 => StoreKind::S,
         8 => StoreKind::D,
         16 => StoreKind::Q,
         _ => unreachable!("validated SIMD size"),
     }
+}
+
+/// Whether a record is a binary16 HFA, whose members are two bytes.
+fn half_aggregate(shape: RecordShape) -> bool {
+    shape
+        .floating
+        .is_some_and(|f| f.kind == evocc_types::FloatKind::F16)
 }
 
 /// An HFA is packed as an object on the stack, not one eight-byte slot per
@@ -546,6 +561,7 @@ fn simd_argument_pieces(shape: RecordShape, stack: bool) -> Vec<(u64, u64)> {
 fn significant_bits(ty: &EvoIRType) -> u16 {
     match ty {
         EvoIRType::Bits(width) => *width,
+        EvoIRType::F16 | EvoIRType::BF16 => 16,
         EvoIRType::F32 => 32,
         EvoIRType::F128 => 128,
         EvoIRType::Vec { .. } => vector_bytes(ty).map_or(64, |bytes| bytes as u16 * 8),
@@ -773,6 +789,28 @@ fn scan_inst(
     index: usize,
     report: &mut impl FnMut((&'static str, &'static str), u32, usize, String),
 ) {
+    // Section 2.6: a half value converts from an integer of at most 32 bits.
+    // C lowering reduces a wider integer first (EvoIR 3.13.6).
+    let half_floating = match inst {
+        Inst::Floating(operation) => Some(operation),
+        Inst::StrictFloating(operation) => Some(&operation.instruction),
+        _ => None,
+    };
+    if let Some(operation) = half_floating {
+        if matches!(
+            operation.op,
+            evocc_evoir::FloatingOp::FromSigned | evocc_evoir::FloatingOp::FromUnsigned
+        ) && evocc_evoir::is_half_type(&operation.result.ty)
+            && significant_bits(&operation.arguments[0].ty) > 32
+        {
+            report(
+                E4009,
+                block,
+                index,
+                "a half value converts from an integer of at most 32 bits".into(),
+            );
+        }
+    }
     if target != Target::Linux {
         if inst_results(inst)
             .into_iter()
@@ -1107,6 +1145,8 @@ fn unsupported_access(ty: &EvoIRType) -> Option<String> {
         EvoIRType::Vec { .. } if matches!(vector_bytes(ty), Some(1 | 2 | 4 | 8 | 16)) => None,
         EvoIRType::Ptr(_)
         | EvoIRType::FnPtr { .. }
+        | EvoIRType::F16
+        | EvoIRType::BF16
         | EvoIRType::F32
         | EvoIRType::F64
         | EvoIRType::F128 => None,
@@ -2191,6 +2231,14 @@ fn lower_block(
             args.push(high);
             continue;
         }
+        if entry && evocc_evoir::is_half_type(&arg.value.ty) {
+            // Section 6.3: a half parameter arrives in a transport register.
+            let transport = lowerer.fresh(RegClass::Simd32);
+            args.push(transport);
+            let half = half_from_transport(lowerer, &mut prologue, transport);
+            lowerer.bind(&arg.value, half);
+            continue;
+        }
         let class = class_of(&arg.value.ty).map_err(|(code, _)| code.to_owned())?;
         let reg = lowerer.fresh(class);
         lowerer.bind(&arg.value, reg);
@@ -3273,6 +3321,10 @@ fn lower_terminator(
                 {
                     results[slot] = widen_apple_result(lowerer, insts, results[slot], shape);
                 }
+                // Section 6.3: a half result leaves in a transport register.
+                if evocc_evoir::is_half_type(&value.ty) {
+                    results[slot] = half_to_transport(lowerer, insts, results[slot]);
+                }
                 slot += 1;
             }
             // Section 6 (revision 0.18): "An `sret` result of at most 16
@@ -3878,6 +3930,7 @@ fn lower_inst(
                 call_arguments(lowerer, insts, args, &marks, &plan, external(callee))?;
             let mut outputs = call_results(lowerer, results)?;
             let narrowed = apple_call_results(lowerer, &mut outputs, results);
+            let halves = half_call_results(lowerer, &mut outputs, results);
             let after = call_record_result(lowerer, &mut outputs, returned);
             if plan.indirect_result {
                 insts.push(MInst::IndirectResult);
@@ -3890,6 +3943,7 @@ fn lower_inst(
                 returns_twice: *returns_twice,
             });
             insts.extend(narrowed);
+            insts.extend(halves);
             insts.extend(after);
         }
         Inst::IndirectCall {
@@ -3933,6 +3987,7 @@ fn lower_inst(
             )?;
             let mut outputs = call_results(lowerer, results)?;
             let narrowed = apple_call_results(lowerer, &mut outputs, results);
+            let halves = half_call_results(lowerer, &mut outputs, results);
             let after = call_record_result(lowerer, &mut outputs, returned);
             if plan.indirect_result {
                 insts.push(MInst::IndirectResult);
@@ -3943,6 +3998,7 @@ fn lower_inst(
                 results: outputs,
             });
             insts.extend(narrowed);
+            insts.extend(halves);
             insts.extend(after);
         }
         // --- the undefined-behaviour predicates of Section 5 ----------------
@@ -4203,6 +4259,58 @@ fn call_args(
     Ok(registers)
 }
 
+/// Section 6.3: a half value crosses a call in the `h` view of a vector
+/// register. Its `gpr32` representation moves to a `simd32` transport
+/// register, whose bits above the half are unspecified, as AAPCS64 C.1
+/// permits.
+fn half_to_transport(lowerer: &mut Lowerer, insts: &mut Vec<MInst>, value: VReg) -> VReg {
+    let transport = lowerer.fresh(RegClass::Simd32);
+    insts.push(MInst::Floating {
+        strict: false,
+        integer_bits: 0,
+        dst: transport,
+        op: evocc_evoir::FloatingOp::FromBits,
+        kind: evocc_types::FloatKind::F32,
+        args: vec![value],
+    });
+    transport
+}
+
+/// The `gpr32` representation of a half value that arrived in a transport
+/// register; its bits above the half stay unspecified.
+fn half_from_transport(lowerer: &mut Lowerer, insts: &mut Vec<MInst>, transport: VReg) -> VReg {
+    let value = lowerer.fresh(RegClass::Gpr32);
+    insts.push(MInst::Floating {
+        strict: false,
+        integer_bits: 0,
+        dst: value,
+        op: evocc_evoir::FloatingOp::ToBits,
+        kind: evocc_types::FloatKind::F32,
+        args: vec![transport],
+    });
+    value
+}
+
+/// Section 6.3: a call reads a half result from the transport register.
+fn half_call_results(lowerer: &mut Lowerer, outputs: &mut [VReg], results: &[Value]) -> Vec<MInst> {
+    let mut after = Vec::new();
+    let mut slot = 0;
+    for value in results.iter().filter(|value| is_register_type(&value.ty)) {
+        if is_pair(&value.ty) {
+            slot += 2;
+            continue;
+        }
+        if evocc_evoir::is_half_type(&value.ty) {
+            let transport = lowerer.fresh(RegClass::Simd32);
+            outputs[slot] = transport;
+            let half = half_from_transport(lowerer, &mut after, transport);
+            lowerer.bind(value, half);
+        }
+        slot += 1;
+    }
+    after
+}
+
 /// Section 6.2: under the Apple convention a call reads a tiny-vector result
 /// from `v0` and narrows its widened lanes after the call.
 fn apple_call_results(
@@ -4382,6 +4490,7 @@ fn lower_atomic_copy(
 
 fn load_kind(ty: &EvoIRType) -> Result<LoadKind, String> {
     Ok(match ty {
+        EvoIRType::F16 | EvoIRType::BF16 => LoadKind::H,
         EvoIRType::F32 => LoadKind::S,
         EvoIRType::F64 => LoadKind::D,
         EvoIRType::F128 => LoadKind::Q,
@@ -4408,6 +4517,7 @@ fn load_kind(ty: &EvoIRType) -> Result<LoadKind, String> {
 
 fn store_kind(ty: &EvoIRType) -> Result<StoreKind, String> {
     Ok(match ty {
+        EvoIRType::F16 | EvoIRType::BF16 => StoreKind::H,
         EvoIRType::F32 => StoreKind::S,
         EvoIRType::F64 => StoreKind::D,
         EvoIRType::F128 => StoreKind::Q,
@@ -4450,6 +4560,14 @@ fn lower_floating(
         .any(|v| v.ty == EvoIRType::F128)
     {
         return quad::lower(lowerer, insts, operation, strict);
+    }
+    if operation
+        .arguments
+        .iter()
+        .chain(std::iter::once(result))
+        .any(|v| evocc_evoir::is_half_type(&v.ty))
+    {
+        return lower_half(lowerer, insts, operation, strict);
     }
     let kind = operation
         .arguments
@@ -4649,6 +4767,112 @@ fn lower_floating(
     }
     lowerer.bind(result, dst);
     Ok(())
+}
+
+/// A floating operation with a half value (Section 2.6). A constant is its
+/// bits in a `gpr32`, and a representation move renames that register. A
+/// conversion between the two half formats passes through the exact
+/// binary32 value. An integer source of at most 32 bits is extended first.
+fn lower_half(
+    lowerer: &mut Lowerer,
+    insts: &mut Vec<MInst>,
+    operation: &evocc_evoir::FloatingInst,
+    strict: bool,
+) -> Result<(), String> {
+    use evocc_evoir::FloatingOp::*;
+    let result = &operation.result;
+    let half = |ty: &EvoIRType| evocc_evoir::floating_kind(ty).filter(|kind| kind.is_half());
+    match operation.op {
+        Constant(bits) => {
+            let dst = lowerer.fresh(RegClass::Gpr32);
+            insts.push(MInst::MovImm {
+                dst,
+                imm: bits as u64,
+            });
+            lowerer.bind(result, dst);
+        }
+        ToBits | FromBits => {
+            let input = lowerer.reg(&operation.arguments[0])?;
+            lowerer.bind(result, input);
+        }
+        Convert => {
+            let source = &operation.arguments[0];
+            let input = lowerer.reg(source)?;
+            let dst = match (half(&source.ty), half(&result.ty)) {
+                (Some(from), Some(to)) if from == to => input,
+                (Some(from), Some(to)) => {
+                    let wide = half_convert(
+                        lowerer,
+                        insts,
+                        Convert,
+                        from,
+                        input,
+                        RegClass::Simd32,
+                        strict,
+                    );
+                    half_convert(lowerer, insts, Convert, to, wide, RegClass::Gpr32, strict)
+                }
+                (Some(from), None) => {
+                    let class = class_of(&result.ty).map_err(|(code, _)| code.to_owned())?;
+                    half_convert(lowerer, insts, Convert, from, input, class, strict)
+                }
+                (None, Some(to)) => {
+                    half_convert(lowerer, insts, Convert, to, input, RegClass::Gpr32, strict)
+                }
+                (None, None) => unreachable!("a half operand or result"),
+            };
+            lowerer.bind(result, dst);
+        }
+        FromSigned | FromUnsigned => {
+            let source = &operation.arguments[0];
+            let bits = significant_bits(&source.ty);
+            if bits > 32 {
+                return Err("a half value converts from an integer of at most 32 bits".into());
+            }
+            let input = lowerer.reg(source)?;
+            let input = if operation.op == FromSigned {
+                lowerer.sign_extend(insts, input, bits, Width::W)
+            } else {
+                lowerer.zero_extend(insts, input, bits, Width::W)
+            };
+            let to = half(&result.ty).ok_or("a half result")?;
+            let dst = half_convert(
+                lowerer,
+                insts,
+                operation.op,
+                to,
+                input,
+                RegClass::Gpr32,
+                strict,
+            );
+            lowerer.bind(result, dst);
+        }
+        _ => return Err("a half format admits only conversions".into()),
+    }
+    Ok(())
+}
+
+/// One machine half conversion: `kind` is the half format, and `class` is
+/// the class of the result.
+fn half_convert(
+    lowerer: &mut Lowerer,
+    insts: &mut Vec<MInst>,
+    op: evocc_evoir::FloatingOp,
+    kind: evocc_types::FloatKind,
+    input: VReg,
+    class: RegClass,
+    strict: bool,
+) -> VReg {
+    let dst = lowerer.fresh(class);
+    insts.push(MInst::Floating {
+        strict,
+        integer_bits: 0,
+        dst,
+        op,
+        kind,
+        args: vec![input],
+    });
+    dst
 }
 
 /// The parts of a complex product or quotient (EvoIR 3.13.5) call the
@@ -5767,9 +5991,12 @@ fn variadic_slot(ty: &EvoIRType) -> Option<(u64, u64)> {
         return Some((bytes.max(8), bytes));
     }
     match ty {
-        EvoIRType::Ptr(_) | EvoIRType::FnPtr { .. } | EvoIRType::F32 | EvoIRType::F64 => {
-            Some((8, 8))
-        }
+        EvoIRType::Ptr(_)
+        | EvoIRType::FnPtr { .. }
+        | EvoIRType::F16
+        | EvoIRType::BF16
+        | EvoIRType::F32
+        | EvoIRType::F64 => Some((8, 8)),
         EvoIRType::Bits(128) | EvoIRType::F128 => Some((16, 16)),
         EvoIRType::Bits(width) if *width <= 64 => Some((8, 8)),
         _ => None,
@@ -6806,6 +7033,10 @@ fn apple_pieces(
             vec![piece(0, 8, RegClass::Gpr64), piece(8, 8, RegClass::Gpr64)],
             16,
         )),
+        // A half value or a binary16 HFA has no Apple stack placement in this
+        // revision (Section 6.3).
+        Passing::Value if evocc_evoir::is_half_type(ty) => None,
+        Passing::Vectors { shape, .. } if half_aggregate(*shape) => None,
         Passing::Value => {
             if let Some(bytes) = simd_argument_bytes(ty) {
                 if bytes == 16 && !matches!(ty, EvoIRType::Vec { .. }) {
@@ -7090,6 +7321,13 @@ fn record_plan(
             ParamMark::ByVal(shape) if shape.simd_members().is_some() => {
                 let count = usize::from(shape.simd_members().unwrap().0);
                 let stack = next_vector + count > vectors;
+                // Section 6.3: a binary16 HFA has no stack placement in this
+                // revision.
+                if stack && half_aggregate(*shape) {
+                    refused.get_or_insert_with(|| {
+                        format!("argument {position}, a binary16 HFA, has no stack placement")
+                    });
+                }
                 let mut skipped = if next_vector < vectors && next_vector + count > vectors {
                     vectors - next_vector
                 } else {
@@ -7775,6 +8013,11 @@ fn call_arguments(
                             == Some(&ParamMark::SignExtend);
                         narrow.push((registers.len(), bits, signed));
                     }
+                }
+                if evocc_evoir::is_half_type(&value.ty) {
+                    let half = lowerer.reg(value)?;
+                    registers.push(half_to_transport(lowerer, insts, half));
+                    continue;
                 }
                 registers.extend(lowerer.registers(value)?);
             }

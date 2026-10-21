@@ -94,8 +94,9 @@ pub(super) fn execute(
         ],
         EvoIRType::Bits(_) => vec![MirValue::Int(result.value as u64)],
         ty => {
+            // A half result is the low two bytes of an `s` view.
             let bytes = match ty {
-                EvoIRType::F32 => 4,
+                EvoIRType::F16 | EvoIRType::BF16 | EvoIRType::F32 => 4,
                 EvoIRType::F64 => 8,
                 _ => 16,
             };

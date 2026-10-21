@@ -835,6 +835,7 @@ fn array_dimensions(
 fn float_name(kind: FloatKind) -> &'static str {
     match kind {
         FloatKind::F16 => "__fp16",
+        FloatKind::BF16 => "__bf16",
         FloatKind::F32 => "float",
         FloatKind::F64 => "double",
         FloatKind::F128 => "long double",

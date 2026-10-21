@@ -6,10 +6,32 @@ use evocc_types::FloatKind;
 
 pub(super) fn ir_type(kind: FloatKind) -> Option<EvoIRType> {
     match kind {
+        FloatKind::F16 => Some(EvoIRType::F16),
+        FloatKind::BF16 => Some(EvoIRType::BF16),
         FloatKind::F32 => Some(EvoIRType::F32),
         FloatKind::F64 => Some(EvoIRType::F64),
         FloatKind::F128 => Some(EvoIRType::F128),
+    }
+}
+
+/// The storage format of a half type: `_Float16`, `__fp16` or `__bf16`.
+pub(super) fn half_format(types: &TypeInterner, ty: TypeId) -> Option<FloatKind> {
+    match types.get(ty)?.kind {
+        TypeKind::TargetBuiltin(builtin) => builtin.half_format(),
         _ => None,
+    }
+}
+
+/// The value format of a scalar floating type: the target's format of a
+/// standard floating type, or the storage format of a half type.
+pub(super) fn scalar_format(
+    types: &TypeInterner,
+    target: &TargetDataLayout,
+    ty: TypeId,
+) -> Option<FloatKind> {
+    match types.get(ty)?.kind {
+        TypeKind::Float(kind) => Some(target.float_format(kind)),
+        _ => half_format(types, ty),
     }
 }
 
@@ -338,11 +360,8 @@ impl<'a> FunctionLowerer<'a> {
         span: SourceSpan,
         state: &mut State,
     ) -> Result<ExprValue, LowerError> {
-        let kind = self.target.float_format(match literal.suffix {
-            evocc_chir::FloatSuffix::F => FloatKind::F32,
-            evocc_chir::FloatSuffix::None => FloatKind::F64,
-            evocc_chir::FloatSuffix::L => FloatKind::F128,
-        });
+        // A half constant's value is binary32 (C23 H.3).
+        let kind = self.target.float_format(literal.suffix.value_kind());
         let raw = match literal.value {
             evocc_chir::FloatConstant::Real(value) => value
                 .target_convert(kind)
@@ -378,6 +397,9 @@ impl<'a> FunctionLowerer<'a> {
         if value.value.ty == ty {
             return Ok(value);
         }
+        if kind.is_half() || evocc_evoir::is_half_type(&value.value.ty) {
+            return self.cast_half(value, kind, state);
+        }
         let op = if floating_kind(&value.value.ty).is_some() {
             FloatingOp::Convert
         } else if value.integer.is_signed() && value.value.ty != EvoIRType::Bits(1) {
@@ -388,12 +410,243 @@ impl<'a> FunctionLowerer<'a> {
         self.floating_instruction(op, vec![value.value], ty, state)
     }
 
+    /// A conversion with a half format on one side rounds once (EvoIR
+    /// 3.13.6). A half value reaches the other half format and binary128
+    /// through its exact binary32 value. An integer of more than 32 bits
+    /// reaches binary16 saturated to 32 bits: every value beyond that range
+    /// overflows binary16 in every rounding direction, as GCC 14 converts
+    /// it. It reaches bfloat16 through its round-to-odd value of 24
+    /// significant bits, which binary32 holds exactly, so the final rounding
+    /// is the only one.
+    fn cast_half(
+        &mut self,
+        value: ExprValue,
+        kind: FloatKind,
+        state: &mut State,
+    ) -> Result<ExprValue, LowerError> {
+        let ty = ir_type(kind).expect("a format has an IR type");
+        if let Some(source) = floating_kind(&value.value.ty) {
+            if source.is_half() && (kind.is_half() || kind == FloatKind::F128) {
+                let wide = self.floating_instruction(
+                    FloatingOp::Convert,
+                    vec![value.value],
+                    EvoIRType::F32,
+                    state,
+                )?;
+                return self.cast_floating(wide, kind, state);
+            }
+            return self.floating_instruction(FloatingOp::Convert, vec![value.value], ty, state);
+        }
+        let EvoIRType::Bits(width) = value.value.ty else {
+            return Err(LowerError::FloatingValue {
+                span: self.info.span,
+            });
+        };
+        let signed = value.integer.is_signed() && width != 1;
+        let op = if signed {
+            FloatingOp::FromSigned
+        } else {
+            FloatingOp::FromUnsigned
+        };
+        if width <= 32 {
+            return self.floating_instruction(op, vec![value.value], ty, state);
+        }
+        let wide = EvoIRType::Bits(width);
+        let constant = |this: &mut Self, state: &State, raw: u128| {
+            let result = this.fresh_value(wide.clone());
+            this.emit(state, Inst::Const(result.clone(), raw as u64))?;
+            if raw >> 64 == 0 {
+                return Ok::<_, LowerError>(result);
+            }
+            let high = this.fresh_value(wide.clone());
+            this.emit(state, Inst::Const(high.clone(), (raw >> 64) as u64))?;
+            let amount = this.fresh_value(wide.clone());
+            this.emit(state, Inst::Const(amount.clone(), 64))?;
+            let shifted = this.emit_raw_binary(state, Inst::Shl, &high, &amount)?;
+            this.emit_raw_binary(state, Inst::Or, &result, &shifted)
+        };
+        let all = u128::MAX >> (128 - width);
+        let x = value.value;
+        if kind == FloatKind::F16 {
+            let y = if signed {
+                let max = constant(self, state, 0x7fff_ffff)?;
+                let min = constant(self, state, all & !0x7fff_ffff)?;
+                let over = self.checked_compare(state, CmpOp::SLt, &max, &x)?;
+                let under = self.checked_compare(state, CmpOp::SLt, &x, &min)?;
+                let low = self.select_bits(state, &under, &min, &x)?;
+                self.select_bits(state, &over, &max, &low)?
+            } else {
+                let max = constant(self, state, 0xffff_ffff)?;
+                let over = self.checked_compare(state, CmpOp::ULt, &max, &x)?;
+                self.select_bits(state, &over, &max, &x)?
+            };
+            let narrow = self.fresh_value(EvoIRType::Bits(32));
+            self.emit(state, Inst::Trunc(narrow.clone(), y, EvoIRType::Bits(32)))?;
+            return self.floating_instruction(op, vec![narrow], ty, state);
+        }
+        // The magnitude, as an unsigned value of the same width.
+        let zero = constant(self, state, 0)?;
+        let negative = if signed {
+            Some(self.checked_compare(state, CmpOp::SLt, &x, &zero)?)
+        } else {
+            None
+        };
+        let magnitude = match &negative {
+            Some(negative) => {
+                let negated = self.emit_raw_binary(state, Inst::Sub, &zero, &x)?;
+                self.select_bits(state, negative, &negated, &x)?
+            }
+            None => x,
+        };
+        // The 24 leading bits with the discarded bits ORed into the last
+        // of them, as an integer below 2^24 and its scale 2^shift.
+        let leading = self.leading_zeros(&magnitude, state)?;
+        let limit = constant(self, state, u128::from(width) - 24)?;
+        let long = self.checked_compare(state, CmpOp::ULt, &leading, &limit)?;
+        let excess = self.emit_raw_binary(state, Inst::Sub, &limit, &leading)?;
+        let shift = self.select_bits(state, &long, &excess, &zero)?;
+        let one = constant(self, state, 1)?;
+        let unit = self.emit_raw_binary(state, Inst::Shl, &one, &shift)?;
+        let mask = self.emit_raw_binary(state, Inst::Sub, &unit, &one)?;
+        let low = self.emit_raw_binary(state, Inst::And, &magnitude, &mask)?;
+        let sticky = self.checked_compare(state, CmpOp::Ne, &low, &zero)?;
+        let sticky_value = self.fresh_value(wide.clone());
+        self.emit(
+            state,
+            Inst::ZExt(sticky_value.clone(), sticky, wide.clone()),
+        )?;
+        let kept = self.emit_raw_binary(state, Inst::LShr, &magnitude, &shift)?;
+        let odd = self.emit_raw_binary(state, Inst::Or, &kept, &sticky_value)?;
+        let narrow = self.fresh_value(EvoIRType::Bits(32));
+        self.emit(state, Inst::Trunc(narrow.clone(), odd, EvoIRType::Bits(32)))?;
+        let digits = self.floating_instruction(
+            FloatingOp::FromUnsigned,
+            vec![narrow],
+            EvoIRType::F32,
+            state,
+        )?;
+        // 2^shift is a binary32 normal number, as shift is at most 104, and
+        // the product is exact: it stays below 2^128.
+        let shift32 = self.fresh_value(EvoIRType::Bits(32));
+        self.emit(
+            state,
+            Inst::Trunc(shift32.clone(), shift, EvoIRType::Bits(32)),
+        )?;
+        let bias = self.fresh_value(EvoIRType::Bits(32));
+        self.emit(state, Inst::Const(bias.clone(), 127))?;
+        let exponent = self.emit_raw_binary(state, Inst::Add, &shift32, &bias)?;
+        let position = self.fresh_value(EvoIRType::Bits(32));
+        self.emit(state, Inst::Const(position.clone(), 23))?;
+        let scale_bits = self.emit_raw_binary(state, Inst::Shl, &exponent, &position)?;
+        let scale = self.floating_instruction(
+            FloatingOp::FromBits,
+            vec![scale_bits],
+            EvoIRType::F32,
+            state,
+        )?;
+        let mut single = self.floating_instruction(
+            FloatingOp::Mul,
+            vec![digits.value, scale.value],
+            EvoIRType::F32,
+            state,
+        )?;
+        if let Some(negative) = negative {
+            // Set the sign bit by its representation: an exact operation.
+            let raw = self
+                .floating_instruction(
+                    FloatingOp::ToBits,
+                    vec![single.value],
+                    EvoIRType::Bits(32),
+                    state,
+                )?
+                .value;
+            let sign = self.fresh_value(EvoIRType::Bits(32));
+            self.emit(
+                state,
+                Inst::ZExt(sign.clone(), negative, EvoIRType::Bits(32)),
+            )?;
+            let amount = self.fresh_value(EvoIRType::Bits(32));
+            self.emit(state, Inst::Const(amount.clone(), 31))?;
+            let sign = self.emit_raw_binary(state, Inst::Shl, &sign, &amount)?;
+            let signed_raw = self.emit_raw_binary(state, Inst::Or, &raw, &sign)?;
+            single = self.floating_instruction(
+                FloatingOp::FromBits,
+                vec![signed_raw],
+                EvoIRType::F32,
+                state,
+            )?;
+        }
+        self.floating_instruction(FloatingOp::Convert, vec![single.value], ty, state)
+    }
+
+    /// The leading zero count of an unsigned value of 64 or 128 bits, in
+    /// its own width. A 128-bit value counts its two halves, as EvoMIR has
+    /// no 128-bit `ctlz`.
+    fn leading_zeros(&mut self, value: &Value, state: &mut State) -> Result<Value, LowerError> {
+        let EvoIRType::Bits(width) = value.ty else {
+            unreachable!("an integer magnitude");
+        };
+        let count = |this: &mut Self, state: &State, operand: Value| {
+            let result = this.fresh_value(operand.ty.clone());
+            this.emit(
+                state,
+                Inst::BitOperation {
+                    result: result.clone(),
+                    operand,
+                    op: evocc_evoir::BitOp::LeadingZeros,
+                },
+            )?;
+            Ok::<_, LowerError>(result)
+        };
+        if width <= 64 {
+            return count(self, state, value.clone());
+        }
+        let half = EvoIRType::Bits(64);
+        let wide = EvoIRType::Bits(width);
+        let amount = self.fresh_value(wide.clone());
+        self.emit(state, Inst::Const(amount.clone(), 64))?;
+        let shifted = self.emit_raw_binary(state, Inst::LShr, value, &amount)?;
+        let high = self.fresh_value(half.clone());
+        self.emit(state, Inst::Trunc(high.clone(), shifted, half.clone()))?;
+        let low = self.fresh_value(half.clone());
+        self.emit(state, Inst::Trunc(low.clone(), value.clone(), half.clone()))?;
+        let high_count = count(self, state, high.clone())?;
+        let low_count = count(self, state, low)?;
+        let sixty_four = self.fresh_value(half.clone());
+        self.emit(state, Inst::Const(sixty_four.clone(), 64))?;
+        let low_total = self.emit_raw_binary(state, Inst::Add, &low_count, &sixty_four)?;
+        let zero = self.fresh_value(half.clone());
+        self.emit(state, Inst::Const(zero.clone(), 0))?;
+        let empty = self.checked_compare(state, CmpOp::Eq, &high, &zero)?;
+        let selected = self.select_bits(state, &empty, &low_total, &high_count)?;
+        let result = self.fresh_value(wide.clone());
+        self.emit(state, Inst::ZExt(result.clone(), selected, wide))?;
+        Ok(result)
+    }
+
+    /// A half operand of an operation converts to binary32 first. The
+    /// conversion is exact, except that it quiets a signaling NaN.
+    pub(super) fn widen_half(
+        &mut self,
+        value: ExprValue,
+        state: &mut State,
+    ) -> Result<ExprValue, LowerError> {
+        if evocc_evoir::is_half_type(&value.value.ty) {
+            self.cast_floating(value, FloatKind::F32, state)
+        } else {
+            Ok(value)
+        }
+    }
+
     pub(super) fn floating_to_integer(
         &mut self,
         value: ExprValue,
         target: CIntegerType,
         state: &mut State,
     ) -> Result<ExprValue, LowerError> {
+        // A half value truncates through its exact binary32 value, as GCC
+        // 14 converts it (FCVT, then FCVTZS or FCVTZU).
+        let value = self.widen_half(value, state)?;
         let guard = self.floating_instruction(
             FloatingOp::ToIntDefined {
                 width: u16::from(target.bits()),
@@ -430,6 +683,7 @@ impl<'a> FunctionLowerer<'a> {
         if operator == UnaryOp::Plus {
             return Ok(operand);
         }
+        let operand = self.widen_half(operand, state)?;
         self.floating_instruction(
             FloatingOp::Neg,
             vec![operand.value.clone()],
@@ -568,6 +822,7 @@ impl<'a> FunctionLowerer<'a> {
         value: ExprValue,
         state: &mut State,
     ) -> Result<Value, LowerError> {
+        let value = self.widen_half(value, state)?;
         let zero = self.floating_instruction(
             FloatingOp::Constant(0),
             vec![],
@@ -585,6 +840,9 @@ impl<'a> FunctionLowerer<'a> {
         operator: UpdateOp,
         state: &mut State,
     ) -> Result<ExprValue, LowerError> {
+        // A half object updates in binary32 and rounds once to its format.
+        let stored = floating_kind(&value.value.ty).unwrap();
+        let value = self.widen_half(value, state)?;
         let kind = floating_kind(&value.value.ty).unwrap();
         let one = self.floating_instruction(
             FloatingOp::Constant(FloatBits::from_unsigned(kind, 1).bits()),
@@ -592,7 +850,7 @@ impl<'a> FunctionLowerer<'a> {
             value.value.ty.clone(),
             state,
         )?;
-        self.floating_binary(
+        let updated = self.floating_binary(
             if matches!(operator, UpdateOp::PreIncrement | UpdateOp::PostIncrement) {
                 BinaryOp::Add
             } else {
@@ -601,6 +859,7 @@ impl<'a> FunctionLowerer<'a> {
             value,
             one,
             state,
-        )
+        )?;
+        self.cast_floating(updated, stored, state)
     }
 }

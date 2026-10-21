@@ -326,6 +326,8 @@ pub fn render_pre_fenv_module(module: &Module) -> Result<String, String> {
 fn render_type(ty: &EvoIRType) -> String {
     match ty {
         EvoIRType::Bits(width) => format!("bits<{width}>"),
+        EvoIRType::F16 => "f16".to_owned(),
+        EvoIRType::BF16 => "bf16".to_owned(),
         EvoIRType::F32 => "f32".to_owned(),
         EvoIRType::F64 => "f64".to_owned(),
         EvoIRType::F128 => "f128".to_owned(),
@@ -527,12 +529,11 @@ impl FunctionRenderer {
                         render_value(&operation.result),
                         render_type(&operation.result.ty),
                         bits,
-                        width = if operation.result.ty == EvoIRType::F32 {
-                            8
-                        } else if operation.result.ty == EvoIRType::F128 {
-                            32
-                        } else {
-                            16
+                        width = match operation.result.ty {
+                            EvoIRType::F16 | EvoIRType::BF16 => 4,
+                            EvoIRType::F32 => 8,
+                            EvoIRType::F128 => 32,
+                            _ => 16,
                         }
                     )
                 } else {
@@ -1126,12 +1127,12 @@ fn render_mark(mark: ParamMark) -> String {
                 extra = format!(
                     ", hfa={}x{}",
                     f.count,
-                    if f.kind == evocc_types::FloatKind::F32 {
-                        "f32"
-                    } else if f.kind == evocc_types::FloatKind::F128 {
-                        "f128"
-                    } else {
-                        "f64"
+                    match f.kind {
+                        evocc_types::FloatKind::F16 => "f16",
+                        evocc_types::FloatKind::BF16 => "bf16",
+                        evocc_types::FloatKind::F32 => "f32",
+                        evocc_types::FloatKind::F64 => "f64",
+                        evocc_types::FloatKind::F128 => "f128",
                     }
                 );
                 if f.abi_align != 8 {
@@ -1360,6 +1361,8 @@ mod tests {
     fn every_type_and_instruction_variant_has_exact_section_9_text() {
         let type_cases = [
             (EvoIRType::Bits(17), "bits<17>"),
+            (EvoIRType::F16, "f16"),
+            (EvoIRType::BF16, "bf16"),
             (EvoIRType::F32, "f32"),
             (EvoIRType::F64, "f64"),
             (EvoIRType::Ptr(AddressSpace::Generic), "ptr<generic>"),

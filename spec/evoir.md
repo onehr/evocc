@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 2.21.0** | **Pinned ground truth** | floating vector execution on 2026-10-21
+**Revision 2.22.0** | **Pinned ground truth** | half formats on 2026-10-21
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract of the parser, the C lowering, equality saturation,
@@ -69,6 +69,7 @@ Every EvoIR value has a statically known type drawn from the following grammar:
 ```text
 Type ::=
     bits<N>          -- unsigned bit-vector of width N (arbitrary positive integer)
+  | f16 | bf16      -- the half storage formats binary16 and bfloat16 (3.13.6)
   | f32 | f64 | f128 -- IEEE 754 binary32, binary64 and binary128
   | ptr<AS>          -- typed pointer in address space AS
   | mem<R>           -- memory snapshot for region R
@@ -216,6 +217,7 @@ return values from calls. A `tuple<>` (empty tuple) is equivalent to `void`.
 | Type | Well-formedness condition |
 |---|---|
 | `bits<N>` | `N > 0` |
+| `f16`, `bf16` | always well-formed |
 | `f32` | always well-formed |
 | `f64` | always well-formed |
 | `f128` | always well-formed |
@@ -1519,7 +1521,7 @@ it ineligible as a region root or witness, so no rewrite can reach it.
 | Field | Description |
 |---|---|
 | `%ap` | A `ptr<AS>` to a **list object**, the lowering of one `__builtin_va_list` (10.1.5): 32 bytes on Linux, 8 on Darwin, alignment 8 on both targets (10.5). |
-| `Type` | For `va_arg`: one of `bits<32>`, `bits<64>`, `bits<128>`, `f64`, `f128`, `ptr<AS>`, `fnptr<Sig>` or a vector `vec<L, bits<N>>`, `vec<L, f32>` or `vec<L, f64>`, the promoted types of Section 3.10. |
+| `Type` | For `va_arg`: one of `bits<32>`, `bits<64>`, `bits<128>`, `f16`, `bf16`, `f64`, `f128`, `ptr<AS>`, `fnptr<Sig>` or a vector `vec<L, bits<N>>`, `vec<L, f32>` or `vec<L, f64>`, the promoted types of Section 3.10. A half format has no default argument promotion (C23 6.5.2.2), so it is one of them (3.13.6). |
 
 **Semantics.** A variadic function receives, besides its listed parameters,
 the sequence of anonymous arguments its caller passed. `va_start` makes the
@@ -1582,6 +1584,8 @@ Same-format transport, constants, copies and loads/stores preserve every bit;
 NaN is not poison, and numerical equality does not identify object representations.
 
 ```text
+%v = const.f16 0x3c00
+%v = const.bf16 0x3f80
 %v = const.f32 0x3f800000
 %v = const.f64 0x3ff0000000000000
 %v = const.f128 0x3fff0000000000000000000000000000
@@ -1589,7 +1593,7 @@ NaN is not poison, and numerical equality does not identify object representatio
 %v = fp.OP %a : T
 ```
 
-Constants have exactly 8/16/32 lowercase hexadecimal digits. Binary `add/sub/mul/div`
+Constants have exactly 4/4/8/16/32 lowercase hexadecimal digits. Binary `add/sub/mul/div`
 require matching FP operands/results; `oeq/une/olt/ole/ogt/oge` require matching FP
 operands and return `bits<1>` (only `une` is true for unordered operands).
 Unary `neg` preserves the format; `convert` changes admitted scalar format; `from_signed`
@@ -1599,7 +1603,9 @@ operation is total with zero for nonrepresentable input, but C lowering must
 first emit `fp.to_int_defined.sN/uN %a : bits<1>` and
 `ub.assume.floating_to_integer`, reporting **E3063** on false, including NaN
 and infinity. `to_bits/from_bits` are exact representation conversions between
-f32/bits<32>, f64/bits<64> or f128/bits<128>, not numerical casts.
+f16/bits<16>, bf16/bits<16>, f32/bits<32>, f64/bits<64> or f128/bits<128>, not
+numerical casts. The half formats admit only constants, conversions and these
+representation moves (3.13.6).
 
 These baseline operations are pure and excluded from P0 roots/witnesses; all
 operands still obey local SSA, initializedness, text/proof reconstruction and
@@ -1618,11 +1624,12 @@ the corresponding `__STDC_IEC_*` and `__FP_FAST_FMA*` macros are absent and
 list of Section 10.5.
 `-fexcess-precision=standard` explicitly selects this existing source-format
 evaluation contract: each operation, assignment and cast rounds to its semantic
-format, with no hidden excess-precision carrier. It changes neither the
-selected rounding/environment policy nor contraction, and repetition is
-idempotent. It does not authorize `-ffast-math`, `-fexcess-precision=fast/16`,
-half formats or any other unsupported profile. This is equivalent option
-admission under `FLT_EVAL_METHOD=0`, not a new numerical rule.
+format, with no hidden excess-precision carrier; an operation on half operands
+evaluates in binary32, as `FLT_EVAL_METHOD` 0 requires (3.13.6). It changes
+neither the selected rounding/environment policy nor contraction, and
+repetition is idempotent. It does not authorize `-ffast-math`,
+`-fexcess-precision=fast/16` or any other unsupported profile. This is
+equivalent option admission under `FLT_EVAL_METHOD=0`, not a new numerical rule.
 For f32/f64/f128, `__builtin_isnan/isinf/isinf_sign/isfinite/isnormal/signbit` inspect
 the exact representation; truth results are 0/1 except `isinf_sign`, which
 returns -1/0/1. `fabs/fabsf/fabsl` clear the sign bit, and `copysign/copysignf/copysignl` copy it
@@ -1653,8 +1660,8 @@ empty hexadecimal digits, an embedded NUL, a malformed string or a dynamic
 operand is not folded and follows the ordinary `nanf`/`nan`/`nanl` call
 boundary (`E2208` where a static constant is required).
 
-HFA records of one to four equal f32/f64/f128 members carry `hfa=Cxf32/f64/f128` in
-byval/sret marks, distinct from `hva`; the same shape survives `va_arg.byval`
+HFA records of one to four equal f16/f32/f64/f128 members carry
+`hfa=Cxf16/f32/f64/f128` in byval/sret marks, distinct from `hva`; the same shape survives `va_arg.byval`
 attributes. Classification is recursive over completed layout: array elements
 count individually and a union counts its largest member; size must equal
 member count times the base size, and alignment-induced padding uses the
@@ -1859,9 +1866,9 @@ modes, before-rounding tininess and five sticky flags use the shared adapter.
 Quad HFA members use the existing homogeneous classifier and require ABI
 alignment 16. Native quad operations may use audited hosted runtime helpers
 behind EvoMIR; helper names are not EvoIR semantics. Other targets and
-freestanding helper availability fail closed. No `_Float128` value, binary16,
-binary128 vector lane, traps, contraction or Annex F claim is implied; 3.13.5
-gives the binary128 complex parts. All FP is excluded from P0.
+freestanding helper availability fail closed. No `_Float128` value, binary128
+vector lane, traps, contraction or Annex F claim is implied; 3.13.5 gives the
+binary128 complex parts and 3.13.6 the half formats. All FP is excluded from P0.
 
 #### 3.13.5 Complex multiplication and division
 
@@ -1923,6 +1930,93 @@ The pure parts are baseline operations: they are pure and excluded from P0,
 as 3.13 states. The strict forms have the `fp.strict.*` row of Section 4.
 Validation rejects a part with another operand count, with formats that
 differ, or with a format other than f32, f64 or f128.
+
+#### 3.13.6 Half formats
+
+The 2026-10-13 decision on L03 admits two storage formats on both targets:
+`f16`, IEEE binary16, and `bf16`, bfloat16, which has the binary32 exponent
+and eight significand bits. `_Float16` and `__fp16` values are `f16` values,
+and `__bf16` values are `bf16` values. The three C types stay distinct types
+of size 2 and alignment 2.
+
+A half value is an exact 16-bit representation. Constants, copies, loads,
+stores, block arguments and `to_bits`/`from_bits` with `bits<16>` preserve
+every bit, a signaling NaN included. The only numeric operations on a half
+format are `convert`, `from_signed` and `from_unsigned`, and their strict
+forms. `convert` admits each pair of formats. Each conversion rounds once,
+directly from the operand value; it quiets a NaN and keeps its sign and its
+leading payload bits. A widening is exact and raises INVALID only for a
+signaling NaN. A value beyond the range of the format overflows as IEEE 754
+defines, to infinity in the nearest direction, and a tiny inexact result
+underflows with tininess detected before rounding. No other operation
+accepts `f16` or `bf16`; validation rejects one that does.
+
+C operations on half operands follow `FLT_EVAL_METHOD` 0 (C23 H.3), as GCC 14
+evaluates them on Armv8-A without the half-precision arithmetic extension:
+
+- Each operand of `+`, `-`, `*`, `/`, a relational or equality operator,
+  unary `-`, `!`, a truth test, `++` and `--` converts to binary32, and the
+  operation evaluates in binary32 under the rules of 3.13. An integer operand
+  of such an operation converts directly to binary32. Unary `+` converts
+  nothing.
+- `_Float16` and `__bf16` expressions keep their type: `sizeof (x + x)` is 2.
+  Both types rank below `float` in the usual arithmetic conversions. The
+  binary32 value of an operation is the value of the expression; it rounds to
+  the half format once, at assignment, initialization, a cast, `return`, a
+  prototyped argument, an anonymous argument, the store of a compound
+  assignment or of `++` and `--`, and the value of a statement expression.
+  A conditional of a half type evaluates in binary32: its value is the
+  binary32 value of the selected operand, and an integer operand converts to
+  binary32 directly. A comma expression keeps the binary32 value of its right
+  operand.
+- An `__fp16` operand promotes to `float` before every operator, as ACLE
+  requires, so its expressions have type `float`; an anonymous `__fp16`
+  argument promotes to `double`.
+- A constant with the suffix `f16` or `F16` has the type `_Float16`, and on
+  Linux one with `bf16` or `BF16` has the type `__bf16`, as GCC 14 accepts
+  it. Each rounds once to binary32; a conversion to the half format rounds
+  that value again, as GCC 14 does. Apple clang rejects the bfloat16 suffix,
+  so on Darwin a constant with it is `E0112` (`stray-token`). The `__FLT16_*`
+  macros are predefined on both targets and the `__BFLT16_*` macros on Linux
+  only, as the two reference compilers predefine them.
+- Operands of `_Float16` and `__bf16` together have no common type. Neither
+  value set contains the other (C23 H.4.2), and the front end reports `E2961`
+  (`mixed-half-formats`) at the operator.
+- A conversion from a half value to an integer truncates its exact binary32
+  value; the `E3063` obligation of 3.13 applies.
+
+Translation-time evaluation follows the same rules: a half constant and an
+operation round to binary32, and a static object of a half type rounds that
+value once. A half value converts from an integer of 64 or 128 bits as the C
+lowering writes it: binary16 from the value saturated to 32 bits, since every
+larger magnitude overflows binary16 in every rounding direction; bfloat16
+from the round-to-odd value of 24 significant bits, which binary32 holds
+exactly, so the final rounding is the only one.
+
+A half value crosses a call in the low 16 bits of a vector register, which
+AAPCS64 C.1 leaves otherwise unspecified, and in an 8-byte stack slot on
+Linux (EvoMIR 6.3). A record of one to four binary16 members is an HFA
+(`hfa=Cxf16`). A record of one to four `__bf16` members is an HFA under
+AAPCS64, but GCC 14 passes it in general registers (GCC PR 120007), so it is
+`E3049` at every call boundary, in both interpreters and in native code.
+AAPCS64 gives binary16 and bfloat16 two fundamental types, so a record that
+mixes them is no HFA. On Linux it passes as an ordinary composite, as GCC 14
+passes it; Clang 19 passes it in vector registers, a recorded
+incompatibility. Apple clang passes it in vector registers too, so on Darwin
+such a record is `E3049` at every call boundary. An anonymous `_Float16` or
+`__bf16` argument stays unpromoted and `va_arg` reads it as written, as GCC
+14 and Clang 19 do on Linux. On Darwin, Apple clang has no stable convention
+for an anonymous `_Float16` or `__bf16` argument or an anonymous binary16
+HFA, so these arguments and their `va_arg` are `E3049`. A binary16 HFA on the
+stack, and a half argument on the Darwin stack, are `E4010` (EvoMIR 6.3).
+
+Retained refusals: a `vector_size` attribute on a half format (`E2903`), the
+nominal `arm_neon.h` half vector types (`E3050`, 10.1.14), half complex
+values (`E2202` or `E2102` for `_Float16 _Complex`, `E1007` for the other two,
+10.1.14), half `asm` operands (`E3021`), the classification and comparison
+builtins of 3.13 on a half operand (`E2951`), `_Atomic` half objects
+(`E2702`), half values under `-mgeneral-regs-only` (`E4002`, EvoMIR 2.6) and
+`-fexcess-precision=16`, which is an unsupported option.
 
 ## 4. Effect Model
 
@@ -2752,6 +2846,7 @@ for them. Codes `E4xxx` belong to EvoMIR (`spec/evomir.md`).
 | `E2958` | `unsupported-enumeration-underlying-type` | front end |
 | `E2959` | `unsupported-complex-type-generic-call` | front end |
 | `E2960` | `unmodeled-complex-constant` | front end |
+| `E2961` | `mixed-half-formats` | front end |
 | `E3001` | `read-of-uninitialized-object` | runtime |
 | `E3002` | `integer-division-by-zero` | runtime |
 | `E3003` | `integer-remainder-by-zero` | runtime |
@@ -3744,7 +3839,8 @@ positive_int  := nonzero_digit digit*
 index         := "0" | nonzero_digit digit*
 hex_byte      := hex_digit hex_digit
 hex_digit     := "0".."9" | "a".."f"
-hex8          := hex_byte hex_byte hex_byte hex_byte
+hex4          := hex_byte hex_byte
+hex8          := hex4 hex4
 hex16         := hex8 hex8
 hex32         := hex16 hex16
 signed_integer := integer | "-" positive_int
@@ -3813,7 +3909,7 @@ visibility_mark := " visibility=" ("internal" | "hidden" | "protected")
 declaration_visibility := " visibility=" ("hidden" | "protected")
 
 type            := "bits<" positive_int ">"
-                 | "f32" | "f64" | "f128"
+                 | "f16" | "bf16" | "f32" | "f64" | "f128"
                  | "ptr<" address_space ">"
                  | "mem<" region ">"
                  | "world"
@@ -3827,7 +3923,7 @@ sig_param_item  := sig_param | "..."
 sig_param       := type [record_mark | " sext"]
 record_mark     := byval_mark | " sret(" integer ", " integer [hva_mark | hfa_mark] ")"
 byval_mark      := " byval(" integer ", " integer [hva_mark | hfa_mark] ")"
-hfa_mark        := ", hfa=" integer "x" ("f32" | "f64" | "f128") [", abi_align=16"]
+hfa_mark        := ", hfa=" integer "x" ("f16" | "f32" | "f64" | "f128") [", abi_align=16"]
 hva_mark        := ", hva=" positive_int "xvec<" positive_int ", bits<" positive_int ">>"
 address_space   := "generic" | "global" | "stack" | "threadlocal"
 
@@ -3870,7 +3966,9 @@ positive scale, `O` an origin ordinal.
 
 ```text
 inst_body :=
-    value_name " = const.f32 0x" hex8
+    value_name " = const.f16 0x" hex4
+  | value_name " = const.bf16 0x" hex4
+  | value_name " = const.f32 0x" hex8
   | value_name " = const.f64 0x" hex16
   | value_name " = const.f128 0x" hex32
   | value_name " = fp." fp_op " " value_list " : " type
@@ -4351,6 +4449,8 @@ Every C-HIR expression lowers to an EvoIR value of the corresponding
 | C Type | EvoIR Type |
 |---|---|
 | `int`, `unsigned int`, `_Bool`, `char`, etc. | `bits<N>` where `N` is the target width in bits |
+| `_Float16`, `__fp16` | `f16`; the value of a `_Float16` operation is `f32` (3.13.6) |
+| `__bf16` | `bf16`; the value of an operation is `f32` (3.13.6) |
 | `float` | `f32` |
 | `double` | `f64` |
 | `long double` | `f128` (3.13.4) |
@@ -4854,6 +4954,9 @@ recursive SCCs are solved together. Every call still consumes and produces
 **Floating and arity lowering classes.** A floating scalar, floating complex
 or homogeneous floating aggregate call interface that lowering does not support
 is `E3049` (`not-lowered: floating-call-interface`). A record of one to four
+binary16 members is an HFA. An HFA of `__bf16` members is `E3049`, and so is,
+on Darwin, a record that mixes the two half formats (3.13.6). A record of one
+to four
 short vectors (8 or 16 bytes) of one size is an HVA whatever its lane types,
 and it passes in vector registers (10.1.14). A required floating value
 or conversion on an integer-only lowering path is `E3050`
@@ -5297,6 +5400,7 @@ compound literals, and a front end must not emit it.
 | `E2958` | `_Bool`, `__int128`, an atomic type or an aligned typedef as the fixed underlying type of an enumeration (10.1.14) |
 | `E2959` | a `__builtin_tgmath` call that selects a complex function, or has a complex argument, of a type without admitted values: `_Float16 _Complex` and the other `_FloatN _Complex` and `_FloatNx _Complex` types (10.1.14) |
 | `E2960` | a translation-time product or quotient of floating complex values on a target whose complex helpers have no model, Darwin in this revision (3.13.5, 10.1.14) |
+| `E2961` | an arithmetic, relational, equality or conditional operator, or a compound assignment, with a `_Float16` operand and a `__bf16` operand (3.13.6) |
 
 #### 10.1.10 `typeof` and `_Generic`
 
@@ -5828,11 +5932,13 @@ preserves qualifiers, and is not a same-size alias of `float`, `double`,
 `long double`, or a GNU `vector_size` type. Their size/alignment
 pairs are respectively 2/2, 4/4, 8/8, 16/16, 8/8, 16/16, 2/2, 16/16 and
 16/16; the last three are sizeless and never receive a fabricated object
-layout. Only the declaration/type-query capability is added: an unused
-prototype needs no EvoIR declaration, while a required value or call with
-these types remains at the existing unsupported-type execution/lowering
-boundary. This does not admit floating-point or vector execution. Seven of
-these spellings exist only in GCC; the profile follows the GCC target headers.
+layout. Values of `_Float16` and `__fp16`, and of `__bf16`, execute as 3.13.6
+states. For the other types only the declaration/type-query capability is
+added: an unused prototype needs no EvoIR declaration, while a required value
+or call with these types remains at the existing unsupported-type
+execution/lowering boundary. This does not admit other floating-point or
+vector execution. Seven of these spellings exist only in GCC; the profile
+follows the GCC target headers.
 
 **Integer-vector profile.**
 `vector_size(B)` creates a canonical vector of B / sizeof(element) lanes,
@@ -5891,9 +5997,9 @@ tiny vector is never an HVA member (EvoMIR 6.2 and 6.6).
 `vector_size` vectors of `float` and `double` lanes on both targets, with the
 layout of the integer profile. A vector of 8 or 16 bytes is a `vec<L, f32>` or
 `vec<L, f64>` value (3.8); a wider vector is an object, as an integer vector
-is. Lanes of `long double` or a half format stay `E3050`. So do the nominal
+is. Lanes of `long double` stay `E3050`. So do the nominal
 `arm_neon.h` floating types, such as `__Float32x4_t`, whose intrinsics belong
-to L05b.
+to L05b. A `vector_size` attribute on a half format is `E2903` (3.13.6).
 
 - `+`, `-`, `*`, `/`, unary `-` and unary `+` are the scalar operations of 3.13
   on each lane: rounding, NaN selection, signed zeros and subnormals follow the
@@ -8342,8 +8448,8 @@ Section 3 defines each instruction and Section 9.3 gives its exact spelling.
 | | `icmp.slt`, `icmp.sle`, `icmp.ult`, `icmp.ule` | `bits<1>` | `%a`, `%b` : `bits<N>` | no |
 | Extension | `sext.bits<N>`, `zext.bits<N>` | `bits<N>` | `%a` : `bits<W>` (W <= N) | no |
 | | `trunc.bits<N>` | `bits<N>` | `%a` : `bits<W>` (W >= N) | no |
-| Floating | `const.f32`, `const.f64`, `const.f128` | `f32`, `f64`, `f128` | 8, 16 or 32 hexadecimal digits | no |
-| | `fp.<op> ... : T` | `T` or `bits<1>` | per operation (3.13) | no |
+| Floating | `const.f16`, `const.bf16`, `const.f32`, `const.f64`, `const.f128` | `f16`, `bf16`, `f32`, `f64`, `f128` | 4, 4, 8, 16 or 32 hexadecimal digits | no |
+| | `fp.<op> ... : T` | `T` or `bits<1>` | per operation (3.13); a half format admits only conversions and representation moves (3.13.6) | no |
 | | `fp.strict.<op> %w, ... : T` | result, `world` | world token, operands (3.13.1) | no; `fenv` effect |
 | Pointer | `ptr.null` | `ptr<AS>` or `fnptr<Sig>` | — | no |
 | | `global_addr @symbol` | `ptr<generic>` | global symbol | no |
@@ -8395,7 +8501,7 @@ Section 3 defines each instruction and Section 9.3 gives its exact spelling.
 
 ```
 Type       := "bits" "<" Integer ">"
-            | "f32" | "f64" | "f128"
+            | "f16" | "bf16" | "f32" | "f64" | "f128"
             | "ptr" "<" AddressSpace ">"
             | "mem" "<" Region ">"
             | "world"
@@ -8422,6 +8528,26 @@ to the signature spelling.
 ---
 
 ## Revision
+
+**Revision 2.22.0, 2026-10-21.** Section 3.13.6 admits the half storage
+formats `f16` and `bf16` of the 2026-10-13 decision on L03. `_Float16` and
+`__fp16` values are `f16` values, and `__bf16` values are `bf16` values. A
+half format admits only constants, conversions and representation moves, and
+each conversion rounds once. A C operation on half operands evaluates in
+binary32 and rounds once to the half format at an assignment, a cast, a
+return, an argument or the value of a statement expression, as GCC 14 does on
+Armv8-A; an `__fp16` operand promotes to `float`. Constant evaluation and both
+interpreters follow the same rules. A half value crosses a call in the low 16
+bits of a vector register, and a binary16 record of one to four members is an
+HFA. An HFA of `__bf16` members is `E3049`. A record that mixes the two half
+formats is no HFA: it passes as a composite on Linux. On Darwin it is
+`E3049`, and so are an anonymous `_Float16` or `__bf16` argument and its
+`va_arg`. The `bf16` and `BF16` constant suffixes and the `__BFLT16_*` macros
+are Linux only. Operands of `_Float16` and `__bf16` together are the new
+`E2961`. Sections 1.1, 1.7, 3.12, 3.13, 6.3, 10.1.1, 10.1.7 and 10.1.14 and
+the appendices follow. The grammar of 9.3 adds the types `f16` and `bf16`, their
+constants of four hexadecimal digits and `hfa=Cxf16`. The `core-v1` path
+admits no half value, and no Lean rule domain changes.
 
 **Revision 2.21.0, 2026-10-21.** Section 3.8 admits floating vectors
 `vec<L, f32>` and `vec<L, f64>` in `vec.pack`, `vec.extract` and

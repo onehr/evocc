@@ -100,11 +100,15 @@ pub(crate) fn validate_anonymous_marks(
     Ok(())
 }
 
+/// The types an anonymous argument can have. A half format has no default
+/// argument promotion (C23 6.5.2.2), so it is one of them.
 pub(crate) fn promoted_type(ty: &EvoIRType) -> bool {
     crate::vector_shape(ty).is_some()
         || matches!(
             ty,
             EvoIRType::Bits(32 | 64 | 128)
+                | EvoIRType::F16
+                | EvoIRType::BF16
                 | EvoIRType::F64
                 | EvoIRType::F128
                 | EvoIRType::Ptr(_)

@@ -487,7 +487,7 @@ fn classify_c_number(spelling: &str) -> Option<TokenKind> {
     } else if is_c_floating_constant(spelling) {
         Some(TokenKind::FloatLiteral)
     } else if imaginary_floating_spelling(spelling)
-        .is_some_and(|real| is_c_floating_constant(&real))
+        .is_some_and(|real| is_c_floating_constant(&real) && half_floating_suffix(&real).is_none())
     {
         Some(TokenKind::ImaginaryFloatLiteral)
     } else {
@@ -553,7 +553,29 @@ fn is_c_integer_constant(spelling: &str) -> bool {
     }
 }
 
+/// The half suffix of a floating constant spelling: `f16` or `F16` for
+/// `_Float16` and `bf16` or `BF16` for `__bf16`, as GCC 14 accepts them.
+/// The result is the suffix and whether it names bfloat16.
+#[must_use]
+pub fn half_floating_suffix(spelling: &str) -> Option<(&'static str, bool)> {
+    ["bf16", "BF16", "f16", "F16"]
+        .into_iter()
+        .find(|suffix| {
+            spelling
+                .strip_suffix(suffix)
+                .is_some_and(|core| !core.is_empty())
+        })
+        .map(|suffix| (suffix, suffix.len() == 4))
+}
+
 fn strip_float_suffix(spelling: &str) -> &str {
+    if let Some((suffix, _)) = half_floating_suffix(spelling) {
+        let core = &spelling[..spelling.len() - suffix.len()];
+        // A hexadecimal significand digit is never part of the suffix: in
+        // `0x1p0bf16` the exponent ends before `bf16`, and `0x1.bf16` has no
+        // exponent at all, which the caller rejects.
+        return core;
+    }
     spelling
         .char_indices()
         .next_back()
@@ -1924,6 +1946,26 @@ mod tests {
     #[test]
     fn lex_float_suffix_f() {
         assert_kinds("1.0f", &[TokenKind::FloatLiteral, TokenKind::Eof]);
+    }
+
+    #[test]
+    fn lex_float_half_suffixes() {
+        for spelling in [
+            "1.0f16", "1.0F16", "1.0bf16", "1.0BF16", "0x1p0f16", "1e0bf16", "1.f16",
+        ] {
+            assert_kinds(spelling, &[TokenKind::FloatLiteral, TokenKind::Eof]);
+        }
+        assert_eq!(half_floating_suffix("1.0bf16"), Some(("bf16", true)));
+        assert_eq!(half_floating_suffix("1.0F16"), Some(("F16", false)));
+        // GCC 14 refuses these spellings, so they stay one stray number.
+        for spelling in ["1.0bF16", "1.0Bf16", "1.0f16f", "1f16", "1.0f16i"] {
+            let kinds = lex(spelling).iter().map(|t| t.kind).collect::<Vec<_>>();
+            assert!(
+                !kinds.contains(&TokenKind::FloatLiteral)
+                    && !kinds.contains(&TokenKind::ImaginaryFloatLiteral),
+                "{spelling}: {kinds:?}"
+            );
+        }
     }
 
     #[test]

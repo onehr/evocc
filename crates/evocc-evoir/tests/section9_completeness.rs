@@ -98,6 +98,13 @@ fn sentinel_types() -> Vec<EvoIRType> {
     ]
 }
 
+/// The half storage formats, which a declaration of the sentinel module
+/// carries so that the function sentinels of earlier revisions keep their
+/// bytes.
+fn half_sentinel_types() -> Vec<EvoIRType> {
+    vec![EvoIRType::F16, EvoIRType::BF16]
+}
+
 #[test]
 fn every_instruction_preserves_uses_and_results_when_remapped() {
     instruction_values::assert_use_remap(evocc_evoir::remap_inst_uses);
@@ -185,6 +192,19 @@ fn sentinel_module() -> Module {
                     EvoIRType::World,
                 ],
                 param_marks: vec![ParamMark::SignExtend, ParamMark::None, ParamMark::None],
+                variadic: false,
+                ret_tys: vec![EvoIRType::Mem(Region::All), EvoIRType::World],
+            },
+            // Revision 2.22.0: the half storage formats are types.
+            evocc_evoir::FunctionDeclaration {
+                visibility: GlobalVisibility::External,
+                linkage: evocc_evoir::Linkage::Strong,
+                name: "sentinel_half".into(),
+                params: half_sentinel_types()
+                    .into_iter()
+                    .chain([EvoIRType::Mem(Region::All), EvoIRType::World])
+                    .collect(),
+                param_marks: Vec::new(),
                 variadic: false,
                 ret_tys: vec![EvoIRType::Mem(Region::All), EvoIRType::World],
             },
@@ -780,6 +800,8 @@ fn type_schema(ty: &EvoIRType) -> &'static str {
             let _ = width;
             "EvoIRType.Bits(width)"
         }
+        EvoIRType::F16 => "EvoIRType.F16",
+        EvoIRType::BF16 => "EvoIRType.BF16",
         EvoIRType::F32 => "EvoIRType.F32",
         EvoIRType::F64 => "EvoIRType.F64",
         EvoIRType::F128 => "EvoIRType.F128",
@@ -1283,7 +1305,7 @@ fn every_section9_field_has_an_independent_non_default_sentinel() {
     let manifest = parse_manifest();
     let mut covered = structural_schema(&module);
     covered.insert(value_schema(&value(1000, EvoIRType::Bits(37))));
-    for ty in sentinel_types() {
+    for ty in sentinel_types().into_iter().chain(half_sentinel_types()) {
         covered.insert(type_schema(&ty));
     }
     covered.extend(enum_schema_keys());

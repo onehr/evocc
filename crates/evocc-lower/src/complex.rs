@@ -12,7 +12,7 @@ enum Operand {
 
 fn format_rank(kind: FloatKind) -> u8 {
     match kind {
-        FloatKind::F16 => 0,
+        FloatKind::F16 | FloatKind::BF16 => 0,
         FloatKind::F32 => 1,
         FloatKind::F64 => 2,
         FloatKind::F128 => 3,

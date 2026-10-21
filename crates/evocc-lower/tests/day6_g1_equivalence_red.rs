@@ -566,6 +566,8 @@ fn observe_evoir(functions: &[Function]) -> Result<EvoExecutionObservation, Stri
 fn render_type(ty: &EvoIRType) -> String {
     match ty {
         EvoIRType::Bits(width) => format!("bits<{width}>"),
+        EvoIRType::F16 => "f16".to_owned(),
+        EvoIRType::BF16 => "bf16".to_owned(),
         EvoIRType::F32 => "f32".to_owned(),
         EvoIRType::F64 => "f64".to_owned(),
         EvoIRType::F128 => "f128".to_owned(),

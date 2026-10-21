@@ -151,19 +151,80 @@ pub(crate) fn guard_points(blocks: &[MBlock]) -> BTreeMap<(u32, usize), bool> {
     guards
 }
 
+/// The class of a floating value. A half value is its 16 representation
+/// bits in a `gpr32` register, with the bits above them unspecified, as for
+/// a `bits<16>` value (Section 2.6).
 pub(crate) fn class(kind: FloatKind) -> RegClass {
     match kind {
+        FloatKind::F16 | FloatKind::BF16 => RegClass::Gpr32,
         FloatKind::F32 => RegClass::Simd32,
         FloatKind::F128 => RegClass::Simd128,
-        _ => RegClass::Simd64,
+        FloatKind::F64 => RegClass::Simd64,
     }
 }
 fn ty(kind: FloatKind) -> EvoIRType {
     match kind {
+        FloatKind::F16 => EvoIRType::F16,
+        FloatKind::BF16 => EvoIRType::BF16,
         FloatKind::F32 => EvoIRType::F32,
         FloatKind::F128 => EvoIRType::F128,
-        _ => EvoIRType::F64,
+        FloatKind::F64 => EvoIRType::F64,
     }
+}
+
+/// The format of the SIMD side of a half conversion, from its class.
+fn simd_format(class: RegClass) -> Option<FloatKind> {
+    match class {
+        RegClass::Simd32 => Some(FloatKind::F32),
+        RegClass::Simd64 => Some(FloatKind::F64),
+        _ => None,
+    }
+}
+
+/// A conversion with a half format on one side (Section 2.6). `kind` names
+/// the half format; the class of the other register gives the other format:
+/// `simd32` binary32, `simd64` binary64, and `gpr32` a 32-bit integer
+/// source of `fp.from_signed` or `fp.from_unsigned`.
+fn half_operation(
+    dst: VReg,
+    op: FloatingOp,
+    kind: FloatKind,
+    args: &[VReg],
+) -> Result<FloatingInst, String> {
+    use FloatingOp::*;
+    let [arg] = args else {
+        return Err("a half conversion takes one operand".into());
+    };
+    let value = |reg: VReg, ty| Value { id: reg.id, ty };
+    let (input, result) = match op {
+        Convert if arg.class == RegClass::Gpr32 => (
+            value(*arg, ty(kind)),
+            value(
+                dst,
+                ty(simd_format(dst.class).ok_or("half widening needs a SIMD result")?),
+            ),
+        ),
+        Convert if dst.class == RegClass::Gpr32 => (
+            value(
+                *arg,
+                ty(simd_format(arg.class).ok_or("half narrowing needs a SIMD source")?),
+            ),
+            value(dst, ty(kind)),
+        ),
+        FromSigned | FromUnsigned
+            if arg.class == RegClass::Gpr32 && dst.class == RegClass::Gpr32 =>
+        {
+            (value(*arg, EvoIRType::Bits(32)), value(dst, ty(kind)))
+        }
+        _ => return Err("invalid machine half conversion".into()),
+    };
+    let instruction = FloatingInst {
+        result,
+        op,
+        arguments: vec![input],
+    };
+    instruction.validate()?;
+    Ok(instruction)
 }
 
 /// Independent machine shape check before allocation and after reconstruction.
@@ -175,6 +236,12 @@ pub(crate) fn operation(
     integer_bits: u16,
 ) -> Result<FloatingInst, String> {
     use FloatingOp::*;
+    if kind.is_half() {
+        if integer_bits != 0 {
+            return Err("a half conversion has no integer width".into());
+        }
+        return half_operation(dst, op, kind, args);
+    }
     if integer_bits != 0
         && (!matches!(op, ToSigned | ToUnsigned)
             || integer_bits > dst.class.bit_width().unwrap_or(0))
@@ -348,6 +415,19 @@ pub(crate) fn emit(
     let (dst, op, kind, strict, integer_bits) = (*dst, *op, *kind, *strict, *integer_bits);
     use FloatingOp::*;
     let dest = name(dst);
+    if kind.is_half() {
+        let source = name(args[0]);
+        emit_half(
+            text,
+            op,
+            kind,
+            (dst.class, &dest),
+            (args[0].class, &source),
+            strict,
+            label,
+        );
+        return;
+    }
     match op {
         Add | Sub | Mul | Div => {
             let _ = writeln!(
@@ -442,4 +522,117 @@ pub(crate) fn emit(
             unreachable!("complex parts lower to helper calls")
         }
     }
+}
+
+/// A half conversion (Section 2.6). A binary16 value moves through the `h`
+/// view of the scratch register `v31` and converts with FCVT, which observes
+/// FPCR and raises status as IEEE 754 requires. A bfloat16 value widens by
+/// a shift into the high half of a binary32 representation; FMAX of the value
+/// with itself then quiets a signaling NaN and raises INVALID for it, and
+/// changes no other value. Narrowing to bfloat16 rounds the binary32 bits in
+/// general registers. A binary64 source narrows first with FCVTXN, which
+/// rounds to odd: twenty-four bits are more than eight plus two, so the
+/// second rounding is exact rounding of the binary64 value, and the status
+/// of the two steps is the status of one IEEE conversion.
+fn emit_half(
+    text: &mut String,
+    op: FloatingOp,
+    kind: FloatKind,
+    (dst_class, dest): (RegClass, &str),
+    (src_class, source): (RegClass, &str),
+    strict: bool,
+    label: &str,
+) {
+    use crate::isa::aarch64::regfile::SIMD_SCRATCH_UNIT_H;
+    let s31 = SIMD_SCRATCH_UNIT_S;
+    let d31 = SIMD_SCRATCH_UNIT_D;
+    match op {
+        FloatingOp::Convert if src_class == RegClass::Gpr32 => {
+            if kind == FloatKind::F16 {
+                let _ = writeln!(
+                    text,
+                    "    fmov {s31}, {source}\n    fcvt {dest}, {SIMD_SCRATCH_UNIT_H}"
+                );
+            } else if dst_class == RegClass::Simd32 {
+                let _ = writeln!(
+                    text,
+                    "    lsl {SCRATCH_W}, {source}, #16\n    fmov {dest}, {SCRATCH_W}\n    fmax {dest}, {dest}, {dest}"
+                );
+            } else {
+                let _ = writeln!(
+                    text,
+                    "    lsl {SCRATCH_W}, {source}, #16\n    fmov {s31}, {SCRATCH_W}\n    fcvt {dest}, {s31}"
+                );
+            }
+        }
+        FloatingOp::Convert => {
+            if kind == FloatKind::F16 {
+                let _ = writeln!(
+                    text,
+                    "    fcvt {SIMD_SCRATCH_UNIT_H}, {source}\n    fmov {dest}, {s31}"
+                );
+            } else if src_class == RegClass::Simd64 {
+                let _ = writeln!(text, "    fcvtxn {s31}, {source}");
+                bfloat_narrow(text, dest, s31, strict, label);
+            } else {
+                bfloat_narrow(text, dest, source, strict, label);
+            }
+        }
+        FloatingOp::FromSigned | FloatingOp::FromUnsigned => {
+            // A 32-bit integer is exact in binary64.
+            let _ = writeln!(
+                text,
+                "    {}cvtf {d31}, {source}",
+                if op == FloatingOp::FromSigned {
+                    "s"
+                } else {
+                    "u"
+                }
+            );
+            if kind == FloatKind::F16 {
+                let _ = writeln!(
+                    text,
+                    "    fcvt {SIMD_SCRATCH_UNIT_H}, {d31}\n    fmov {dest}, {s31}"
+                );
+            } else {
+                let _ = writeln!(text, "    fcvtxn {s31}, {d31}");
+                bfloat_narrow(text, dest, s31, strict, label);
+            }
+        }
+        _ => unreachable!("validated half conversion"),
+    }
+}
+
+/// Round the binary32 value in `source` to bfloat16 bits in `dest`. A NaN
+/// keeps its sign and its leading payload bits and becomes quiet; the quiet
+/// comparison FCMP raises INVALID for a signaling NaN, as the conversion
+/// must. A baseline conversion rounds to nearest, ties to even: it adds
+/// 0x7fff and the lowest kept bit, and an overflow carries into infinity. A
+/// strict one reads the rounding direction from FPCR and ORs its status into
+/// FPSR: INEXACT for a discarded bit, UNDERFLOW when the value is tiny before
+/// rounding, and OVERFLOW when it rounds to infinity. Writing FPSR raises a
+/// status in this non-trapping profile.
+fn bfloat_narrow(text: &mut String, dest: &str, source: &str, strict: bool, label: &str) {
+    let w16 = SCRATCH_W;
+    let w17 = SCRATCH_UNIT_W;
+    let x17 = SCRATCH_UNIT_X;
+    let _ = writeln!(
+        text,
+        "    fcmp {source}, {source}\n    fmov {w16}, {source}\n    b.vs {label}_bnan"
+    );
+    if strict {
+        let _ = writeln!(
+            text,
+            "    tst {w16}, #0xffff\n    b.eq {label}_bexact\n    mov {dest}, #16\n    tst {w16}, #0x7f800000\n    b.ne {label}_bnormal\n    mov {dest}, #24\n{label}_bnormal:\n    mrs {x17}, fpcr\n    ubfx {w17}, {w17}, #22, #2\n    cbz {w17}, {label}_bnearest\n    cmp {w17}, #3\n    b.eq {label}_bzero\n    cmp {w17}, #1\n    cset {w17}, eq\n    eor {w17}, {w17}, {w16}, lsr #31\n    b {label}_bround\n{label}_bzero:\n    mov {w17}, #0\n    b {label}_bround\n{label}_bnearest:\n    ubfx {w17}, {w16}, #16, #1\n    add {w17}, {w17}, {w16}, uxth\n    add {w17}, {w17}, #7, lsl #12\n    add {w17}, {w17}, #0xfff\n    lsr {w17}, {w17}, #16\n{label}_bround:\n    add {w16}, {w17}, {w16}, lsr #16\n    mvn {w17}, {w16}\n    tst {w17}, #0x7f80\n    b.ne {label}_bstatus\n    orr {dest}, {dest}, #4\n{label}_bstatus:\n    mrs {x17}, fpsr\n    orr {w17}, {w17}, {dest}\n    msr fpsr, {x17}\n    mov {dest}, {w16}\n    b {label}_bdone\n{label}_bexact:\n    lsr {dest}, {w16}, #16\n    b {label}_bdone"
+        );
+    } else {
+        let _ = writeln!(
+            text,
+            "    ubfx {w17}, {w16}, #16, #1\n    add {w16}, {w16}, {w17}\n    mov {w17}, #0x7fff\n    add {w16}, {w16}, {w17}\n    lsr {dest}, {w16}, #16\n    b {label}_bdone"
+        );
+    }
+    let _ = writeln!(
+        text,
+        "{label}_bnan:\n    lsr {dest}, {w16}, #16\n    orr {dest}, {dest}, #0x40\n{label}_bdone:"
+    );
 }

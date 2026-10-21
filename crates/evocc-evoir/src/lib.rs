@@ -18,7 +18,7 @@ mod assembly;
 mod atomic;
 mod floating;
 pub use atomic::{AtomicAccess, AtomicCopyOp, AtomicOp, AtomicOrder, AtomicRmwOp};
-pub use floating::{floating_kind, FloatingInst, FloatingOp};
+pub use floating::{floating_bits_type, floating_kind, is_half_type, FloatingInst, FloatingOp};
 mod strict_floating;
 pub use strict_floating::StrictFloatingInst;
 mod text;
@@ -1770,6 +1770,7 @@ pub fn evoir_access_layout(ty: &EvoIRType) -> Result<Option<AccessLayout>, Strin
             u64::from(lanes) * u64::from(width / 8)
         }
         EvoIRType::Bits(width) if *width > 0 => u64::from(width.div_ceil(8)),
+        EvoIRType::F16 | EvoIRType::BF16 => 2,
         EvoIRType::F32 => 4,
         EvoIRType::F64 => 8,
         EvoIRType::F128 => 16,
@@ -6020,7 +6021,12 @@ fn execute_instruction(
                         state.world = world;
                         state.save_vector(representation)
                     }
-                    EvoIRType::Bits(_) | EvoIRType::F32 | EvoIRType::F64 | EvoIRType::F128 => {
+                    EvoIRType::Bits(_)
+                    | EvoIRType::F16
+                    | EvoIRType::BF16
+                    | EvoIRType::F32
+                    | EvoIRType::F64
+                    | EvoIRType::F128 => {
                         let raw = if *volatile {
                             let (raw, world) = state
                                 .memory
@@ -6629,7 +6635,7 @@ fn normalize_runtime_input(
         });
     }
     match expected {
-        EvoIRType::F32 | EvoIRType::F64 | EvoIRType::F128 => {
+        EvoIRType::F16 | EvoIRType::BF16 | EvoIRType::F32 | EvoIRType::F64 | EvoIRType::F128 => {
             let kind = floating_kind(expected).unwrap();
             evocc_types::floating::FloatBits::from_bits(kind, value.value()).ok_or_else(|| {
                 InterpreterError::InvalidEntryArgument {

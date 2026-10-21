@@ -139,6 +139,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             let layout = self.target_layout;
             let precision = |kind| match layout.float_format(kind) {
                 FloatKind::F16 => 11,
+                FloatKind::BF16 => 8,
                 FloatKind::F32 => 24,
                 FloatKind::F64 => 53,
                 FloatKind::F128 => 113,
@@ -201,7 +202,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                         }
                         FloatKind::F64 => value.is_finite(),
                         // Retain the existing declarable-only type boundary.
-                        FloatKind::F16 | FloatKind::F128 => value.is_zero(),
+                        FloatKind::F16 | FloatKind::BF16 | FloatKind::F128 => value.is_zero(),
                     }
                 })
             };

@@ -2667,6 +2667,8 @@ impl<'a> Cursor<'a> {
             return Ok(EvoIRType::Bits(width));
         }
         for (name, ty) in [
+            ("f16", EvoIRType::F16),
+            ("bf16", EvoIRType::BF16),
             ("f32", EvoIRType::F32),
             ("f64", EvoIRType::F64),
             ("f128", EvoIRType::F128),

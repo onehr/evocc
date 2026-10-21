@@ -127,12 +127,13 @@ impl FloatBits {
     fn default_nan(self) -> Self {
         Self {
             bits: match self.kind {
+                FloatKind::F16 => 0x7e00,
+                FloatKind::BF16 => 0x7fc0,
                 FloatKind::F32 => 0x7fc00000,
                 FloatKind::F64 => 0x7ff8000000000000,
                 // The qualified AArch64 hosted TFmode runtime uses all-one
                 // fraction bits for an invalid operation without NaN inputs.
                 FloatKind::F128 => 0x7fffffffffffffffffffffffffffffff,
-                _ => unreachable!("admitted scalar format"),
             },
             ..self
         }
@@ -172,6 +173,8 @@ impl FloatBits {
         };
         let mut status = FpStatus::engine(raw.status);
         let (sign, minimum, largest) = match self.kind {
+            FloatKind::F16 => (1u128 << 15, 1u128 << 10, 0x7bff),
+            FloatKind::BF16 => (1u128 << 15, 1u128 << 7, 0x7f7f),
             FloatKind::F32 => (1u128 << 31, 1u128 << 23, 0x7f7fffff),
             FloatKind::F64 => (1u128 << 63, 1u128 << 52, 0x7fefffffffffffff),
             FloatKind::F128 => (
@@ -179,7 +182,6 @@ impl FloatBits {
                 1u128 << 112,
                 0x7ffeffffffffffffffffffffffffffff,
             ),
-            _ => unreachable!("admitted scalar format"),
         };
         if status.contains(FpStatus::INEXACT)
             && !status.contains(FpStatus::UNDERFLOW)
@@ -314,10 +316,10 @@ impl FloatBits {
 
     fn beyond_range(self, value: RangeQuad) -> bool {
         let threshold = match self.kind {
-            FloatKind::F32 => 128,
+            FloatKind::F16 => 16,
+            FloatKind::F32 | FloatKind::BF16 => 128,
             FloatKind::F64 => 1024,
             FloatKind::F128 => 16384,
-            _ => unreachable!(),
         };
         value.abs() >= RangeQuad::from_u128(1).value.scalbn(threshold)
     }
@@ -345,16 +347,13 @@ impl FloatBits {
         })
     }
 
+    /// A half format is a source or a target here too: a conversion is the
+    /// one numeric operation on it (EvoIR 3.13.6).
     pub fn target_convert_round(
         self,
         kind: FloatKind,
         rounding: FpRounding,
     ) -> Option<FpResult<Self>> {
-        if !self.executable_scalar()
-            || !matches!(kind, FloatKind::F32 | FloatKind::F64 | FloatKind::F128)
-        {
-            return None;
-        }
         if self.kind == kind {
             return Some(FpResult {
                 value: self,
@@ -371,21 +370,22 @@ impl FloatBits {
                 },
             });
         }
-        fn convert<F: Float + FloatConvert<Single> + FloatConvert<Double> + FloatConvert<Quad>>(
+        fn convert<
+            F: Float
+                + FloatConvert<Half>
+                + FloatConvert<BFloat>
+                + FloatConvert<Single>
+                + FloatConvert<Double>
+                + FloatConvert<Quad>,
+        >(
             value: F,
             kind: FloatKind,
             round: Round,
         ) -> rustc_apfloat::StatusAnd<u128> {
-            if kind == FloatKind::F32 {
-                let result: rustc_apfloat::StatusAnd<Single> = value.convert_r(round, &mut false);
+            with_format!(kind, T, {
+                let result: rustc_apfloat::StatusAnd<T> = value.convert_r(round, &mut false);
                 result.map(Float::to_bits)
-            } else if kind == FloatKind::F64 {
-                let result: rustc_apfloat::StatusAnd<Double> = value.convert_r(round, &mut false);
-                result.map(Float::to_bits)
-            } else {
-                let result: rustc_apfloat::StatusAnd<Quad> = value.convert_r(round, &mut false);
-                result.map(Float::to_bits)
-            }
+            })
         }
         let evaluate =
             |round| with_format!(self.kind, F, convert(F::from_bits(self.bits), kind, round));
@@ -403,13 +403,7 @@ impl FloatBits {
             F,
             F::from_i128_r(value, rounding.engine()).map(Float::to_bits)
         );
-        FpResult {
-            value: Self {
-                kind,
-                bits: result.value,
-            },
-            status: FpStatus::engine(result.status),
-        }
+        Self::integer_result(kind, result, value.unsigned_abs())
     }
 
     pub fn from_unsigned_round(
@@ -422,12 +416,28 @@ impl FloatBits {
             F,
             F::from_u128_r(value, rounding.engine()).map(Float::to_bits)
         );
+        Self::integer_result(kind, result, value)
+    }
+
+    /// An integer is never tiny. A magnitude at or above the binade past the
+    /// largest finite value overflows, also when a directed rounding gives
+    /// the largest finite value; this APFloat pin drops OVERFLOW there. Only
+    /// binary16 has such a binade below 2^128.
+    fn integer_result(
+        kind: FloatKind,
+        result: rustc_apfloat::StatusAnd<u128>,
+        magnitude: u128,
+    ) -> FpResult<Self> {
+        let mut status = FpStatus::engine(result.status);
+        if kind == FloatKind::F16 && magnitude >= 1 << 16 {
+            status = status.union(FpStatus::OVERFLOW).union(FpStatus::INEXACT);
+        }
         FpResult {
             value: Self {
                 kind,
                 bits: result.value,
             },
-            status: FpStatus::engine(result.status),
+            status,
         }
     }
 

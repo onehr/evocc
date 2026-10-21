@@ -1085,6 +1085,19 @@ fn execute(state: &mut State, frame: &mut Frame, inst: &MInst) -> Result<(), Mir
                     }),
                 })
                 .collect::<Result<Vec<_>, _>>()?;
+            // A half value is the low 16 bits of its `gpr32` register; the
+            // bits above them are unspecified (Section 2.6).
+            let values = values
+                .into_iter()
+                .zip(&operation.arguments)
+                .map(|(raw, argument)| {
+                    if evocc_evoir::is_half_type(&argument.ty) {
+                        raw & 0xffff
+                    } else {
+                        raw
+                    }
+                })
+                .collect::<Vec<_>>();
             let bits = if *strict {
                 let environment = state.world.fp_environment();
                 let result = operation.evaluate_strict(&values, environment.rounding);
@@ -1440,6 +1453,28 @@ fn execute(state: &mut State, frame: &mut Frame, inst: &MInst) -> Result<(), Mir
                     state.world = world;
                     MirValue::Vector(value)
                 }
+                // `ldr h` writes the low two bytes of the `s` view and
+                // clears the others.
+                LoadKind::Hv => {
+                    let (value, world) = state
+                        .memory
+                        .load_representation(&state.world, address, access, *volatile)
+                        .map_err(|error| memory_error(&error))?;
+                    state.world = world;
+                    let mut wide = evocc_memory::ObjectRepresentation::uninitialized(4)
+                        .map_err(|error| memory_error(&error))?;
+                    wide.write_integer(
+                        0,
+                        2,
+                        value.read_integer(0, 2, evocc_memory::ByteOrder::Little),
+                        evocc_memory::ByteOrder::Little,
+                    )
+                    .and_then(|()| {
+                        wide.write_integer(2, 2, Some(0), evocc_memory::ByteOrder::Little)
+                    })
+                    .map_err(|error| memory_error(&error))?;
+                    MirValue::Vector(wide)
+                }
                 LoadKind::P => {
                     let pointer = if *volatile {
                         let (pointer, world) = state
@@ -1516,6 +1551,25 @@ fn execute(state: &mut State, frame: &mut Frame, inst: &MInst) -> Result<(), Mir
             }
             let value = read(frame, *src)?;
             match (kind, value) {
+                // `str h` writes the low two bytes of the `s` view.
+                (StoreKind::Hv, MirValue::Vector(value)) => {
+                    let mut narrow = evocc_memory::ObjectRepresentation::uninitialized(2)
+                        .map_err(|error| memory_error(&error))?;
+                    narrow
+                        .write_integer(
+                            0,
+                            2,
+                            value.read_integer(0, 2, evocc_memory::ByteOrder::Little),
+                            evocc_memory::ByteOrder::Little,
+                        )
+                        .map_err(|error| memory_error(&error))?;
+                    let (memory, world) = state
+                        .memory
+                        .store_representation(&state.world, address, access, &narrow, *volatile)
+                        .map_err(|error| memory_error(&error))?;
+                    state.memory = memory;
+                    state.world = world;
+                }
                 (StoreKind::S | StoreKind::D | StoreKind::Q, MirValue::Vector(value)) => {
                     let (memory, world) = state
                         .memory

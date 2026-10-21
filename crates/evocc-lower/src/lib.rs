@@ -3532,22 +3532,16 @@ fn function_value_type(
             integer,
         });
     }
-    if let Some(TypeKind::Float(kind)) = types.get(ty).map(|ty| &ty.kind) {
+    if let Some(kind) = floating::scalar_format(types, target, ty) {
         return Ok(FunctionValueType {
             source: ty,
-            ir: floating::ir_type(target.float_format(*kind))
-                .ok_or(LowerError::FloatingCallInterface { span })?,
+            ir: floating::ir_type(kind).ok_or(LowerError::FloatingCallInterface { span })?,
             integer: CIntegerType::ULONG,
         });
     }
-    if evocc_chir::homogeneous_floating_aggregate(types, target, ty).is_some_and(|f| {
-        !matches!(
-            f.kind,
-            evocc_types::FloatKind::F32
-                | evocc_types::FloatKind::F64
-                | evocc_types::FloatKind::F128
-        )
-    }) {
+    // An HFA of `__bf16` members, and on Darwin a record that mixes the two
+    // half formats, has no admitted convention (EvoIR 3.13.6).
+    if evocc_chir::half_interface_refused(types, target, ty, false) {
         return Err(LowerError::FloatingCallInterface { span });
     }
     match types.get(ty).map(|canonical| &canonical.kind) {
@@ -3634,14 +3628,11 @@ fn function_value_type(
         Some(
             TypeKind::Complex(_)
             | TypeKind::TargetBuiltin(
-                evocc_types::TargetBuiltinType::GnuFloat16
-                | evocc_types::TargetBuiltinType::GnuFloat32
+                evocc_types::TargetBuiltinType::GnuFloat32
                 | evocc_types::TargetBuiltinType::GnuFloat64
                 | evocc_types::TargetBuiltinType::GnuFloat128
                 | evocc_types::TargetBuiltinType::GnuFloat32x
-                | evocc_types::TargetBuiltinType::GnuFloat64x
-                | evocc_types::TargetBuiltinType::ArmFp16
-                | evocc_types::TargetBuiltinType::ArmBf16,
+                | evocc_types::TargetBuiltinType::GnuFloat64x,
             ),
         ) => Err(LowerError::FloatingCallInterface { span }),
         _ => Err(LowerError::UnsupportedType {
@@ -5996,13 +5987,9 @@ impl<'a> FunctionLowerer<'a> {
                             let lowered = self.lower_expr(expression, &mut state)?;
                             let lowered = if matches!(
                                 expected.ir,
-                                EvoIRType::Ptr(_)
-                                    | EvoIRType::FnPtr { .. }
-                                    | EvoIRType::Vec(..)
-                                    | EvoIRType::F32
-                                    | EvoIRType::F64
-                                    | EvoIRType::F128
-                            ) {
+                                EvoIRType::Ptr(_) | EvoIRType::FnPtr { .. } | EvoIRType::Vec(..)
+                            ) || evocc_evoir::floating_kind(&expected.ir).is_some()
+                            {
                                 self.coerce_to_object_type(
                                     lowered,
                                     Some(expression),
@@ -6503,12 +6490,13 @@ impl<'a> FunctionLowerer<'a> {
         if let Ok(integer) = canonical_integer(self.unit.types(), self.target, ty, span) {
             return Ok((bits(integer), integer));
         }
-        match self.unit.types().get(ty).map(|canonical| &canonical.kind) {
-            Some(TypeKind::Float(kind)) => Ok((
-                floating::ir_type(self.target.float_format(*kind))
-                    .ok_or(LowerError::FloatingValue { span })?,
+        if let Some(kind) = floating::scalar_format(self.unit.types(), self.target, ty) {
+            return Ok((
+                floating::ir_type(kind).ok_or(LowerError::FloatingValue { span })?,
                 CIntegerType::ULONG,
-            )),
+            ));
+        }
+        match self.unit.types().get(ty).map(|canonical| &canonical.kind) {
             Some(TypeKind::Vector { .. }) => {
                 let value = function_value_type(self.unit.types(), self.target, ty, span)?;
                 Ok((value.ir, value.integer))
@@ -7204,8 +7192,8 @@ impl<'a> FunctionLowerer<'a> {
                 self.emit_memory_store(destination, value, ty, volatile.writes(), span, state)?;
                 Ok(())
             }
-            TypeKind::Float(kind)
-                if floating::ir_type(self.target.float_format(kind)).is_some() =>
+            TypeKind::Float(_) | TypeKind::TargetBuiltin(_)
+                if floating::scalar_format(self.unit.types(), self.target, ty).is_some() =>
             {
                 // A floating member is transported as its exact bits.
                 let value = self.emit_memory_load(source, ty, volatile.reads(), span, state)?;
@@ -8316,10 +8304,10 @@ impl<'a> FunctionLowerer<'a> {
         if let Ok(integer) = canonical_integer(self.unit.types(), self.target, ty, span) {
             return self.cast(value, integer, state);
         }
+        if let Some(kind) = floating::scalar_format(self.unit.types(), self.target, ty) {
+            return self.cast_floating(value, kind, state);
+        }
         match self.unit.types().get(ty).map(|canonical| &canonical.kind) {
-            Some(TypeKind::Float(kind)) => {
-                self.cast_floating(value, self.target.float_format(*kind), state)
-            }
             Some(TypeKind::Vector { .. }) => {
                 if value.value.ty != self.c_value_type(ty, span)?.0 {
                     return Err(LowerError::UnsupportedExpression {
@@ -8507,6 +8495,16 @@ impl<'a> FunctionLowerer<'a> {
                     CIntegerType::ULONG
                 };
                 let zero = self.constant(state, integer, 0)?;
+                self.emit_memory_store_with_layout(address, zero, layout, false, state)?;
+                Ok(())
+            }
+            TypeKind::TargetBuiltin(kind) if kind.half_format().is_some() => {
+                let mut layout = self.access_layout(ty, span)?;
+                if mode == ZeroInitializer::PointerProvenance {
+                    return Ok(());
+                }
+                layout.align_bytes = layout.align_bytes.min(alignment);
+                let zero = self.constant(state, CIntegerType::USHORT, 0)?;
                 self.emit_memory_store_with_layout(address, zero, layout, false, state)?;
                 Ok(())
             }
@@ -9053,7 +9051,8 @@ impl<'a> FunctionLowerer<'a> {
                                 | evocc_types::FloatKind::F64
                                 | evocc_types::FloatKind::F128
                         ))
-                    ) {
+                    ) || floating::half_format(self.unit.types(), *destination_type).is_some()
+                    {
                         self.emit_zero_initializer_at(
                             action_address,
                             *destination_type,
@@ -10917,7 +10916,8 @@ impl<'a> FunctionLowerer<'a> {
                 if matches!(
                     self.unit.types().get(*target).map(|ty| &ty.kind),
                     Some(TypeKind::Pointer(_) | TypeKind::Vector { .. } | TypeKind::Float(_))
-                ) {
+                ) || floating::half_format(self.unit.types(), *target).is_some()
+                {
                     let value = self.lower_expr(operand, state)?;
                     return self.coerce_to_object_type(value, Some(operand), *target, *span, state);
                 }
@@ -11280,6 +11280,11 @@ impl<'a> FunctionLowerer<'a> {
                     canonical_integer(self.unit.types(), self.target, facts.ty(), span)?,
                     &mut continued,
                 )?;
+            }
+            // The binary32 value of a half operation rounds once to the
+            // statement expression's half type, as in GCC 14 (EvoIR 3.13.6).
+            if let Some(kind) = floating::half_format(self.unit.types(), facts.ty()) {
+                *result = self.cast_floating(result.clone(), kind, &mut continued)?;
             }
             if result.value.ty != expected {
                 return Err(LowerError::UnsupportedExpression {
@@ -12593,11 +12598,25 @@ impl<'a> FunctionLowerer<'a> {
         if evocc_evoir::floating_kind(&left.value.ty).is_some()
             || evocc_evoir::floating_kind(&right.value.ty).is_some()
         {
+            let halves = [&left.value.ty, &right.value.ty]
+                .into_iter()
+                .filter_map(|ty| evocc_evoir::floating_kind(ty).filter(|kind| kind.is_half()))
+                .collect::<Vec<_>>();
             let kind = if left.value.ty == EvoIRType::F128 || right.value.ty == EvoIRType::F128 {
                 evocc_types::FloatKind::F128
             } else if left.value.ty == EvoIRType::F64 || right.value.ty == EvoIRType::F64 {
                 evocc_types::FloatKind::F64
+            } else if left.value.ty == EvoIRType::F32 || right.value.ty == EvoIRType::F32 {
+                // A binary32 arm is either `float` or an evaluated half
+                // operation; the other arm converts to binary32 too.
+                evocc_types::FloatKind::F32
+            } else if halves.len() == 2 && halves[0] == halves[1] {
+                // Two half values of one format: the conditional keeps the
+                // format, whose values binary32 holds exactly.
+                halves[0]
             } else {
+                // A half conditional evaluates in binary32, as in GCC 14: an
+                // integer arm converts to binary32 directly (EvoIR 3.13.6).
                 evocc_types::FloatKind::F32
             };
             return Ok((
@@ -13556,6 +13575,11 @@ impl<'a> FunctionLowerer<'a> {
                         feature: "anonymous argument lacks default promotion",
                     });
                 };
+                if evocc_chir::half_interface_refused(self.unit.types(), self.target, *ty, true) {
+                    return Err(LowerError::FloatingCallInterface {
+                        span: argument.span(),
+                    });
+                }
                 if self.is_aggregate_type(*ty)
                     && !evocc_chir::is_integer_variadic_record(self.unit.types(), self.target, *ty)
                 {
@@ -13686,13 +13710,9 @@ impl<'a> FunctionLowerer<'a> {
                 let value = self.lower_expr(argument, state)?;
                 if matches!(
                     expected.ir,
-                    EvoIRType::Ptr(_)
-                        | EvoIRType::FnPtr { .. }
-                        | EvoIRType::Vec(..)
-                        | EvoIRType::F32
-                        | EvoIRType::F64
-                        | EvoIRType::F128
-                ) {
+                    EvoIRType::Ptr(_) | EvoIRType::FnPtr { .. } | EvoIRType::Vec(..)
+                ) || evocc_evoir::floating_kind(&expected.ir).is_some()
+                {
                     self.coerce_to_object_type(
                         value,
                         Some(argument),
@@ -13909,17 +13929,12 @@ impl<'a> FunctionLowerer<'a> {
         {
             if let PlaceRoot::Object { symbol } = place.root() {
                 if !self.memory_symbols.contains(symbol) && place.projections().is_empty() {
-                    let TypeKind::Float(kind) =
-                        self.unit.types().get(place.value_ty()).unwrap().kind
-                    else {
-                        unreachable!("floating representation store has a floating destination");
-                    };
+                    let kind =
+                        floating::scalar_format(self.unit.types(), self.target, place.value_ty())
+                            .expect("floating representation store has a floating destination");
                     let value = self.floating_constant(
-                        evocc_types::floating::FloatBits::from_bits(
-                            self.target.float_format(kind),
-                            bits.raw_bits(),
-                        )
-                        .expect("canonical floating object representation"),
+                        evocc_types::floating::FloatBits::from_bits(kind, bits.raw_bits())
+                            .expect("canonical floating object representation"),
                         &state,
                     )?;
                     self.store_local(*symbol, value, target_span, &mut state)?;
@@ -14070,6 +14085,9 @@ impl<'a> FunctionLowerer<'a> {
         let mut record_shape = None;
         let result = if op == VarArgsBuiltinOp::Arg {
             let ty = requested_ty.ok_or(LowerError::VarArgs { span })?;
+            if evocc_chir::half_interface_refused(self.unit.types(), self.target, ty, true) {
+                return Err(LowerError::FloatingCallInterface { span });
+            }
             if self.is_aggregate_type(ty) {
                 if !evocc_chir::is_integer_variadic_record(self.unit.types(), self.target, ty) {
                     return Err(LowerError::VarArgs { span });
@@ -14215,7 +14233,8 @@ impl<'a> FunctionLowerer<'a> {
         if matches!(
             self.unit.types().get(place.ty()).map(|ty| &ty.kind),
             Some(TypeKind::Pointer(_) | TypeKind::Float(_))
-        ) {
+        ) || floating::half_format(self.unit.types(), place.ty()).is_some()
+        {
             let right = self.lower_expr(assigned, state)?;
             let result = if operator == AssignmentOp::Simple {
                 self.coerce_to_object_type(right, Some(assigned), place.ty(), span, state)?

@@ -48,6 +48,39 @@ pub struct FloatingExpr<'arena> {
     pub span: SourceSpan,
 }
 
+/// Whether an expression of a half type has the binary32 value of an
+/// evaluation rather than a half value (EvoIR 3.13.6): an arithmetic
+/// operator, negation or a half constant, or a conditional or comma
+/// expression that can select one. A conditional of a half type evaluates
+/// in binary32, as in GCC 14, so an arm that is not a half value, an integer
+/// arm, converts to binary32 directly. `is_half` tells whether an arm has a
+/// half type. Lowering reaches the same placement from the value types; the
+/// interpreter applies this predicate.
+#[must_use]
+pub fn half_carrier<'a>(
+    expression: &'a CHirExpr<'a>,
+    is_half: &mut dyn FnMut(&'a CHirExpr<'a>) -> bool,
+) -> bool {
+    use crate::{BinaryOp, FloatSuffix, UnaryOp};
+    match expression {
+        CHirExpr::Binary(BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div, ..)
+        | CHirExpr::Unary(UnaryOp::Neg, ..) => true,
+        CHirExpr::FloatLit(literal, _) => {
+            matches!(literal.suffix, FloatSuffix::F16 | FloatSuffix::BF16)
+        }
+        CHirExpr::Unary(UnaryOp::Plus, operand, _) | CHirExpr::EvaluateOnce(operand, _) => {
+            half_carrier(operand, is_half)
+        }
+        CHirExpr::Ternary(_, left, right, _) | CHirExpr::Elvis(left, right, _) => [left, right]
+            .into_iter()
+            .any(|arm| !is_half(arm) || half_carrier(arm, is_half)),
+        CHirExpr::Comma(_, right, _) | CHirExpr::Binary(BinaryOp::Comma, _, right, _) => {
+            half_carrier(right, is_half)
+        }
+        _ => false,
+    }
+}
+
 /// Representation masks are shared by constant, interpreted and IR lowering.
 pub fn masks(kind: FloatKind) -> Option<(u128, u128)> {
     match kind {

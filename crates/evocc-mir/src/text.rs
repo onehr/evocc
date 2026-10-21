@@ -239,10 +239,11 @@ pub fn render_inst(inst: &MInst) -> String {
             } else {
                 String::new()
             },
-            if *kind == evocc_types::FloatKind::F32 {
-                "f32"
-            } else {
-                "f64"
+            match kind {
+                evocc_types::FloatKind::F16 => "f16",
+                evocc_types::FloatKind::BF16 => "bf16",
+                evocc_types::FloatKind::F32 => "f32",
+                _ => "f64",
             },
             args.iter()
                 .map(|reg| use_of(*reg))

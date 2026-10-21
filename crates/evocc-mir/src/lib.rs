@@ -545,6 +545,9 @@ pub enum LoadKind {
     Sw,
     P,
     Pf,
+    /// `ldr h`: two bytes into the `h` view of a `simd32` register, whose
+    /// other bits become zero. A binary16 HFA member travels in it.
+    Hv,
     S,
     D,
     Q,
@@ -559,6 +562,7 @@ impl LoadKind {
             Self::X => "x",
             Self::P => "p",
             Self::Pf => "pf",
+            Self::Hv => "hv",
             Self::S => "s",
             Self::Sb => "sb",
             Self::Sh => "sh",
@@ -584,6 +588,7 @@ impl LoadKind {
             Self::Sw => "ldrsw",
             Self::P => "ldr.p",
             Self::Pf => "ldr.pf",
+            Self::Hv => "ldr.h",
             Self::S => "ldr.s",
             Self::D => "ldr.d",
             Self::Q => "ldr.q",
@@ -602,6 +607,7 @@ impl LoadKind {
             "ldrsw" => Self::Sw,
             "ldr.p" => Self::P,
             "ldr.pf" => Self::Pf,
+            "ldr.h" => Self::Hv,
             "ldr.s" => Self::S,
             "ldr.d" => Self::D,
             "ldr.q" => Self::Q,
@@ -614,7 +620,7 @@ impl LoadKind {
     pub const fn size_bytes(self) -> u64 {
         match self {
             Self::B | Self::Sb => 1,
-            Self::H | Self::Sh => 2,
+            Self::H | Self::Sh | Self::Hv => 2,
             Self::W | Self::Sw | Self::S => 4,
             Self::X | Self::P | Self::Pf | Self::D => 8,
             Self::Q => 16,
@@ -636,6 +642,8 @@ pub enum StoreKind {
     W,
     X,
     P,
+    /// `str h`: the `h` view of a `simd32` register, two bytes.
+    Hv,
     S,
     D,
     Q,
@@ -650,6 +658,7 @@ impl StoreKind {
             Self::W => "str.w",
             Self::X => "str.x",
             Self::P => "str.p",
+            Self::Hv => "str.h",
             Self::S => "str.s",
             Self::D => "str.d",
             Self::Q => "str.q",
@@ -664,6 +673,7 @@ impl StoreKind {
             "str.w" => Self::W,
             "str.x" => Self::X,
             "str.p" => Self::P,
+            "str.h" => Self::Hv,
             "str.s" => Self::S,
             "str.d" => Self::D,
             "str.q" => Self::Q,
@@ -675,7 +685,7 @@ impl StoreKind {
     pub const fn size_bytes(self) -> u64 {
         match self {
             Self::B => 1,
-            Self::H => 2,
+            Self::H | Self::Hv => 2,
             Self::W | Self::S => 4,
             Self::X | Self::P | Self::D => 8,
             Self::Q => 16,

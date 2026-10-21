@@ -89,6 +89,15 @@ fn floating_complex_call_interfaces_lower() {
 
 #[test]
 fn target_floating_call_interfaces_use_the_named_refusal() {
+    let interfaces = |spelling: &str| {
+        [
+            format!("{spelling} identity({spelling} value) {{ return value; }}"),
+            format!("int ignore({spelling} value) {{ return 0; }}"),
+            format!("extern {spelling} external(void); int main(void) {{ external(); return 0; }}"),
+            format!("int callback({spelling} (*function)({spelling})) {{ return 0; }}"),
+            format!("typedef {spelling} signature({spelling}); signature *address(void) {{ return 0; }}"),
+        ]
+    };
     for spelling in [
         "_Float16",
         "_Float32",
@@ -99,20 +108,60 @@ fn target_floating_call_interfaces_use_the_named_refusal() {
         "__fp16",
         "__bf16",
     ] {
-        for source in [
-            format!("{spelling} identity({spelling} value) {{ return value; }}"),
-            format!("int ignore({spelling} value) {{ return 0; }}"),
-            format!("extern {spelling} external(void); int main(void) {{ external(); return 0; }}"),
-            format!("int callback({spelling} (*function)({spelling})) {{ return 0; }}"),
-            format!("typedef {spelling} signature({spelling}); signature *address(void) {{ return 0; }}"),
-        ] {
-            assert_lowering_error(&source, 310, "E3049", "not-lowered: floating-call-interface");
+        // L03: the half formats cross a call in a vector register (EvoIR
+        // 3.13.6). The other target floating types keep the refusal.
+        let half = matches!(spelling, "_Float16" | "__fp16" | "__bf16");
+        for source in interfaces(spelling) {
+            if half {
+                for optimize in [false, true] {
+                    asm_binding_ir(&source, optimize);
+                }
+            } else {
+                assert_lowering_error(
+                    &source,
+                    310,
+                    "E3049",
+                    "not-lowered: floating-call-interface",
+                );
+            }
         }
         // Equal-sized nominal types are not scalar aliases; pointer and layout
         // use does not justify refusing the containing ordinary function.
         asm_binding_ir(
             &format!("unsigned size(const {spelling} *p) {{ return sizeof(*p); }}"),
             false,
+        );
+    }
+    // AAPCS64 makes a record of `__bf16` members an HFA, and GCC 14 passes it
+    // in general registers, so the interface keeps the named refusal.
+    let interfaces = |record: &str| {
+        [
+            format!("{record} struct B identity(struct B value) {{ return value; }}"),
+            format!("{record} int ignore(struct B value) {{ return 0; }}"),
+            format!("{record} extern struct B external(void); int main(void) {{ external(); return 0; }}"),
+        ]
+    };
+    for record in ["struct B { __bf16 a, b; };", "struct B { __bf16 a[3]; };"] {
+        for source in interfaces(record) {
+            assert_lowering_error(
+                &source,
+                311,
+                "E3049",
+                "not-lowered: floating-call-interface",
+            );
+        }
+    }
+    // A record of both half formats is no HFA, because AAPCS64 gives them two
+    // fundamental types: on Linux it is an ordinary composite, as in GCC 14.
+    for source in interfaces("struct B { __bf16 a; _Float16 b; };") {
+        for optimize in [false, true] {
+            asm_binding_ir(&source, optimize);
+        }
+    }
+    for optimize in [false, true] {
+        asm_binding_ir(
+            "struct H { _Float16 a, b, c; }; struct H identity(struct H value) { return value; }",
+            optimize,
         );
     }
 }
@@ -278,21 +327,53 @@ fn floating_complex_record_variable_arguments_lower() {
     }
 }
 
-/// A record with a half-precision member has no executable variadic ABI.
+/// L03: a record with a half member is an ordinary variadic record, and a
+/// binary16 HFA is an HFA. A record that AAPCS64 makes an HFA because of a
+/// `__bf16` member keeps the named refusal, and a member type without
+/// admitted values keeps the variadic refusal.
 #[test]
-fn half_precision_record_variable_arguments_remain_outside_the_executable_abi() {
+fn half_precision_record_variable_arguments_follow_the_record_abi() {
+    for member in [
+        "__fp16 x; int tag;",
+        "_Float16 x; int tag;",
+        "__bf16 x; int tag;",
+        "_Float16 x, y;",
+    ] {
+        for optimize in [false, true] {
+            asm_binding_ir(
+                &format!("struct S {{ {member} }}; int f(int n, ...); int pass(struct S s) {{ return f(1, s); }}"),
+                optimize,
+            );
+            asm_binding_ir(
+                &format!("struct S {{ {member} }}; int f(int n, ...) {{ __builtin_va_list ap; __builtin_va_start(ap, n); struct S s = __builtin_va_arg(ap, struct S); return 0; }}"),
+                optimize,
+            );
+        }
+    }
     for (ordinal, source, code, message) in [
         (
             5,
-            "struct S { __fp16 x; int tag; }; int f(int n, ...); int pass(struct S s) { return f(1, s); }\n",
+            "struct S { _Float32 x; int tag; }; int f(int n, ...); int pass(struct S s) { return f(1, s); }\n",
             "E3030",
             "not-lowered: varargs",
         ),
         (
             6,
-            "struct S { __fp16 x; int tag; }; int f(int n, ...) { __builtin_va_list ap; __builtin_va_start(ap, n); struct S s = __builtin_va_arg(ap, struct S); return 0; }\n",
+            "struct S { _Float32 x; int tag; }; int f(int n, ...) { __builtin_va_list ap; __builtin_va_start(ap, n); struct S s = __builtin_va_arg(ap, struct S); return 0; }\n",
             "E3030",
             "not-lowered: varargs",
+        ),
+        (
+            7,
+            "struct B { __bf16 x, y; }; int f(int n, ...); int pass(struct B s) { return f(1, s); }\n",
+            "E3049",
+            "not-lowered: floating-call-interface",
+        ),
+        (
+            8,
+            "struct B { __bf16 x, y; }; int f(int n, ...) { __builtin_va_list ap; __builtin_va_start(ap, n); struct B s = __builtin_va_arg(ap, struct B); return 0; }\n",
+            "E3049",
+            "not-lowered: floating-call-interface",
         ),
     ] {
         assert_lowering_error(source, ordinal, code, message);

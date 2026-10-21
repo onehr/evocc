@@ -21,6 +21,8 @@ pub(crate) struct Helper {
 }
 fn registers(ty: &EvoIRType) -> Vec<RegClass> {
     match ty {
+        // A half result arrives in the `h` view of a vector register.
+        EvoIRType::F16 | EvoIRType::BF16 => vec![RegClass::Simd32],
         EvoIRType::Bits(128) => vec![RegClass::Gpr64; 2],
         EvoIRType::Bits(1..=32) => vec![RegClass::Gpr32],
         EvoIRType::Bits(33..=64) => vec![RegClass::Gpr64],
@@ -151,6 +153,9 @@ pub(crate) fn qualified(symbol: &str) -> Option<Helper> {
             "__extenddftf2" => (Convert, vec![F64], F128),
             "__trunctfsf2" => (Convert, vec![F128], F32),
             "__trunctfdf2" => (Convert, vec![F128], F64),
+            // GCC 14's libgcc rounds binary128 once to the half formats.
+            "__trunctfhf2" => (Convert, vec![F128], EvoIRType::F16),
+            "__trunctfbf2" => (Convert, vec![F128], EvoIRType::BF16),
             "__floatsitf" => (FromSigned, vec![Bits(32)], F128),
             "__floatditf" => (FromSigned, vec![Bits(64)], F128),
             "__floattitf" => (FromSigned, vec![Bits(128)], F128),

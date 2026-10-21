@@ -4,7 +4,7 @@
 //! generic NaN selection. Neither API changes the process floating environment.
 
 use crate::FloatKind;
-use rustc_apfloat::ieee::{Double, Half, Quad, Single};
+use rustc_apfloat::ieee::{BFloat, Double, Half, Quad, Single};
 use rustc_apfloat::{Float, FloatConvert, Round, Status};
 use std::cmp::Ordering;
 
@@ -32,6 +32,10 @@ macro_rules! with_format {
                 type $format = Half;
                 $expression
             }
+            FloatKind::BF16 => {
+                type $format = BFloat;
+                $expression
+            }
             FloatKind::F32 => {
                 type $format = Single;
                 $expression
@@ -56,7 +60,7 @@ pub use environment::{FpEnvironment, FpResult, FpRounding, FpStatus};
 impl FloatBits {
     pub fn from_bits(kind: FloatKind, bits: u128) -> Option<Self> {
         let width = match kind {
-            FloatKind::F16 => 16,
+            FloatKind::F16 | FloatKind::BF16 => 16,
             FloatKind::F32 => 32,
             FloatKind::F64 => 64,
             FloatKind::F128 => 128,
@@ -97,6 +101,7 @@ impl FloatBits {
         1u128
             << match self.kind {
                 FloatKind::F16 => 9,
+                FloatKind::BF16 => 6,
                 FloatKind::F32 => 22,
                 FloatKind::F64 => 51,
                 FloatKind::F128 => 111,
@@ -125,19 +130,15 @@ impl FloatBits {
     /// Numerical format conversion (not object copying). Widening/narrowing a
     /// NaN preserves sign and the most significant payload bits and quiets it.
     pub fn target_convert(self, kind: FloatKind) -> Option<Self> {
-        if !matches!(self.kind, FloatKind::F32 | FloatKind::F64 | FloatKind::F128)
-            || !matches!(kind, FloatKind::F32 | FloatKind::F64 | FloatKind::F128)
-        {
-            return None;
-        }
         if kind == self.kind || self.is_finite() {
             return self.convert(kind);
         }
         let layout = |kind| match kind {
+            FloatKind::F16 => (15, 10, 0x7c00),
+            FloatKind::BF16 => (15, 7, 0x7f80),
             FloatKind::F32 => (31, 23, 0x7f800000),
             FloatKind::F64 => (63, 52, 0x7ff0000000000000),
             FloatKind::F128 => (127, 112, 0x7fff0000000000000000000000000000),
-            _ => unreachable!("admitted scalar format"),
         };
         let (source_sign, source_fraction, _) = layout(self.kind);
         let (sign, fraction, exponent) = layout(kind);
@@ -160,7 +161,7 @@ impl FloatBits {
     /// Exact sign-bit operation; in particular, this does not quiet an sNaN.
     pub fn negated(self) -> Self {
         let sign = match self.kind {
-            FloatKind::F16 => 15,
+            FloatKind::F16 | FloatKind::BF16 => 15,
             FloatKind::F32 => 31,
             FloatKind::F64 => 63,
             FloatKind::F128 => 127,
@@ -193,6 +194,7 @@ impl FloatBits {
         where
             F: Float
                 + FloatConvert<Half>
+                + FloatConvert<BFloat>
                 + FloatConvert<Single>
                 + FloatConvert<Double>
                 + FloatConvert<Quad>,

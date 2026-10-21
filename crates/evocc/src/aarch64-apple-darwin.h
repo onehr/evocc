@@ -120,3 +120,22 @@
 #define __LDBL_NORM_MAX__ 1.7976931348623157e+308L
 #undef __DECIMAL_DIG__
 #define __DECIMAL_DIG__ __LDBL_DECIMAL_DIG__
+
+/* Apple clang has no bfloat16 constant suffix and predefines no bfloat16
+ * macros (EvoIR 3.13.6). */
+#undef __BFLT16_DECIMAL_DIG__
+#undef __BFLT16_DENORM_MIN__
+#undef __BFLT16_DIG__
+#undef __BFLT16_EPSILON__
+#undef __BFLT16_HAS_DENORM__
+#undef __BFLT16_HAS_INFINITY__
+#undef __BFLT16_HAS_QUIET_NAN__
+#undef __BFLT16_IS_IEC_60559__
+#undef __BFLT16_MANT_DIG__
+#undef __BFLT16_MAX_10_EXP__
+#undef __BFLT16_MAX_EXP__
+#undef __BFLT16_MAX__
+#undef __BFLT16_MIN_10_EXP__
+#undef __BFLT16_MIN_EXP__
+#undef __BFLT16_MIN__
+#undef __BFLT16_NORM_MAX__

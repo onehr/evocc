@@ -1,6 +1,6 @@
 # EvoMIR Specification
 
-**Revision 1.9.0** | **Pinned ground truth** | Floating vector lanes on 2026-10-21
+**Revision 1.10.0** | **Pinned ground truth** | Half formats on 2026-10-21
 
 ## Status and scope
 
@@ -181,7 +181,7 @@ physical registers, spill slots and frame offsets.
 
 | Class | Holds | View |
 |---|---|---|
-| `gpr32` | `bits<N>` with `1 <= N <= 32`; an integer vector of 1, 2 or 4 bytes; a 4-byte floating vector | `w` |
+| `gpr32` | `bits<N>` with `1 <= N <= 32`; an integer vector of 1, 2 or 4 bytes; a 4-byte floating vector; an `f16` or `bf16` value in its low 16 bits | `w` |
 | `gpr64` | `bits<N>` with `33 <= N <= 64`; every pointer; each half of a `bits<128>` | `x` |
 | `simd32` | `f32` | `s` |
 | `simd64` | `f64`; an 8-byte integer or floating vector | `d` |
@@ -279,6 +279,43 @@ conversions are ordinary ABI calls of `__addtf3`, `__subtf3`, `__multf3`,
 Comparisons use the equality/unordered and ordered helper families and test
 signs; quiet ordered predicates first test unordered status, replace
 unordered inputs with zero, and mask the result to false.
+
+**Half formats.** An `f16` or `bf16` value of EvoIR Section 3.13.6 is its 16
+representation bits in a `gpr32` register, and the bits above them are
+unspecified, as for a `bits<16>` value. A constant is `mov`, a load or a
+store is `ldrh` or `strh`, and a copy or a spill moves the bits; a signaling
+NaN keeps its bits. The only operations are `fp.convert`, `fp.from_signed`
+and `fp.from_unsigned` and their strict forms. The suffix `.f16` or `.bf16`
+names the half format, and the class of the other operand names the other
+side: `simd32` binary32, `simd64` binary64, and `gpr32` a 32-bit integer.
+
+- Binary16 converts with FCVT through the `h` view of `v31`, so FPCR and FPSR
+  apply as IEEE 754 requires.
+- A bfloat16 value widens to binary32 by a shift into the high half of the
+  binary32 bits. FMAX of the result with itself then quiets a signaling NaN
+  and raises INVALID for it; it changes no other value. A widening to
+  binary64 converts that binary32 value with FCVT.
+- A narrowing to bfloat16 rounds the binary32 bits in `x16` and `x17`. A NaN
+  keeps its sign and its leading payload bits and becomes quiet, and the
+  quiet FCMP of the value raises INVALID for a signaling NaN. The baseline
+  form rounds to nearest, ties to even. The strict form reads the rounding
+  direction from FPCR and ORs INEXACT, UNDERFLOW (tiny before rounding) and
+  OVERFLOW into FPSR; a write of FPSR raises the status in this non-trapping
+  profile. A binary64 source narrows to binary32 first with FCVTXN, which
+  rounds to odd: 24 bits are more than 8 + 2, so the second rounding gives the
+  exactly rounded value and the status of one conversion.
+- An integer of at most 32 bits converts with SCVTF or UCVTF to binary64,
+  which is exact, and then narrows. A wider integer source is `E4009`; the C
+  lowering reduces it first (EvoIR Section 3.13.6).
+- On Linux, a conversion from `f128` is `bl.fixed_fp` or `bl.strict_fp` of
+  `__trunctfhf2` or `__trunctfbf2`, with the half result in `h0`. A
+  conversion to `f128` widens to binary32 exactly and then calls
+  `__extendsftf2`. A conversion between the two half formats passes through
+  the exact binary32 value.
+
+Under `-mgeneral-regs-only` a function with a half value is `E4002`, as one
+with a floating vector is (Section 2.7), although a `gpr32` register holds
+the value.
 
 **Complex parts.** The two parts of one complex product or quotient of EvoIR
 Section 3.13.5, adjacent and with the same operands, become one call. The
@@ -414,6 +451,7 @@ virtual register.
 | `ldr.p`, `ldr.pf` / `str.p` | An 8-byte load of an object pointer or a function pointer, or a store of a pointer. Emitted as `ldr`/`str`. The interpreter reconstructs provenance as EvoIR Sections 5.3 and 5.4 do and reports `E3013` on a partial shadow. |
 | `strb`, `strh`, `str.w`, `str.x rt, [rn, #off]` | 1, 2, 4 or 8 bytes at `rn + off` `:=` the low bytes of `rt`. |
 | `ldr.s`, `ldr.d`, `ldr.q` / `str.s`, `str.d`, `str.q` | Load or store of a `simd32`, `simd64` or `simd128` value. |
+| `ldr.h` / `str.h` | Two bytes between memory and the `h` view of a `simd32` register; a load makes the other bits of the register zero. A binary16 HFA member moves with them (Section 6.3). |
 | `ldp rd1, rd2, [rn, #off]` / `stp rt1, rt2, [rn, #off]` | Two `gpr64` registers at `rn + off` and `rn + off + 8`, optional writeback `!`. Lowering uses them for a `bits<128>` access at alignment 8 or more and for a 128-bit `va_arg`. Not single-copy atomic. |
 | ` volatile` marker | The access appears in the volatile trace (EvoIR Section 4.3) and is never merged with a neighbor. |
 | ` [align=N]` suffix on a scalar load or store | The alignment that the EvoIR access guard proves, a power of two; without it, natural alignment. It changes only strict-alignment emission (Section 8.9). |
@@ -489,7 +527,8 @@ the spelling family of the source. A pointer comparison uses only `eq` and
 | Form | Semantics |
 |---|---|
 | `fp.OP.f32` / `fp.OP.f64 (args)` | The EvoIR floating operation `OP` (Section 2.6). |
-| `fp.strict.OP[.iN].f32` / `.f64 (args)` | The strict operation; `.iN` is the semantic width of an integer result. |
+| `fp.OP.f16` / `fp.OP.bf16 (arg)` | A conversion with a half format on one side (Section 2.6). |
+| `fp.strict.OP[.iN].f32` / `.f64` / `.f16` / `.bf16 (args)` | The strict operation; `.iN` is the semantic width of an integer result. |
 | `fp.env.check`, `fp.env.check.strict` | The floating-environment checks (Section 2.6). |
 | `vec.pack.N.B (args)` / `vec.extract.N.B (src, index)` | Integer-vector representation forms (Section 2.7). |
 | `crypto.aese`, `.aesd`, `.aesmc`, `.aesimc (args)` | The AES instructions on `simd128` operands. |
@@ -909,6 +948,19 @@ first member) that does not fit goes wholly to the stack with contiguous
 object bytes; other vectors wider than 16 bytes use the record convention. Stack transport uses the natural member
 alignment that EvoIR records (`abi_align=16`, or 8), and the shared cursor
 rounds the physical stack offset. An anonymous `float` becomes `double`.
+
+**Half values.** An `f16` or `bf16` argument or result uses the next vector
+register like an `f32`, in its `h` view. AAPCS64 C.1 leaves the bits above
+the half unspecified, so the machine moves the `gpr32` bits to a `simd32`
+transport register with `fmov` and reads only the low 16 bits back. An
+anonymous half value is not promoted (EvoIR Section 3.13.6), and `va_arg`
+reads the two low bytes of its 16-byte register slot or 8-byte stack slot. A binary16 HFA (`hfa=Cxf16`)
+takes one register for each member, which moves with `ldr.h` and `str.h`. On
+Linux, a half argument that finds no register takes the low two bytes of an
+8-byte stack slot. A binary16 HFA has no stack placement in this revision, and
+neither has a half argument under the Apple convention: both are `E4010`. The
+front end refuses an anonymous half argument and its `va_arg` on Darwin
+(`E3049`).
 
 ### 6.4 Records
 
@@ -1737,15 +1789,15 @@ this table, not a withdrawn code or the allocation verifier's separate E4020.
 | Code | Name | Meaning |
 |---|---|---|
 | `E4001` | `not-lowered: floating-point` | Withdrawn: scalar `f32`/`f64` are admitted (Section 2.6); other formats remain front-end refusals. |
-| `E4002` | `not-lowered: vector` | An unsupported vector execution or external vector ABI, a 4-byte floating vector at a call boundary, or a SIMD class or a floating vector under `-mgeneral-regs-only`, including an Apple tiny-vector result in `v0` (Sections 2.7 and 6.2). |
+| `E4002` | `not-lowered: vector` | An unsupported vector execution or external vector ABI, a 4-byte floating vector at a call boundary, or a SIMD class, a floating vector or a half value under `-mgeneral-regs-only`, including an Apple tiny-vector result in `v0` (Sections 2.6, 2.7 and 6.2). |
 | `E4003` | `not-lowered: wide-integer` | `bits<N>` with `64 < N < 128` or `N > 128`. Width 128 is admitted, including the UB predicates and hosted division. |
 | `E4004` | `not-lowered: tuple` | A tuple-typed value. |
 | `E4005` | `not-lowered: static-pointer-data` | Withdrawn: static relocations are emitted (Section 8.2). |
 | `E4006` | `not-lowered: indirect-branch` | Withdrawn: `br.indirect` lowers with complete edge bindings (Section 7.2). Invalid targets and malformed bindings keep their own checks. |
 | `E4007` | `not-lowered: frame-address` | Withdrawn: `frame_address` lowers (Section 5.1). |
 | `E4008` | `not-lowered: pointer-difference` | Withdrawn: `ptr.to_int` operands, 64-bit subtraction and exact signed division lower through scalar forms. |
-| `E4009` | `not-lowered: unsupported-form` | An EvoIR instruction absent from Section 5, a form that the ABI profile does not admit (binary128, section placement or a patchable entry on Darwin), or an `asm` that clobbers `x29` (Section 6.7). |
-| `E4010` | `abi: too-many-register-arguments` | A stack argument on the Darwin ABI profile without the Apple convention, or a named stack argument that the Apple convention does not place (Section 6.6). |
+| `E4009` | `not-lowered: unsupported-form` | An EvoIR instruction absent from Section 5, a form that the ABI profile does not admit (binary128, section placement or a patchable entry on Darwin), an `asm` that clobbers `x29` (Section 6.7), or a half value from an integer above 32 bits (Section 2.6). |
+| `E4010` | `abi: too-many-register-arguments` | A stack argument on the Darwin ABI profile without the Apple convention, a named stack argument that the Apple convention does not place (Section 6.6), or a half argument or binary16 HFA without a stack placement (Section 6.3). |
 | `E4011` | `abi: aggregate-by-value` | Withdrawn: `byval`/`sret` records follow AAPCS64 (Section 6.4). |
 | `E4012` | `abi: variadic` | Withdrawn: variadic callees and callers lower (Section 6.12). |
 | `E4013` | `abi: too-many-results` | More than eight ordinary results. |
@@ -1909,6 +1961,18 @@ and the checked UB-check profile; each exporter refuses other forms.
 | `core-asm-v1` | `crates/evocc-mir/src/asm_ast.rs` (`evo-asm-ast`) | `lean/EvoIR/Asm/Reader.lean` | The assembly AST and the frame hints |
 
 ## Revision
+
+**Revision 1.10.0, 2026-10-21.** Section 2.6 lowers the half formats of EvoIR
+2.22.0. A half value is its 16 bits in a `gpr32` register, and a function with one is
+`E4002` under `-mgeneral-regs-only`. Binary16 converts
+with FCVT through the `h` view of `v31`. Bfloat16 widens by a shift and FMAX
+and narrows by an integer rounding sequence; the strict form reads the
+rounding direction from FPCR and raises its status in FPSR. FCVTXN narrows a
+binary64 value to bfloat16 with one effective rounding. Section 4.1 adds
+`ldr.h` and `str.h` for binary16 HFA members, and Section 6.3 passes a half
+value in the `h` view of a vector register. A binary16 HFA on the stack and a
+half argument on the Apple stack are `E4010`, and a half value from an
+integer above 32 bits is `E4009`.
 
 **Revision 1.9.0, 2026-10-21.** Section 2.7 lowers the floating vectors of
 EvoIR 2.21.0. A floating vector has the class of an integer vector of its

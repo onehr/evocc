@@ -110,6 +110,7 @@ pub fn is_integer_variadic_record(
                 | TypeKind::Pointer(_)
                 | TypeKind::GnuInt128(_),
             ) => true,
+            Some(TypeKind::TargetBuiltin(builtin)) => builtin.half_format().is_some(),
             _ => false,
         }
     }
@@ -125,11 +126,55 @@ pub fn is_integer_variadic_record(
         && homogeneous_floating_aggregate(types, target, ty).is_none_or(|f| {
             matches!(
                 f.kind,
-                evocc_types::FloatKind::F32
+                evocc_types::FloatKind::F16
+                    | evocc_types::FloatKind::F32
                     | evocc_types::FloatKind::F64
                     | evocc_types::FloatKind::F128
             )
         })
+}
+
+/// Whether a value of type `ty` has no admitted convention where it crosses
+/// a call (EvoIR 3.13.6). An HFA of `__bf16` members has none on either
+/// target: AAPCS64 passes it in vector registers, and GCC 14 in general
+/// registers (GCC PR 120007). A record that mixes the two half formats is no
+/// HFA under AAPCS64 and passes as an ordinary composite, as GCC 14 passes
+/// it; it has none where the target's compiler passes it as an HFA, as
+/// Apple clang does. An anonymous `_Float16` or `__bf16` value, and an
+/// anonymous binary16 HFA, have none where the target passes no half
+/// anonymous arguments: Apple clang has no stable convention for them.
+#[must_use]
+pub fn half_interface_refused(
+    types: &TypeInterner,
+    target: &TargetDataLayout,
+    ty: TypeId,
+    anonymous: bool,
+) -> bool {
+    use evocc_types::{FloatKind, TypeKind};
+    let record = matches!(
+        types.get(ty).map(|ty| &ty.kind),
+        Some(TypeKind::Struct(_) | TypeKind::Union(_))
+    );
+    let aggregate = record
+        .then(|| homogeneous_floating_aggregate(types, target, ty).map(|f| f.kind))
+        .flatten();
+    if aggregate == Some(FloatKind::BF16) {
+        return true;
+    }
+    if record
+        && !target.passes_mixed_half_records()
+        && mixes_half_formats_like_an_hfa(types, target, ty)
+    {
+        return true;
+    }
+    if !anonymous || target.passes_half_anonymous_arguments() {
+        return false;
+    }
+    let half = matches!(
+        types.get(ty).map(|ty| &ty.kind),
+        Some(TypeKind::TargetBuiltin(builtin)) if builtin.half_format().is_some()
+    );
+    half || aggregate == Some(FloatKind::F16)
 }
 
 /// The AAPCS64 HFA class, distinguished from mixed or padded records which use
@@ -151,6 +196,32 @@ pub fn homogeneous_floating_aggregate(
     target: &TargetDataLayout,
     ty: TypeId,
 ) -> Option<evocc_types::FloatAggregate> {
+    floating_aggregate(types, target, ty, false)
+}
+
+/// Whether a record of binary16 and bfloat16 members would be an HFA if the
+/// two half formats were one type. AAPCS64 makes such a record no HFA; Clang,
+/// Apple clang included, joins the formats by size and passes the record in
+/// vector registers (EvoIR 3.13.6).
+#[must_use]
+pub fn mixes_half_formats_like_an_hfa(
+    types: &TypeInterner,
+    target: &TargetDataLayout,
+    ty: TypeId,
+) -> bool {
+    homogeneous_floating_aggregate(types, target, ty).is_none()
+        && floating_aggregate(types, target, ty, true).is_some()
+}
+
+/// The HFA class of `ty`. With `join_halves`, the two half formats count as
+/// one member type, as Clang counts them; a record that mixes them then has
+/// the kind `BF16`.
+fn floating_aggregate(
+    types: &TypeInterner,
+    target: &TargetDataLayout,
+    ty: TypeId,
+    join_halves: bool,
+) -> Option<evocc_types::FloatAggregate> {
     use evocc_types::{FloatKind, TagDefinition, TagState, TypeKind};
     #[derive(Clone, Copy)]
     enum Shape {
@@ -162,10 +233,16 @@ pub fn homogeneous_floating_aggregate(
         types: &TypeInterner,
         target: &TargetDataLayout,
         ty: TypeId,
+        join_halves: bool,
         active: &mut Vec<TagId>,
     ) -> Shape {
         match types.get(ty).map(|ty| &ty.kind) {
             Some(TypeKind::Float(kind)) => Shape::Float(target.float_format(*kind), 1),
+            // A half member has its own format: AAPCS64 gives binary16 and
+            // bfloat16 two fundamental types (EvoIR 3.13.6).
+            Some(TypeKind::TargetBuiltin(builtin)) if builtin.half_format().is_some() => {
+                Shape::Float(builtin.half_format().unwrap(), 1)
+            }
             // AAPCS64 lays out a complex type as a record of its two parts.
             Some(TypeKind::Complex(base)) => match base.executable_part() {
                 Some(kind) => Shape::Float(target.float_format(kind), 2),
@@ -178,7 +255,7 @@ pub fn homogeneous_floating_aggregate(
                 if *count == 0 {
                     return Shape::Empty;
                 }
-                match shape(types, target, *element, active) {
+                match shape(types, target, *element, join_halves, active) {
                     Shape::Float(kind, n) if count.checked_mul(n).is_some_and(|n| n <= 4) => {
                         Shape::Float(kind, count * n)
                     }
@@ -206,15 +283,18 @@ pub fn homogeneous_floating_aggregate(
                     let member = if field.bit_field.is_some() {
                         Shape::General
                     } else {
-                        shape(types, target, field.ty, active)
+                        shape(types, target, field.ty, join_halves, active)
                     };
                     result = match (result, member) {
                         (Shape::Empty, right) => right,
                         (left, Shape::Empty) => left,
-                        (Shape::Float(a, n), Shape::Float(b, m)) if a == b => {
+                        (Shape::Float(a, n), Shape::Float(b, m))
+                            if a == b || (join_halves && a.is_half() && b.is_half()) =>
+                        {
                             let count = if union { n.max(m) } else { n + m };
+                            let kind = if a == b { a } else { FloatKind::BF16 };
                             if count <= 4 {
-                                Shape::Float(a, count)
+                                Shape::Float(kind, count)
                             } else {
                                 Shape::General
                             }
@@ -228,10 +308,10 @@ pub fn homogeneous_floating_aggregate(
             _ => Shape::General,
         }
     }
-    match shape(types, target, ty, &mut Vec::new()) {
+    match shape(types, target, ty, join_halves, &mut Vec::new()) {
         Shape::Float(kind, count @ 1..=4) => {
             let element_bytes = match kind {
-                FloatKind::F16 => 2,
+                FloatKind::F16 | FloatKind::BF16 => 2,
                 FloatKind::F32 => 4,
                 FloatKind::F64 => 8,
                 FloatKind::F128 => 16,
@@ -360,6 +440,37 @@ pub enum FloatSuffix {
     None,
     F,
     L,
+    /// `f16` or `F16`: a `_Float16` constant.
+    F16,
+    /// `bf16` or `BF16`: a `__bf16` constant.
+    BF16,
+}
+
+impl FloatSuffix {
+    /// The format of the constant's C type. `F128` names `long double`,
+    /// whose format the target chooses.
+    #[must_use]
+    pub const fn type_kind(self) -> evocc_types::FloatKind {
+        match self {
+            Self::None => evocc_types::FloatKind::F64,
+            Self::F => evocc_types::FloatKind::F32,
+            Self::L => evocc_types::FloatKind::F128,
+            Self::F16 => evocc_types::FloatKind::F16,
+            Self::BF16 => evocc_types::FloatKind::BF16,
+        }
+    }
+
+    /// The format of the constant's value. A half constant evaluates to
+    /// binary32, as C23 H.3 requires with `FLT_EVAL_METHOD` 0: the value
+    /// rounds once to binary32, and a later conversion to the half format
+    /// rounds it again, as GCC 14 does.
+    #[must_use]
+    pub const fn value_kind(self) -> evocc_types::FloatKind {
+        match self {
+            Self::F16 | Self::BF16 => evocc_types::FloatKind::F32,
+            suffix => suffix.type_kind(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

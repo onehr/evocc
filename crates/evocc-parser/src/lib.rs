@@ -806,24 +806,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         // macro expansion through translation phase 4. If either survives to
         // this phase-7 boundary, it has no C-token form and is diagnosed at
         // the exact preserved token rather than leaking into syntax errors.
-        let lexical_diagnostic = tokens
-            .iter()
-            .find(|token| {
-                matches!(
-                    token.kind,
-                    TokenKind::PpNumber | TokenKind::PpOther | TokenKind::EncodingError
-                )
-            })
-            .map(|token| ParseDiagnostic {
-                span: token.span,
-                previous_declaration: None,
-                code: if token.kind == TokenKind::EncodingError {
-                    "E0002"
-                } else {
-                    "E0112"
-                },
-                message: "stray-token".to_owned(),
-            });
+        let lexical_diagnostic = lexical_diagnostic(&tokens);
         // GNU contextual spellings must remain identifiers through
         // preprocessing so they can be macro-expanded or token-pasted. Turn
         // an exact surviving spelling into its parser token only at this
@@ -938,6 +921,37 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     pub fn set_target_layout(&mut self, layout: TargetDataLayout) {
         self.types.set_signed_char(layout.plain_char_is_signed());
         self.target_layout = layout;
+        if !layout.accepts_bfloat16_constants() {
+            self.refuse_bfloat16_constants();
+        }
+    }
+
+    /// Apple clang rejects the `bf16` and `BF16` constant suffixes, so on
+    /// such a target a constant with one is a preprocessing number without a
+    /// C token form, and the first stray token is `E0112` (EvoIR 3.13.6).
+    fn refuse_bfloat16_constants(&mut self) {
+        debug_assert_eq!(self.pos, 0, "the target is selected before parsing");
+        let mut refused = false;
+        for token in &mut self.tokens {
+            if token.kind == TokenKind::FloatLiteral
+                && token
+                    .text
+                    .spelling()
+                    .and_then(evocc_lex::half_floating_suffix)
+                    .is_some_and(|(_, bfloat)| bfloat)
+            {
+                token.kind = TokenKind::PpNumber;
+                refused = true;
+            }
+        }
+        if refused {
+            // Only the lexical diagnostic precedes parsing; the first stray
+            // token in source order replaces it.
+            self.diagnostics = lexical_diagnostic(&self.tokens).into_iter().collect();
+            self.had_error = true;
+            self.error_count = 1;
+            self.rollback_error_count = 1;
+        }
     }
 
     /// Control recognition of ordinary externally linked standard names.
@@ -10370,6 +10384,13 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             value = self.complex_update_value(op, target, value, span)?;
         }
         self.require_supported_assignment_promotion(op, target, value)?;
+        if op != AssignmentOp::Simple {
+            self.require_one_half_format(
+                target,
+                value,
+                self.merge_span(target.span(), value.span()),
+            )?;
+        }
         let mut typed_target = typed_target?;
         self.require_admitted_atomic_update(
             &typed_target,
@@ -11242,6 +11263,17 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         }
     }
 
+    /// The C type of a real format: `_Float16` for binary16 and `__bf16` for
+    /// bfloat16, which are target builtins, not standard floating types.
+    fn real_type(&mut self, kind: FloatKind) -> TypeId {
+        let kind = match kind {
+            FloatKind::F16 => TypeKind::TargetBuiltin(TargetBuiltinType::GnuFloat16),
+            FloatKind::BF16 => TypeKind::TargetBuiltin(TargetBuiltinType::ArmBf16),
+            kind => TypeKind::Float(kind),
+        };
+        self.intern(kind, Qualifiers::default())
+    }
+
     fn materialize_inferred_type(
         &mut self,
         inferred: InferredType,
@@ -11250,7 +11282,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         Some(match inferred {
             InferredType::Canonical(ty) => ty,
             InferredType::Integer(integer) => self.intern_c_integer_type(integer),
-            InferredType::Real(real) => self.intern(TypeKind::Float(real), Qualifiers::default()),
+            InferredType::Real(real) => self.real_type(real),
             InferredType::Complex(complex) => {
                 self.intern(TypeKind::Complex(complex), Qualifiers::default())
             }
@@ -11344,11 +11376,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 ExprCategory::Value,
             ),
             CHirExpr::FloatLit(literal, _) => (
-                InferredType::Real(match literal.suffix {
-                    FloatSuffix::F => FloatKind::F32,
-                    FloatSuffix::None => FloatKind::F64,
-                    FloatSuffix::L => FloatKind::F128,
-                }),
+                InferredType::Real(literal.suffix.type_kind()),
                 ExprCategory::Value,
             ),
             CHirExpr::CharLit(literal, _) => (
@@ -12149,7 +12177,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         when_true: InferredExpressionType,
         when_false: InferredExpressionType,
     ) -> Option<InferredType> {
-        if when_true.ty == when_false.ty {
+        // An `__fp16` operand promotes to `float`, also in a conditional.
+        if when_true.ty == when_false.ty && !self.is_arm_fp16(when_true.ty) {
             return Some(when_true.ty);
         }
         if let Some(arithmetic) = self.usual_arithmetic_expression_type(when_true.ty, when_false.ty)
@@ -12209,6 +12238,34 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             }
             _ => None,
         }
+    }
+
+    fn is_arm_fp16(&self, ty: InferredType) -> bool {
+        matches!(ty, InferredType::Canonical(ty) if matches!(
+            self.types.get(ty).map(|ty| &ty.kind),
+            Some(TypeKind::TargetBuiltin(TargetBuiltinType::ArmFp16))
+        ))
+    }
+
+    /// `_Float16` and `__bf16` operands of one operator have no common type.
+    /// Report the named refusal at the operator (EvoIR 3.13.6).
+    fn require_one_half_format(
+        &mut self,
+        left: &CHirExpr<'_>,
+        right: &CHirExpr<'_>,
+        span: SourceSpan,
+    ) -> Option<()> {
+        let class = |this: &Self, expression: &CHirExpr<'_>| {
+            this.converted_expression_type(expression)
+                .map(|inferred| this.operand_type_class(inferred.ty))
+        };
+        if let (Some(left), Some(right)) = (class(self, left), class(self, right)) {
+            if mixes_half_formats(left, right) {
+                self.report("E2961", "mixed-half-formats", span);
+                return None;
+            }
+        }
+        Some(())
     }
 
     fn usual_arithmetic_expression_type(
@@ -12301,12 +12358,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     TypeKind::TargetBuiltin(kind) => {
                         evocc_chir::integer::integer_type_for_target(kind)
                             .map(OperandTypeClass::Integer)
-                            .unwrap_or_else(|| match kind {
-                                TargetBuiltinType::ArmFp16 | TargetBuiltinType::ArmBf16 => {
-                                    OperandTypeClass::Real(FloatKind::F16)
-                                }
-                                _ => OperandTypeClass::Other,
-                            })
+                            .or_else(|| half_operand_class(kind))
+                            .unwrap_or(OperandTypeClass::Other)
                     }
                     TypeKind::Int(rank) => OperandTypeClass::Integer(integer_type_for_rank(rank)),
                     TypeKind::Enum(_) => self
@@ -12545,6 +12598,11 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         if self.match_kind(TokenKind::Colon) {
             let fallback = self.parse_conditional()?;
             self.require_supported_conditional_promotion(condition, fallback)?;
+            self.require_one_half_format(
+                condition,
+                fallback,
+                self.merge_span(condition.span(), fallback.span()),
+            )?;
             let span = self.merge_span(condition.span(), fallback.span());
             let (condition, fallback) = self.convert_conditional_arms(condition, fallback)?;
             return Some(self.alloc_node(CHirExpr::Elvis(condition, fallback, span)));
@@ -12553,6 +12611,11 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         self.expect(TokenKind::Colon)?;
         let when_false = self.parse_conditional()?;
         self.require_supported_conditional_promotion(when_true, when_false)?;
+        self.require_one_half_format(
+            when_true,
+            when_false,
+            self.merge_span(when_true.span(), when_false.span()),
+        )?;
         let span = self.merge_span(condition.span(), when_false.span());
         let (when_true, when_false) = self.convert_conditional_arms(when_true, when_false)?;
         Some(self.alloc_node(CHirExpr::Ternary(condition, when_true, when_false, span)))
@@ -12603,6 +12666,21 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             {
                 lhs = self.make_vector_binary(op, lhs, rhs, span)?;
                 continue;
+            }
+            if matches!(
+                op,
+                BinaryOp::Add
+                    | BinaryOp::Sub
+                    | BinaryOp::Mul
+                    | BinaryOp::Div
+                    | BinaryOp::Lt
+                    | BinaryOp::Le
+                    | BinaryOp::Gt
+                    | BinaryOp::Ge
+                    | BinaryOp::Eq
+                    | BinaryOp::Ne
+            ) {
+                self.require_one_half_format(lhs, rhs, span)?;
             }
             let expression = self.alloc_node(CHirExpr::Binary(op, lhs, rhs, span));
             self.discharge_unsigned_sign_comparison(op, lhs, rhs);
@@ -13493,6 +13571,10 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     FloatSuffix::F => FloatKind::F32,
                     FloatSuffix::None => FloatKind::F64,
                     FloatSuffix::L => FloatKind::F128,
+                    FloatSuffix::F16 | FloatSuffix::BF16 => {
+                        self.report("E1006", "invalid-floating-literal", tok.span);
+                        return None;
+                    }
                 };
                 let ty = self.intern(
                     TypeKind::Complex(complex_base_for_float(kind)),
@@ -15464,11 +15546,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 (builtin.strip_prefix("__builtin_")?, ty, vec![ty])
             }
             "__builtin_nan" | "__builtin_nanf" | "__builtin_nanl" => {
-                let kind = match nan_builtin_suffix(builtin)? {
-                    FloatSuffix::F => FloatKind::F32,
-                    FloatSuffix::None => FloatKind::F64,
-                    FloatSuffix::L => FloatKind::F128,
-                };
+                let kind = nan_builtin_suffix(builtin)?.type_kind();
                 let ty = self.intern(TypeKind::Float(kind), Qualifiers::default());
                 (
                     builtin.strip_prefix("__builtin_")?,
@@ -16490,14 +16568,45 @@ fn implicit_function_name(spelling: &str) -> Option<&'static str> {
 
 fn floating_rank(kind: FloatKind) -> u8 {
     match kind {
-        FloatKind::F16 => 0,
+        FloatKind::F16 | FloatKind::BF16 => 0,
         FloatKind::F32 => 1,
         FloatKind::F64 => 2,
         FloatKind::F128 => 3,
     }
 }
 
+/// The arithmetic class of a half type (EvoIR 3.13.6). `_Float16` and
+/// `__bf16` keep their own type, which ranks below `float`. An `__fp16`
+/// operand promotes to `float` before every operator, as ACLE requires.
+fn half_operand_class(kind: TargetBuiltinType) -> Option<OperandTypeClass> {
+    match kind {
+        TargetBuiltinType::GnuFloat16 => Some(OperandTypeClass::Real(FloatKind::F16)),
+        TargetBuiltinType::ArmBf16 => Some(OperandTypeClass::Real(FloatKind::BF16)),
+        TargetBuiltinType::ArmFp16 => Some(OperandTypeClass::Real(FloatKind::F32)),
+        _ => None,
+    }
+}
+
+/// Whether two operand classes mix the two half formats. Neither value set
+/// is a subset of the other, so they have no common type (C23 H.4.2 makes
+/// the analogous mixture undefined).
+fn mixes_half_formats(left: OperandTypeClass, right: OperandTypeClass) -> bool {
+    matches!(
+        (left, right),
+        (
+            OperandTypeClass::Real(FloatKind::F16),
+            OperandTypeClass::Real(FloatKind::BF16)
+        ) | (
+            OperandTypeClass::Real(FloatKind::BF16),
+            OperandTypeClass::Real(FloatKind::F16)
+        )
+    )
+}
+
 fn widest_floating_kind(left: OperandTypeClass, right: OperandTypeClass) -> Option<FloatKind> {
+    if mixes_half_formats(left, right) {
+        return None;
+    }
     match (floating_kind(left), floating_kind(right)) {
         (Some(left), Some(right)) => Some(if floating_rank(left) >= floating_rank(right) {
             left
@@ -16521,7 +16630,7 @@ fn complex_class(complex: ComplexBase) -> OperandTypeClass {
 
 fn complex_base_for_float(kind: FloatKind) -> ComplexBase {
     match kind {
-        FloatKind::F16 => ComplexBase::CF16,
+        FloatKind::F16 | FloatKind::BF16 => ComplexBase::CF16,
         FloatKind::F32 => ComplexBase::CF32,
         FloatKind::F64 => ComplexBase::CF64,
         FloatKind::F128 => ComplexBase::CF128,
@@ -17549,21 +17658,53 @@ fn parse_int_literal(text: &str) -> Option<IntLit> {
     })
 }
 
+/// The first token without a C token form after preprocessing, at the exact
+/// preserved token: `E0002` for an encoding error, else `E0112`.
+fn lexical_diagnostic(tokens: &[Token]) -> Option<ParseDiagnostic> {
+    tokens
+        .iter()
+        .find(|token| {
+            matches!(
+                token.kind,
+                TokenKind::PpNumber | TokenKind::PpOther | TokenKind::EncodingError
+            )
+        })
+        .map(|token| ParseDiagnostic {
+            span: token.span,
+            previous_declaration: None,
+            code: if token.kind == TokenKind::EncodingError {
+                "E0002"
+            } else {
+                "E0112"
+            },
+            message: "stray-token".to_owned(),
+        })
+}
+
 /// A literal rounds once, directly into the format of its type. An `L`
 /// literal therefore has the target's `long double` format.
+/// A half constant (`f16`, `bf16`) rounds once to binary32, its value
+/// format (C23 H.3); its type is still the half type.
 fn parse_float_literal(text: &str, target: TargetDataLayout) -> Option<FloatLit> {
-    let (number, suffix) = match text.as_bytes().last().copied() {
-        Some(b'f' | b'F') => (&text[..text.len() - 1], FloatSuffix::F),
-        Some(b'l' | b'L') => (&text[..text.len() - 1], FloatSuffix::L),
-        _ => (text, FloatSuffix::None),
+    let (number, suffix) = if let Some((half, bfloat)) = evocc_lex::half_floating_suffix(text) {
+        (
+            &text[..text.len() - half.len()],
+            if bfloat {
+                FloatSuffix::BF16
+            } else {
+                FloatSuffix::F16
+            },
+        )
+    } else {
+        match text.as_bytes().last().copied() {
+            Some(b'f' | b'F') => (&text[..text.len() - 1], FloatSuffix::F),
+            Some(b'l' | b'L') => (&text[..text.len() - 1], FloatSuffix::L),
+            _ => (text, FloatSuffix::None),
+        }
     };
     Some(FloatLit {
         value: evocc_chir::FloatConstant::Real(evocc_types::floating::FloatBits::parse(
-            target.float_format(match suffix {
-                FloatSuffix::F => FloatKind::F32,
-                FloatSuffix::None => FloatKind::F64,
-                FloatSuffix::L => FloatKind::F128,
-            }),
+            target.float_format(suffix.value_kind()),
             number,
         )?),
         suffix,

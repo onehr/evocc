@@ -110,12 +110,6 @@ pub(super) fn convert_runtime(
         }
         return convert(value, kind, span);
     }
-    if !matches!(kind, FloatKind::F32 | FloatKind::F64 | FloatKind::F128) {
-        return Err(InterpreterError::UnsupportedExpression {
-            feature: "strict floating format",
-            span,
-        });
-    }
     let environment = world.fp_environment();
     let result = match value {
         CValue::Integer(value) => Some(if value.ty().is_signed() {

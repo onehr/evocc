@@ -326,7 +326,9 @@ fn floating_complex_values_lower_as_two_parts() {
 fn target_floating_call_refusals_survive_the_cli_without_affecting_storage() {
     let source = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../tests/fixtures/floating-target-call-refusal.c");
-    for kind in ["__fp16", "__bf16"] {
+    // L03 admits the half formats (EvoIR 3.13.6). The other target floating
+    // types keep the named refusal.
+    for kind in ["_Float32", "_Float64x"] {
         for case in 0..5 {
             for mode in ["--emit=evoir", "--emit=asm", "--interpret-evoir"] {
                 for opt in ["-O0", "-O2"] {
@@ -341,6 +343,31 @@ fn target_floating_call_refusals_survive_the_cli_without_affecting_storage() {
                     assert!(!out.status.success(), "{kind} {case} {mode} {opt}");
                     assert!(diagnostic.contains("E3049"), "{diagnostic}");
                     assert!(!diagnostic.contains("E3101"), "{diagnostic}");
+                }
+            }
+        }
+        check_with_args(
+            "floating-target-call-refusal.c",
+            EXECUTION,
+            &[&format!("-DFLOAT_TYPE={kind}"), "-DCASE=5"],
+        );
+    }
+    for kind in ["_Float16", "__fp16", "__bf16"] {
+        for case in 0..5 {
+            for mode in ["--emit=evoir", "--emit=asm"] {
+                for opt in ["-O0", "-O2"] {
+                    let out = Command::new(env!("CARGO_BIN_EXE_evocc"))
+                        .args(["--target=aarch64-unknown-linux-gnu", mode, opt])
+                        .arg(format!("-DFLOAT_TYPE={kind}"))
+                        .arg(format!("-DCASE={case}"))
+                        .arg(&source)
+                        .output()
+                        .unwrap();
+                    assert!(
+                        out.status.success(),
+                        "{kind} {case} {mode} {opt}: {}",
+                        String::from_utf8_lossy(&out.stderr)
+                    );
                 }
             }
         }
@@ -972,15 +999,17 @@ fn mixed_record_varargs_copy_unused_representation() {
 fn integer_complex_varargs_use_the_composite_abi() {
     check("integer-complex-varargs.c", EXECUTION);
     // L04: floating complex anonymous arguments use the HFA rules. L05: a
-    // record of floating vectors is an HVA.
+    // record of floating vectors is an HVA. L03: a half member is a
+    // floating member.
     for source in [
         "void f(int n,...){__builtin_va_list ap;__builtin_va_start(ap,n);__builtin_va_arg(ap,_Complex double);}",
+        "struct S{int n;__fp16 value;};void f(int n,...){__builtin_va_list ap;__builtin_va_start(ap,n);__builtin_va_arg(ap,struct S);}",
         "struct S{int n;_Complex double value;};void f(int n,...){__builtin_va_list ap;__builtin_va_start(ap,n);__builtin_va_arg(ap,struct S);}",
         "typedef float v2f __attribute__((vector_size(8)));struct H{v2f a,b;};void f(int n,...){__builtin_va_list ap;__builtin_va_start(ap,n);__builtin_va_arg(ap,struct H);}",
     ] {
         assert!(lower_source(source).is_ok(), "{source}");
     }
-    let source = "struct S{int n;__fp16 value;};void f(int n,...){__builtin_va_list ap;__builtin_va_start(ap,n);__builtin_va_arg(ap,struct S);}";
+    let source = "struct S{int n;_Float32 value;};void f(int n,...){__builtin_va_list ap;__builtin_va_start(ap,n);__builtin_va_arg(ap,struct S);}";
     assert_eq!(lower_source(source).unwrap_err().code(), "E3030");
 }
 #[test]

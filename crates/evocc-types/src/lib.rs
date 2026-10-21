@@ -131,10 +131,23 @@ pub enum CType {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum FloatKind {
+    /// IEEE binary16, the storage format of `_Float16` and `__fp16`.
     F16,
+    /// bfloat16, the storage format of `__bf16`: the binary32 exponent with
+    /// eight significand bits.
+    BF16,
     F32,
     F64,
     F128,
+}
+
+impl FloatKind {
+    /// Whether this is a half storage format. EvoIR performs no arithmetic
+    /// in it: an operation converts a half operand to binary32 first.
+    #[must_use]
+    pub const fn is_half(self) -> bool {
+        matches!(self, Self::F16 | Self::BF16)
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -415,6 +428,18 @@ pub enum TargetBuiltinType {
 }
 
 impl TargetBuiltinType {
+    /// The storage format of a half-precision type: binary16 for `_Float16`
+    /// and `__fp16`, bfloat16 for `__bf16`. The three types stay distinct C
+    /// types; only their values share these formats.
+    #[must_use]
+    pub const fn half_format(self) -> Option<FloatKind> {
+        match self {
+            Self::GnuFloat16 | Self::ArmFp16 => Some(FloatKind::F16),
+            Self::ArmBf16 => Some(FloatKind::BF16),
+            _ => None,
+        }
+    }
+
     /// Polynomial values have unsigned integer representations, while their
     /// nominal C type identity remains distinct from the unsigned base type.
     pub const fn polynomial_bits(self) -> Option<u8> {
@@ -1561,8 +1586,12 @@ impl RecordShape {
         self.align.is_power_of_two()
             && !(self.vector.is_some() && self.floating.is_some())
             && self.floating.is_none_or(|f| {
-                matches!(f.kind, FloatKind::F32 | FloatKind::F64 | FloatKind::F128)
-                    && (1..=4).contains(&f.count)
+                // A bfloat16 HFA has no admitted convention: GCC 14 and
+                // AAPCS64 disagree (GCC PR 120007).
+                matches!(
+                    f.kind,
+                    FloatKind::F16 | FloatKind::F32 | FloatKind::F64 | FloatKind::F128
+                ) && (1..=4).contains(&f.count)
                     && matches!(f.abi_align, 8 | 16)
                     && (f.abi_align == 8 || self.align >= 16)
                     && (f.kind != FloatKind::F128 || f.abi_align == 16)
@@ -1663,6 +1692,11 @@ pub fn canonical_marks(marks: Vec<ParamMark>, count: usize) -> Vec<ParamMark> {
 pub enum EvoIRType {
     /// Unsigned/signed bit-vector of statically known width `N`.
     Bits(u16),
+    /// The half storage formats: IEEE binary16 and bfloat16. Their values
+    /// are exact 16-bit representations; EvoIR performs no arithmetic in
+    /// them (EvoIR 3.13.6).
+    F16,
+    BF16,
     /// IEEE 754 binary32 / binary64 / binary128.
     F32,
     F64,
@@ -1943,6 +1977,8 @@ pub struct TargetDataLayout {
     power_of_two_atomics: bool,
     compiler_rt_complex: bool,
     long_long_masks: bool,
+    bfloat16_constants: bool,
+    mixed_half_composites: bool,
 }
 
 impl TargetDataLayout {
@@ -1959,6 +1995,8 @@ impl TargetDataLayout {
             power_of_two_atomics: false,
             compiler_rt_complex: false,
             long_long_masks: false,
+            bfloat16_constants: true,
+            mixed_half_composites: true,
         }
     }
 
@@ -1979,6 +2017,8 @@ impl TargetDataLayout {
             power_of_two_atomics: true,
             compiler_rt_complex: true,
             long_long_masks: true,
+            bfloat16_constants: false,
+            mixed_half_composites: false,
         }
     }
 
@@ -2040,6 +2080,33 @@ impl TargetDataLayout {
     #[must_use]
     pub const fn extends_narrow_call_integers(&self) -> bool {
         self.narrow_call_extension
+    }
+
+    /// Whether an anonymous `_Float16` or `__bf16` argument has an admitted
+    /// convention. AAPCS64 passes it unpromoted, as GCC 14 and Clang 19 do
+    /// on Linux; Apple clang has no stable convention for it on Darwin
+    /// (EvoIR 3.13.6).
+    #[must_use]
+    pub const fn passes_half_anonymous_arguments(&self) -> bool {
+        !self.pointer_va_list
+    }
+
+    /// Whether a floating constant can have the `bf16` or `BF16` suffix.
+    /// GCC 14 accepts it on Linux; Apple clang rejects it (EvoIR 3.13.6).
+    #[must_use]
+    pub const fn accepts_bfloat16_constants(&self) -> bool {
+        self.bfloat16_constants
+    }
+
+    /// Whether a record of binary16 and bfloat16 members that is an HFA by
+    /// member size passes as an ordinary composite. AAPCS64 gives the two
+    /// formats two fundamental types, so the record is no HFA, and GCC 14
+    /// passes it in general registers on Linux. Apple clang passes it in
+    /// vector registers, so it has no admitted convention on Darwin (EvoIR
+    /// 3.13.6).
+    #[must_use]
+    pub const fn passes_mixed_half_records(&self) -> bool {
+        self.mixed_half_composites
     }
 
     /// Whether `long double` has the binary64 format of `double`. It stays a
@@ -2686,7 +2753,7 @@ fn integer_layout(rank: IntRank) -> TypeLayout {
 
 fn float_layout(kind: FloatKind) -> TypeLayout {
     match kind {
-        FloatKind::F16 => TypeLayout::new(2, 2),
+        FloatKind::F16 | FloatKind::BF16 => TypeLayout::new(2, 2),
         FloatKind::F32 => TypeLayout::new(4, 4),
         FloatKind::F64 => TypeLayout::new(8, 8),
         FloatKind::F128 => TypeLayout::new(16, 16),

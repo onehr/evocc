@@ -137,6 +137,11 @@ pub enum InterpreterError {
         name: String,
         span: SourceSpan,
     },
+    /// A call interface with a half type that has no admitted convention
+    /// (EvoIR 3.13.6): the same refusal as the lowering's.
+    FloatingCallInterface {
+        span: SourceSpan,
+    },
     Profile(crate::ProfileRefusal),
     Linkage(crate::linkage::LinkageError),
     VolatileAggregate {
@@ -328,6 +333,7 @@ impl InterpreterError {
             Self::ComputedGoto { .. } => "E3029",
             Self::InvalidIndirectBranchTarget { .. } => "E3048",
             Self::VarArgs { .. } => "E3030",
+            Self::FloatingCallInterface { .. } => "E3049",
             Self::VarArgPack { .. } => "E2950",
             Self::WideInteger { .. } => "E3033",
             Self::FrameAddressUnavailable { .. } => "E3031",
@@ -437,6 +443,7 @@ impl InterpreterError {
             Self::ComputedGoto { .. } => "not-lowered: computed-goto".to_owned(),
             Self::InvalidIndirectBranchTarget { .. } => "invalid-indirect-branch-target".to_owned(),
             Self::VarArgs { .. } => "not-lowered: varargs".to_owned(),
+            Self::FloatingCallInterface { .. } => "not-lowered: floating-call-interface".to_owned(),
             Self::VarArgPack { .. } => "invalid-va-arg-pack".to_owned(),
             Self::WideInteger { .. } => "not-executed: wide-integer".to_owned(),
             Self::FrameAddressUnavailable { .. } => "not-executed: frame-address".to_owned(),
@@ -490,6 +497,7 @@ impl InterpreterError {
             | Self::ComputedGoto { span }
             | Self::InvalidIndirectBranchTarget { span }
             | Self::VarArgs { span }
+            | Self::FloatingCallInterface { span }
             | Self::VarArgPack { span }
             | Self::WideInteger { span }
             | Self::FrameAddressUnavailable { span }
@@ -2582,6 +2590,19 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     if let CValue::Floating(value) = operand {
                         values.push(CValue::Floating(match operator {
                             UnaryOp::Plus => value,
+                            // Negation of a half operand evaluates in
+                            // binary32, which quiets a signaling NaN.
+                            UnaryOp::Neg if value.kind().is_half() => {
+                                let strict = self.strict_floating();
+                                floating::convert_runtime(
+                                    operand,
+                                    evocc_types::FloatKind::F32,
+                                    expression_span,
+                                    &mut self.world,
+                                    strict,
+                                )?
+                                .negated()
+                            }
                             UnaryOp::Neg => value.negated(),
                             _ => {
                                 return Err(InterpreterError::UnsupportedExpression {
@@ -4215,7 +4236,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         } = expression
         {
             if crate::expression_is_void(expression, self.unit.symbols(), self.unit.types()) {
-                self.schedule_statement_expression(body, *value, *span, tasks)?;
+                self.schedule_statement_expression(body, *value, None, *span, tasks)?;
                 return Ok(());
             }
         }
@@ -4231,6 +4252,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         &mut self,
         body: &'arena CHirStmt<'arena>,
         value: Option<&'arena CHirExpr<'arena>>,
+        round: Option<ValueType>,
         span: SourceSpan,
         tasks: &mut Vec<MachineTask<'arena>>,
     ) -> Result<(), InterpreterError> {
@@ -4241,6 +4263,9 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             });
         };
         self.enter_fenv_scope(*policy, tasks);
+        if let Some(target) = round {
+            tasks.push(MachineTask::CastValue { target, span });
+        }
         let result_matches = match (value, items.last()) {
             (None, _) => true,
             (Some(value), Some(CHirBlockItem::Statement(statement))) => {
@@ -4354,10 +4379,11 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             }
             VarArgsBuiltinOp::End => None,
             VarArgsBuiltinOp::Arg => {
-                let target = self.value_type(
-                    requested_ty.ok_or(InterpreterError::VarArgs { span })?,
-                    span,
-                )?;
+                let requested = requested_ty.ok_or(InterpreterError::VarArgs { span })?;
+                if crate::half_interface_refused(self.unit.types(), &self.target, requested, true) {
+                    return Err(InterpreterError::FloatingCallInterface { span });
+                }
+                let target = self.value_type(requested, span)?;
                 if matches!(target, ValueType::Aggregate(ty) if !crate::is_integer_variadic_record(self.unit.types(), &self.target, ty))
                 {
                     return Err(InterpreterError::VarArgs { span });
@@ -4690,7 +4716,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 });
             }
             CHirExpr::Ternary(condition, then_expression, else_expression, _) => {
-                let result_type = self.expression_value_type(expression)?;
+                let result_type = self.conditional_value_type(expression)?;
                 tasks.push(MachineTask::SelectTernary {
                     then_expression,
                     else_expression,
@@ -4702,7 +4728,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 });
             }
             CHirExpr::Elvis(operand, else_expression, _) => {
-                let result_type = self.expression_value_type(expression)?;
+                let result_type = self.conditional_value_type(expression)?;
                 tasks.push(MachineTask::SelectElvis {
                     else_expression,
                     result_type,
@@ -5023,9 +5049,18 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 )));
             }
             CHirExpr::StatementExpr {
-                body, value, span, ..
+                body,
+                value,
+                facts,
+                span,
             } => {
-                self.schedule_statement_expression(body, *value, *span, tasks)?;
+                // The binary32 value of a half operation rounds once to the
+                // statement expression's half type (EvoIR 3.13.6).
+                let round = match self.value_type(facts.ty(), *span)? {
+                    target @ ValueType::Floating(kind) if kind.is_half() => Some(target),
+                    _ => None,
+                };
+                self.schedule_statement_expression(body, *value, round, *span, tasks)?;
             }
             CHirExpr::CompoundLit(_, _, _) if self.memory_mode => {
                 self.schedule_compound_literal(expression, false, tasks)?;
@@ -5063,11 +5098,8 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             }
             CHirExpr::StringLit(_, _) => values.push(self.string_pointer(expression, true)?),
             CHirExpr::FloatLit(literal, _) => {
-                let kind = self.target.float_format(match literal.suffix {
-                    crate::FloatSuffix::F => evocc_types::FloatKind::F32,
-                    crate::FloatSuffix::None => evocc_types::FloatKind::F64,
-                    crate::FloatSuffix::L => evocc_types::FloatKind::F128,
-                });
+                // A half constant's value is binary32 (C23 H.3).
+                let kind = self.target.float_format(literal.suffix.value_kind());
                 let value = match literal.value {
                     crate::FloatConstant::Real(value) => value.target_convert(kind).ok_or(
                         InterpreterError::UnsupportedExpression {
@@ -5577,6 +5609,17 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         let binding_span = call_span.unwrap_or(declaration.span);
         let mut arguments = arguments;
         let anonymous = arguments.split_off(signature.parameters.len());
+        if anonymous.iter().any(|value| match value {
+            CValue::Floating(value) => {
+                value.kind().is_half() && !self.target.passes_half_anonymous_arguments()
+            }
+            CValue::Aggregate { ty, .. } => {
+                crate::half_interface_refused(self.unit.types(), &self.target, *ty, true)
+            }
+            _ => false,
+        }) {
+            return Err(InterpreterError::FloatingCallInterface { span: binding_span });
+        }
         if anonymous
             .iter()
             .any(|value| matches!(value, CValue::Aggregate { ty, .. } if !crate::is_integer_variadic_record(self.unit.types(), &self.target, *ty)))
@@ -5823,6 +5866,18 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 symbol: function,
                 span: declaration.span,
             });
+        }
+        // A `__bf16` HFA has no admitted convention (EvoIR 3.13.6).
+        let interface = std::iter::once(return_type).chain(match canonical_parameters {
+            FunctionParameters::Prototype { types, .. } => types.iter(),
+            FunctionParameters::Unspecified => [].iter(),
+        });
+        for ty in interface {
+            if crate::half_interface_refused(self.unit.types(), &self.target, *ty, false) {
+                return Err(InterpreterError::FloatingCallInterface {
+                    span: declaration.span,
+                });
+            }
         }
         let return_value_type = self.value_type(*return_type, declaration.span)?;
         let parameters = match (canonical_parameters, &declaration.parameters) {
@@ -6296,6 +6351,10 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 | evocc_types::FloatKind::F64
                 | evocc_types::FloatKind::F128),
             )) => Ok(ValueType::Floating(self.target.float_format(*kind))),
+            // A half value is its storage format (EvoIR 3.13.6).
+            Some(TypeKind::TargetBuiltin(builtin)) if builtin.half_format().is_some() => {
+                Ok(ValueType::Floating(builtin.half_format().unwrap()))
+            }
             Some(
                 TypeKind::Struct(_)
                 | TypeKind::Union(_)
@@ -7171,6 +7230,28 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 feature: "invalid pointer expression type",
                 span,
             })
+    }
+
+    /// The value type of a conditional. A half conditional with an arm that
+    /// has a binary32 value, or with an integer arm, evaluates in binary32,
+    /// as lowering does (EvoIR 3.13.6).
+    fn conditional_value_type(
+        &mut self,
+        expression: &'arena CHirExpr<'arena>,
+    ) -> Result<ValueType, InterpreterError> {
+        let result = self.expression_value_type(expression)?;
+        if matches!(result, ValueType::Floating(kind) if kind.is_half()) {
+            let mut is_half = |arm: &'arena CHirExpr<'arena>| {
+                matches!(
+                    self.expression_value_type(arm),
+                    Ok(ValueType::Floating(kind)) if kind.is_half()
+                )
+            };
+            if crate::floating::half_carrier(expression, &mut is_half) {
+                return Ok(ValueType::Floating(evocc_types::FloatKind::F32));
+            }
+        }
+        Ok(result)
     }
 
     fn expression_value_type(

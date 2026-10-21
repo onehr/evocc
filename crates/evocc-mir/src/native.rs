@@ -271,7 +271,8 @@ fn compile_module_with_guard_control(
             continue;
         }
         // EvoMIR 2.7: a floating vector is refused under this option even
-        // where no SIMD class holds it, as a 4-byte vector copy is.
+        // where no SIMD class holds it, as a 4-byte vector copy is. EvoMIR
+        // 2.6: so is a half value, which a `gpr32` register holds.
         let floating_vector = options.general_registers_only
             && module
                 .functions
@@ -297,7 +298,10 @@ fn compile_module_with_guard_control(
                                     }),
                             )
                         }))
-                        .any(|ty| evocc_evoir::floating_vector_shape(ty).is_some())
+                        .any(|ty| {
+                            evocc_evoir::floating_vector_shape(ty).is_some()
+                                || evocc_evoir::is_half_type(ty)
+                        })
                 });
         if floating_vector
             || options.general_registers_only

@@ -64,7 +64,7 @@ fn constant(kind: FloatKind, bits: u128) -> FloatBits {
 
 fn sign_bit(kind: FloatKind) -> u128 {
     match kind {
-        FloatKind::F16 => 1 << 15,
+        FloatKind::F16 | FloatKind::BF16 => 1 << 15,
         FloatKind::F32 => 1 << 31,
         FloatKind::F64 => 1 << 63,
         FloatKind::F128 => 1 << 127,
@@ -99,6 +99,7 @@ fn infinity(kind: FloatKind) -> FloatBits {
             FloatKind::F64 => 0x7ff0000000000000,
             FloatKind::F128 => 0x7fff0000000000000000000000000000,
             FloatKind::F16 => 0x7c00,
+            FloatKind::BF16 => 0x7f80,
         },
     )
 }
@@ -111,6 +112,7 @@ fn largest(kind: FloatKind) -> FloatBits {
             FloatKind::F64 => 0x7fefffffffffffff,
             FloatKind::F128 => 0x7ffeffffffffffffffffffffffffffff,
             FloatKind::F16 => 0x7bff,
+            FloatKind::BF16 => 0x7f7f,
         },
     )
 }

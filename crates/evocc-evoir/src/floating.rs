@@ -139,10 +139,27 @@ pub struct FloatingInst {
 
 pub fn floating_kind(ty: &EvoIRType) -> Option<FloatKind> {
     match ty {
+        EvoIRType::F16 => Some(FloatKind::F16),
+        EvoIRType::BF16 => Some(FloatKind::BF16),
         EvoIRType::F32 => Some(FloatKind::F32),
         EvoIRType::F64 => Some(FloatKind::F64),
         EvoIRType::F128 => Some(FloatKind::F128),
         _ => None,
+    }
+}
+
+/// Whether `ty` is a half storage format (EvoIR 3.13.6).
+pub fn is_half_type(ty: &EvoIRType) -> bool {
+    matches!(ty, EvoIRType::F16 | EvoIRType::BF16)
+}
+
+/// The representation type of a floating type: `bits<N>` of its width.
+pub fn floating_bits_type(ty: &EvoIRType) -> EvoIRType {
+    match ty {
+        EvoIRType::F16 | EvoIRType::BF16 => EvoIRType::Bits(16),
+        EvoIRType::F32 => EvoIRType::Bits(32),
+        EvoIRType::F128 => EvoIRType::Bits(128),
+        _ => EvoIRType::Bits(64),
     }
 }
 
@@ -174,15 +191,23 @@ impl FloatingInst {
         let fp_binary =
             args.len() == 2 && floating_kind(&args[0].ty).is_some() && args[0].ty == args[1].ty;
         let integer = |ty: &EvoIRType| matches!(ty, EvoIRType::Bits(1..=128));
-        let bits = |ty: &EvoIRType| match ty {
-            EvoIRType::F32 => EvoIRType::Bits(32),
-            EvoIRType::F128 => EvoIRType::Bits(128),
-            _ => EvoIRType::Bits(64),
-        };
+        let bits = floating_bits_type;
+        // A half format is a storage format. Constants, conversions and
+        // representation moves are its only operations (3.13.6).
+        let half = is_half_type(result) || args.iter().any(|a| is_half_type(&a.ty));
+        if half
+            && !matches!(
+                self.op,
+                Constant(_) | Convert | FromSigned | FromUnsigned | ToBits | FromBits
+            )
+        {
+            return Err("a half format admits only constants, conversions and bits".into());
+        }
         let valid = match self.op {
             Constant(raw) => {
                 fp_result
                     && args.is_empty()
+                    && (!is_half_type(result) || raw <= u128::from(u16::MAX))
                     && (*result != EvoIRType::F32 || raw <= u128::from(u32::MAX))
                     && (*result != EvoIRType::F64 || raw <= u128::from(u64::MAX))
             }

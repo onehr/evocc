@@ -2286,6 +2286,7 @@ pub(crate) fn load_mnemonic(kind: LoadKind) -> &'static str {
         | LoadKind::X
         | LoadKind::P
         | LoadKind::Pf
+        | LoadKind::Hv
         | LoadKind::S
         | LoadKind::D
         | LoadKind::Q => "ldr",
@@ -2299,9 +2300,23 @@ pub(crate) fn store_mnemonic(kind: StoreKind) -> &'static str {
     match kind {
         StoreKind::B => "strb",
         StoreKind::H => "strh",
-        StoreKind::W | StoreKind::X | StoreKind::P | StoreKind::S | StoreKind::D | StoreKind::Q => {
-            "str"
-        }
+        StoreKind::W
+        | StoreKind::X
+        | StoreKind::P
+        | StoreKind::Hv
+        | StoreKind::S
+        | StoreKind::D
+        | StoreKind::Q => "str",
+    }
+}
+
+/// The `h` view of a `simd32` register, which the 16-bit SIMD accesses
+/// name: `s5` becomes `h5`.
+fn half_view(half: bool, spelled: String) -> String {
+    if half {
+        format!("h{}", spelled.strip_prefix('s').unwrap_or(&spelled))
+    } else {
+        spelled
     }
 }
 
@@ -2316,7 +2331,7 @@ pub(crate) const fn load_class(kind: LoadKind, declared: RegClass) -> RegClass {
         LoadKind::B | LoadKind::H | LoadKind::W => RegClass::Gpr32,
         LoadKind::X | LoadKind::P | LoadKind::Pf | LoadKind::Sw => RegClass::Gpr64,
         LoadKind::Sb | LoadKind::Sh => declared,
-        LoadKind::S => RegClass::Simd32,
+        LoadKind::Hv | LoadKind::S => RegClass::Simd32,
         LoadKind::D => RegClass::Simd64,
         LoadKind::Q => RegClass::Simd128,
     }
@@ -2328,7 +2343,7 @@ pub(crate) const fn store_class(kind: StoreKind) -> RegClass {
     match kind {
         StoreKind::B | StoreKind::H | StoreKind::W => RegClass::Gpr32,
         StoreKind::X | StoreKind::P => RegClass::Gpr64,
-        StoreKind::S => RegClass::Simd32,
+        StoreKind::Hv | StoreKind::S => RegClass::Simd32,
         StoreKind::D => RegClass::Simd64,
         StoreKind::Q => RegClass::Simd128,
     }
@@ -2784,7 +2799,10 @@ fn emit_inst(
                 text,
                 "    {} {}, [{}, #{offset}]",
                 load_mnemonic(*kind),
-                spell(*dst, load_class(*kind, dst.class)),
+                half_view(
+                    *kind == LoadKind::Hv,
+                    spell(*dst, load_class(*kind, dst.class))
+                ),
                 spell(*base, RegClass::Gpr64)
             );
         }
@@ -2825,7 +2843,7 @@ fn emit_inst(
                 text,
                 "    {} {}, [{}, #{offset}]",
                 store_mnemonic(*kind),
-                spell(*src, store_class(*kind)),
+                half_view(*kind == StoreKind::Hv, spell(*src, store_class(*kind))),
                 spell(*base, RegClass::Gpr64)
             );
         }

@@ -1157,6 +1157,8 @@ fn parse_defining(
         let name = name.strip_prefix("strict.").unwrap_or(name);
         let (op, kind) = name.rsplit_once('.').ok_or("missing FP format")?;
         let kind = match kind {
+            "f16" => evocc_types::FloatKind::F16,
+            "bf16" => evocc_types::FloatKind::BF16,
             "f32" => evocc_types::FloatKind::F32,
             "f64" => evocc_types::FloatKind::F64,
             _ => return Err("unsupported FP format".into()),

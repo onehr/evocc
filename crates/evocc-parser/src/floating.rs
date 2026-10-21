@@ -172,7 +172,10 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         if op.is_comparison() {
             let left = self.expression_type(operands[0])?.ty;
             let right = self.expression_type(operands[1])?.ty;
-            let Some(InferredType::Real(kind)) = self.usual_arithmetic_expression_type(left, right)
+            // A half common type has no comparison builtin in this revision.
+            let Some(InferredType::Real(kind)) = self
+                .usual_arithmetic_expression_type(left, right)
+                .filter(|common| !matches!(common, InferredType::Real(kind) if kind.is_half()))
             else {
                 self.report("E2951", "builtin-argument-type", span);
                 return None;
@@ -190,7 +193,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         } else {
             // Classification is type-generic: inspecting a float must not first
             // widen it, quiet a signaling NaN, or truncate long-double layout.
-            if !matches!(self.expression_type(operands[0])?.ty, InferredType::Real(_))
+            // A half operand keeps its refusal: no classification of the
+            // half formats is admitted in this revision.
+            if !matches!(self.expression_type(operands[0])?.ty, InferredType::Real(kind) if !kind.is_half())
                 && !matches!(
                 self.expression_type(operands[0])?.ty,
                 InferredType::Canonical(t) if matches!(self.types.get(t)?.kind, TypeKind::Float(_)))

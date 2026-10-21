@@ -402,7 +402,7 @@ fn validate_shape(name: &str, block: u32, inst: &MInst) -> Result<(), String> {
             if base.class == RegClass::Gpr64
                 && matches!(
                     (kind, dst.class),
-                    (crate::LoadKind::S, RegClass::Simd32)
+                    (crate::LoadKind::S | crate::LoadKind::Hv, RegClass::Simd32)
                         | (crate::LoadKind::D, RegClass::Simd64)
                         | (crate::LoadKind::Q, RegClass::Simd128)
                 )
@@ -418,7 +418,7 @@ fn validate_shape(name: &str, block: u32, inst: &MInst) -> Result<(), String> {
             if base.class == RegClass::Gpr64
                 && matches!(
                     (kind, src.class),
-                    (crate::StoreKind::S, RegClass::Simd32)
+                    (crate::StoreKind::S | crate::StoreKind::Hv, RegClass::Simd32)
                         | (crate::StoreKind::D, RegClass::Simd64)
                         | (crate::StoreKind::Q, RegClass::Simd128)
                 )

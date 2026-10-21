@@ -28,9 +28,6 @@ impl Number {
     }
 
     fn real(self, kind: FloatKind) -> Option<FloatBits> {
-        if !matches!(kind, FloatKind::F32 | FloatKind::F64 | FloatKind::F128) {
-            return None;
-        }
         let value = match (self, kind) {
             (Self::Integer(value), _) if value.ty().is_signed() => {
                 FloatBits::from_signed(kind, value.mathematical_value())
@@ -70,17 +67,48 @@ enum NumberType {
     Real(FloatKind),
 }
 
+/// The common type of two operands. Both half formats rank below binary32;
+/// a mixture of the two has no common type, which the front end reports.
 fn common(left: NumberType, right: NumberType) -> Option<NumberType> {
     use NumberType::{Integer, Real};
     match (left, right) {
-        (Real(FloatKind::F16), _) | (_, Real(FloatKind::F16)) => None,
         (Real(FloatKind::F128), _) | (_, Real(FloatKind::F128)) => Some(Real(FloatKind::F128)),
         (Real(FloatKind::F64), _) | (_, Real(FloatKind::F64)) => Some(Real(FloatKind::F64)),
         (Real(FloatKind::F32), _) | (_, Real(FloatKind::F32)) => Some(Real(FloatKind::F32)),
+        (Real(left), Real(right)) => (left == right).then_some(Real(left)),
+        (Real(half), Integer(_)) | (Integer(_), Real(half)) => Some(Real(half)),
         (Integer(left), Integer(right)) => Some(Integer(usual_arithmetic_type(
             CInteger::new(0, left).promoted().ty(),
             CInteger::new(0, right).promoted().ty(),
         ))),
+    }
+}
+
+/// The format in which an operation of operands of `kind` evaluates: an
+/// operation on half operands evaluates in binary32 (EvoIR 3.13.6).
+fn evaluation_format(kind: FloatKind) -> FloatKind {
+    if kind.is_half() {
+        FloatKind::F32
+    } else {
+        kind
+    }
+}
+
+/// A conditional of half type evaluates in binary32, as in GCC 14: an
+/// evaluated arm keeps its binary32 value, and an integer arm converts to
+/// binary32 directly. Any other selected value converts to the type of the
+/// conditional.
+fn convert_selected(value: Number, target: NumberType) -> Option<Number> {
+    match (value, target) {
+        (Number::Real(value), NumberType::Real(kind))
+            if kind.is_half() && value.kind() == FloatKind::F32 =>
+        {
+            Some(Number::Real(value))
+        }
+        (value @ Number::Integer(_), NumberType::Real(kind)) if kind.is_half() => {
+            convert(value, NumberType::Real(FloatKind::F32))
+        }
+        _ => convert(value, target),
     }
 }
 
@@ -139,6 +167,9 @@ impl Folder<'_> {
     fn declared_type(&self, ty: TypeId) -> Option<NumberType> {
         match self.types.get(ty)?.kind {
             TypeKind::Float(kind) => Some(NumberType::Real(self.target.float_format(kind))),
+            TypeKind::TargetBuiltin(builtin) if builtin.half_format().is_some() => {
+                builtin.half_format().map(NumberType::Real)
+            }
             _ => canonical_integer_type(self.types, ty).map(NumberType::Integer),
         }
     }
@@ -150,13 +181,9 @@ impl Folder<'_> {
         match expression {
             CHirExpr::Floating(operation) => self.declared_type(operation.facts.ty()),
             CHirExpr::Complex(operation) => self.declared_type(operation.facts.ty()),
-            CHirExpr::FloatLit(literal, _) => Some(NumberType::Real(self.target.float_format(
-                match literal.suffix {
-                    FloatSuffix::None => FloatKind::F64,
-                    FloatSuffix::F => FloatKind::F32,
-                    FloatSuffix::L => FloatKind::F128,
-                },
-            ))),
+            CHirExpr::FloatLit(literal, _) => Some(NumberType::Real(
+                self.target.float_format(literal.suffix.type_kind()),
+            )),
             CHirExpr::Cast(ty, ..) => self.declared_type(*ty),
             CHirExpr::Unary(UnaryOp::Plus | UnaryOp::Neg, operand, _)
             | CHirExpr::EvaluateOnce(operand, _) => self.ty(operand, depth + 1),
@@ -244,7 +271,12 @@ impl Folder<'_> {
                         .ok()
                         .map(Number::Integer),
                     (UnaryOp::Plus, value) => Some(value),
-                    (UnaryOp::Neg, Number::Real(value)) => Some(Number::Real(value.negated())),
+                    // Negation of a half operand evaluates in binary32.
+                    (UnaryOp::Neg, Number::Real(value)) => Some(Number::Real(
+                        value
+                            .target_convert(evaluation_format(value.kind()))?
+                            .negated(),
+                    )),
                     (
                         UnaryOp::Neg,
                         Number::QuietNaN {
@@ -266,7 +298,7 @@ impl Folder<'_> {
             CHirExpr::Ternary(condition, left, right, _) => {
                 let condition = self.eval(condition, depth + 1)?.truth();
                 let value = self.eval(if condition { left } else { right }, depth + 1)?;
-                convert(value, self.ty(expression, depth)?)
+                convert_selected(value, self.ty(expression, depth)?)
             }
             CHirExpr::Elvis(left, right, _) => {
                 let value = self.eval(left, depth + 1)?;
@@ -275,17 +307,9 @@ impl Folder<'_> {
                 } else {
                     self.eval(right, depth + 1)?
                 };
-                convert(selected, self.ty(expression, depth)?)
+                convert_selected(selected, self.ty(expression, depth)?)
             }
             CHirExpr::Binary(op, left, right, _) => {
-                if [left, right].iter().any(|operand| {
-                    matches!(
-                        self.ty(operand, depth + 1),
-                        Some(NumberType::Real(FloatKind::F16))
-                    )
-                }) {
-                    return None;
-                }
                 let operand_type = common(self.ty(left, depth + 1)?, self.ty(right, depth + 1)?)?;
                 let left = self.eval(left, depth + 1)?;
                 if (*op == BinaryOp::And && !left.truth()) || (*op == BinaryOp::Or && left.truth())
@@ -308,6 +332,7 @@ impl Folder<'_> {
                 let NumberType::Real(kind) = operand_type else {
                     return None;
                 };
+                let kind = evaluation_format(kind);
                 let a = left.real(kind)?;
                 let b = right.real(kind)?;
                 let comparison = match op {
@@ -667,10 +692,11 @@ pub(super) fn representation(
     symbols: &SymbolTable,
     target: &TargetDataLayout,
 ) -> Option<CInteger> {
-    let TypeKind::Float(kind) = types.get(destination)?.kind else {
-        return None;
+    let kind = match types.get(destination)?.kind {
+        TypeKind::Float(kind) => target.float_format(kind),
+        TypeKind::TargetBuiltin(builtin) => builtin.half_format()?,
+        _ => return None,
     };
-    let kind = target.float_format(kind);
     let value = Folder {
         types,
         symbols,
@@ -687,18 +713,14 @@ pub(super) fn representation(
             // A format conversion quiets the NaN and keeps its sign and its
             // highest payload bits, as at run time.
             let value = value.real(kind)?;
-            return Some(match kind {
-                FloatKind::F32 => CInteger::from_raw(value.bits(), CIntegerType::UINT),
-                FloatKind::F64 => CInteger::from_raw(value.bits(), CIntegerType::ULONG),
-                FloatKind::F128 => CInteger::from_raw(value.bits(), CIntegerType::UINT128),
-                FloatKind::F16 => return None,
-            });
+            return Some(CInteger::from_raw(value.bits(), representation_type(kind)));
         }
         let (width, fraction, exponent, ty) = match kind {
+            FloatKind::F16 => (16, 10, 0x1f, CIntegerType::USHORT),
+            FloatKind::BF16 => (16, 7, 0xff, CIntegerType::USHORT),
             FloatKind::F32 => (32, 23, 0xff, CIntegerType::UINT),
             FloatKind::F64 => (64, 52, 0x7ff, CIntegerType::ULONG),
             FloatKind::F128 => (128, 112, 0x7fff, CIntegerType::UINT128),
-            FloatKind::F16 => return None,
         };
         let bits = (u128::from(negative) << (width - 1))
             | ((exponent as u128) << fraction)
@@ -707,10 +729,15 @@ pub(super) fn representation(
         return Some(CInteger::from_raw(bits, ty));
     }
     let value = value.real(kind)?;
-    Some(match kind {
-        FloatKind::F32 => CInteger::from_raw(value.bits(), CIntegerType::UINT),
-        FloatKind::F64 => CInteger::from_raw(value.bits(), CIntegerType::ULONG),
-        FloatKind::F128 => CInteger::from_raw(value.bits(), CIntegerType::UINT128),
-        _ => unreachable!("representation kind was checked"),
-    })
+    Some(CInteger::from_raw(value.bits(), representation_type(kind)))
+}
+
+/// The unsigned integer type of a format's representation bits.
+fn representation_type(kind: FloatKind) -> CIntegerType {
+    match kind {
+        FloatKind::F16 | FloatKind::BF16 => CIntegerType::USHORT,
+        FloatKind::F32 => CIntegerType::UINT,
+        FloatKind::F64 => CIntegerType::ULONG,
+        FloatKind::F128 => CIntegerType::UINT128,
+    }
 }

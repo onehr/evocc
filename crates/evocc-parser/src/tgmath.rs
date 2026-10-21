@@ -53,7 +53,7 @@ fn real_part(kind: &TypeKind) -> TypeKind {
 /// conversions.
 fn floating_rank(kind: FloatKind) -> u8 {
     match kind {
-        FloatKind::F16 => 0,
+        FloatKind::F16 | FloatKind::BF16 => 0,
         FloatKind::F32 => 1,
         FloatKind::F64 => 2,
         FloatKind::F128 => 3,
@@ -209,7 +209,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 OperandTypeClass::Integer(_) | OperandTypeClass::WideInteger { .. } => {
                     FloatKind::F64
                 }
-                OperandTypeClass::Real(kind) if kind != FloatKind::F16 => kind,
+                OperandTypeClass::Real(kind) if !kind.is_half() => kind,
                 // A complex integer counts as `_Complex double`.
                 OperandTypeClass::Complex(ComplexBase::Integer(_)) => {
                     complex = true;
@@ -248,7 +248,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             TypeKind::Complex(match real {
                 FloatKind::F32 => ComplexBase::CF32,
                 FloatKind::F64 => ComplexBase::CF64,
-                FloatKind::F16 => ComplexBase::CF16,
+                FloatKind::F16 | FloatKind::BF16 => ComplexBase::CF16,
                 FloatKind::F128 => ComplexBase::CF128,
             })
         } else {

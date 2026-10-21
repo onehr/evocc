@@ -237,6 +237,36 @@ pub(super) fn lower(
                 l.bind(result, input);
                 return Ok(());
             }
+            // A half value widens through its exact binary32 value.
+            if let Some(half) = evocc_evoir::floating_kind(&source.ty).filter(|k| k.is_half()) {
+                let input = l.reg(source)?;
+                let single = half_convert(l, out, Convert, half, input, RegClass::Simd32, strict);
+                let dst = call(l, out, "__extendsftf2", vec![single], strict)?[0];
+                l.bind(result, dst);
+                return Ok(());
+            }
+            // libgcc rounds binary128 once to a half format. Its result
+            // arrives in the `h` view of `v0`.
+            if evocc_evoir::is_half_type(&result.ty) {
+                let symbol = if result.ty == EvoIRType::F16 {
+                    "__trunctfhf2"
+                } else {
+                    "__trunctfbf2"
+                };
+                let input = l.reg(source)?;
+                let transport = call(l, out, symbol, vec![input], strict)?[0];
+                let dst = l.fresh(RegClass::Gpr32);
+                out.push(MInst::Floating {
+                    strict: false,
+                    integer_bits: 0,
+                    dst,
+                    op: ToBits,
+                    kind: FloatKind::F32,
+                    args: vec![transport],
+                });
+                l.bind(result, dst);
+                return Ok(());
+            }
             let symbol = match (&source.ty, &result.ty) {
                 (EvoIRType::F32, EvoIRType::F128) => "__extendsftf2",
                 (EvoIRType::F64, EvoIRType::F128) => "__extenddftf2",
