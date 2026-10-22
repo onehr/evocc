@@ -1509,6 +1509,7 @@ fn configured_preprocessor(options: &DriverOptions) -> Result<Preprocessor, Stri
         !wide_character.is_signed(),
         options.short_wchar && options.target.is_darwin(),
     );
+    pp.set_target_follows_apple_clang(options.target.is_darwin());
     pp.set_legacy_literal_prefixes(options.language.legacy_literal_prefixes());
     if options.signed_char {
         pp.undefine("__CHAR_UNSIGNED__");

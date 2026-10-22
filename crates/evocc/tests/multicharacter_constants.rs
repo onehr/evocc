@@ -171,7 +171,6 @@ fn linux_programs_print_what_gcc_14_prints() {
 #[test]
 fn forms_that_the_compilers_read_differently_keep_e1006() {
     for source in [
-        "int x = 'a\u{e9}';\n",
         "int x = L'ab';\n",
         "int x = u'ab';\n",
         "int x = U'ab';\n",

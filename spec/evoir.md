@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 2.28.3** | **Pinned ground truth** | Wide character values on 2026-10-22
+**Revision 2.28.4** | **Pinned ground truth** | Expanded `defined` and UTF-8 constants on 2026-10-22
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract of the parser, the C lowering, equality saturation,
@@ -7653,8 +7653,10 @@ one produced by `##` or by macro expansion, is re-lexed as an integer constant:
 any of the suffixes `u`, `l`, `ul`, `ll`, `ull` in either case, decimal, octal
 and hexadecimal forms. Evaluation is in `intmax_t`/`uintmax_t` with the usual
 arithmetic conversions; an identifier that is not a macro is `0`; `defined`
-and the feature queries are evaluated before expansion. A character
-constant has the value it has in a C expression, including wide prefixes,
+and the feature queries are evaluated before expansion. A `defined` produced
+by a macro replacement list is evaluated before that replacement list is
+rescanned. A character constant has the value it has in a C expression,
+including wide prefixes,
 octal and hexadecimal escapes and `\e`; a malformed one is `E1006` before
 evaluation and never reads as zero. `#if CAT(300,) > 100` and
 `#if CAT(0x1,00) > 100` are true.
@@ -7894,6 +7896,17 @@ the constant has the same value. A multi-character constant with a prefix, an
 element outside ASCII, a universal character name or an escape above 255
 stays `E1006`, because the two compilers read it differently or refuse it.
 Fixture: `tests/fixtures/multicharacter-constants/`.
+
+**UTF-8 plain character constants.** A plain character constant whose text is
+non-ASCII UTF-8 is the GCC 14 multi-character value of its source bytes:
+`'é'` is `0xC3A9`, `'€'` is `0xE282AC`, `'aé'` is `0x61C3A9` and `'😀'` is
+`0xF09F9880`. Apple clang refuses every such constant with `E1006`; the
+lowered value exists only on Linux. A prefixed constant and a constant with
+an escape keep the rules above.
+
+`u'😀'` follows the target: Linux keeps GCC 14's low UTF-16 surrogate
+`0xDE00` in a `char16_t`, and Darwin refuses it with `E1006`. GCC prints a
+warning for the Linux value; EvoCC does not add a warning.
 
 **Rescanning.** After a macro's replacement list has its arguments
 substituted, it is rescanned for further macro names together with the
@@ -8833,6 +8846,13 @@ to the signature spelling.
 ---
 
 ## Revision
+
+**Revision 2.28.4, 2026-10-22.** Section 10.5 evaluates a `defined` produced
+by a macro replacement list before that list is rescanned, and refuses a
+`defined` whose operand is not an identifier. A plain UTF-8 character
+constant, including the mixed `'aé'`, has GCC 14's multi-character value on
+Linux; Apple clang refuses it. `u'😀'` follows the target: GCC 14's low
+surrogate `0xDE00` on Linux, `E1006` on Darwin.
 
 **Revision 2.28.3, 2026-10-22.** Section 10.5 gives a wide character constant
 the value, width and signedness of the target `wchar_t` in `#if` and in

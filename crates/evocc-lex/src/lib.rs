@@ -398,6 +398,25 @@ pub fn decode_character_literal(text: &str) -> Option<(u32, &str)> {
     Some((value, prefix))
 }
 
+/// The GCC 14 value of a plain character constant that spells a non-ASCII
+/// UTF-8 sequence, such as `'é'` or `'aé'`. The source bytes form the
+/// multi-character value; a prefixed constant and an escape sequence return
+/// `None` here.
+#[must_use]
+pub fn decode_utf8_plain_character(text: &str) -> Option<u32> {
+    let (prefix, quoted) = text.split_once('\'')?;
+    if !prefix.is_empty() {
+        return None;
+    }
+    let contents = quoted.strip_suffix('\'')?;
+    if contents.is_ascii() || contents.contains('\\') {
+        return None;
+    }
+    Some(contents.as_bytes().iter().fold(0_u32, |value, byte| {
+        value.wrapping_shl(8) | u32::from(*byte)
+    }))
+}
+
 /// The value of an ordinary multi-character constant, such as `'TEXT'`, as
 /// GCC 14 and Clang give it: each element shifts the value left by eight bits
 /// and adds its byte, the value keeps its low 32 bits, and its type is `int`.

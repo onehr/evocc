@@ -18944,6 +18944,17 @@ fn concatenate_string_prefix(left: StringPrefix, right: StringPrefix) -> Option<
 }
 
 fn parse_char_literal(text: &str, target: TargetDataLayout) -> Option<CharLit> {
+    // A plain constant whose source bytes are non-ASCII UTF-8 is a
+    // multi-character constant for GCC 14. Apple clang refuses it.
+    if let Some(value) = evocc_lex::decode_utf8_plain_character(text) {
+        if target.names_clang_extensions() {
+            return None;
+        }
+        return Some(CharLit {
+            value,
+            prefix: CharPrefix::None,
+        });
+    }
     // A multi-character constant has type `int` and the value that GCC 14
     // and Clang give it; plain char signedness does not apply (EvoIR 10.5).
     if let Some(value) = evocc_lex::decode_multicharacter_literal(text) {
@@ -18981,6 +18992,13 @@ fn parse_char_literal(text: &str, target: TargetDataLayout) -> Option<CharLit> {
         } else {
             value
         }
+    } else if prefix == CharPrefix::U16 && value > u32::from(u16::MAX) {
+        // GCC 14 keeps the low UTF-16 surrogate in a char16_t; Apple clang
+        // refuses the constant.
+        if target.names_clang_extensions() {
+            return None;
+        }
+        0xDC00 | (value & 0x3FF)
     } else if prefix == CharPrefix::None && target.plain_char_is_signed() && value <= 255 {
         (value as u8 as i8 as i32) as u32
     } else {

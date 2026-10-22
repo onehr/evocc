@@ -208,6 +208,9 @@ The first public version.
 
 ### Fixed
 
+- A `defined` that macro expansion produces in `#if` is evaluated, as GCC 14 and Apple clang
+  do, and one whose operand is not an identifier is E0111. A plain character constant with UTF-8
+  bytes has GCC 14's value on Linux and is refused on Darwin, as Apple clang refuses it.
 - Wide character constants have the value and signedness of the target `wchar_t`, also in
   `#if`: on Linux `#if L'\0' - 1 < 0` is false, as with GCC 14, and `L'\xffffffff'` is
   accepted. Before, `#if` treated them as signed on every target, and `L'\xffffffff'` was E1006.

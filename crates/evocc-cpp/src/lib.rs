@@ -736,6 +736,8 @@ pub struct Preprocessor {
     wide_character_bits: u8,
     wide_character_unsigned: bool,
     wide_character_refuses_out_of_range_hex: bool,
+    target_follows_apple_clang: bool,
+    conditional_depth: usize,
     source_ids: HashMap<String, FileId>,
     source_paths: HashMap<FileId, String>,
     source_contents: HashMap<String, Vec<u8>>,
@@ -792,6 +794,8 @@ impl Preprocessor {
             wide_character_bits: 32,
             wide_character_unsigned: true,
             wide_character_refuses_out_of_range_hex: false,
+            target_follows_apple_clang: false,
+            conditional_depth: 0,
             source_ids: HashMap::new(),
             source_paths: HashMap::new(),
             source_contents: HashMap::new(),
@@ -965,6 +969,11 @@ impl Preprocessor {
         self.wide_character_bits = bits;
         self.wide_character_unsigned = unsigned;
         self.wide_character_refuses_out_of_range_hex = refuses_out_of_range_hex;
+    }
+
+    /// Select whether the target follows Apple clang's character rules.
+    pub fn set_target_follows_apple_clang(&mut self, enabled: bool) {
+        self.target_follows_apple_clang = enabled;
     }
 
     pub fn set_legacy_literal_prefixes(&mut self, enabled: bool) {
@@ -1933,6 +1942,9 @@ impl Preprocessor {
                                 i += 1;
                                 continue;
                             }
+                            if self.conditional_depth > 0 {
+                                body = replace_defined_operators(&body, &self.macros, source);
+                            }
                             stamp_macro_expansion(&mut body, tok.span, invocation_whitespace);
                             expanding.insert(name.clone());
                             let sub_stream = TokenStream::new(body);
@@ -2011,6 +2023,9 @@ impl Preprocessor {
                                         next.preceded_by_whitespace |= invocation_whitespace;
                                     }
                                     continue;
+                                }
+                                if self.conditional_depth > 0 {
+                                    body = replace_defined_operators(&body, &self.macros, source);
                                 }
                                 let invocation_span =
                                     raw.get(j.saturating_sub(1)).map_or(tok.span, |close| {
@@ -2376,7 +2391,14 @@ impl Preprocessor {
         )
     }
 
+    fn target_is_darwin(&self) -> bool {
+        self.target_follows_apple_clang
+    }
+
     fn character_literal_is_admitted(&self, spelling: &str) -> bool {
+        if evocc_lex::decode_utf8_plain_character(spelling).is_some() {
+            return !self.target_is_darwin();
+        }
         if evocc_lex::decode_multicharacter_literal(spelling).is_some() {
             return true;
         }
@@ -2404,6 +2426,7 @@ impl Preprocessor {
         expanding: &mut HashSet<String>,
     ) -> bool {
         let defined_replaced = replace_defined_operators(tokens, &self.macros, source);
+        self.conditional_depth += 1;
         let expanded = self.process_impl(
             TokenStream::new(defined_replaced),
             source,
@@ -2411,7 +2434,16 @@ impl Preprocessor {
             false,
             0,
         );
+        self.conditional_depth -= 1;
         let expanded = expanded.into_vec();
+        if let Some(span) = malformed_defined(&expanded, source) {
+            self.errors.push(PreprocessError {
+                code: "E0111",
+                span,
+                message: "conditional-operand-not-integer".into(),
+            });
+            return false;
+        }
         if let Some(token) = expanded.iter().find(|token| {
             token.kind == TokenKind::CharLiteral
                 && !self.character_literal_is_admitted(token_lexeme(token, source))
@@ -3300,6 +3332,11 @@ fn replace_defined_operators(tokens: &[Token], macros: &MacroMap, source: &[u8])
             index += 1;
             continue;
         };
+        if !tokens.get(name_index).is_some_and(preprocessing_identifier) {
+            result.push(tokens[index].clone());
+            index += 1;
+            continue;
+        }
         let name = token_lexeme(&tokens[name_index], source);
         let mut answer = make_int_token(i64::from(macros.contains(name)));
         answer.span = tokens[index].span;
@@ -3307,6 +3344,27 @@ fn replace_defined_operators(tokens: &[Token], macros: &MacroMap, source: &[u8])
         index = next_index;
     }
     result
+}
+
+fn malformed_defined(tokens: &[Token], source: &[u8]) -> Option<SourceSpan> {
+    let mut index = 0;
+    while index < tokens.len() {
+        if token_lexeme(&tokens[index], source) != "defined" {
+            index += 1;
+            continue;
+        }
+        let next = tokens.get(index + 1).map(|token| token.kind);
+        let name_index = if next == Some(TokenKind::LParen) {
+            index + 2
+        } else {
+            index + 1
+        };
+        if !tokens.get(name_index).is_some_and(preprocessing_identifier) {
+            return Some(tokens[index].span);
+        }
+        index = name_index + 1;
+    }
+    None
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -3689,6 +3747,14 @@ fn parse_pp_character(
     wide_character_bits: u8,
     wide_character_unsigned: bool,
 ) -> PpInteger {
+    // A plain UTF-8 constant is the GCC multi-character value. Darwin
+    // validation refuses it before evaluation.
+    if let Some(value) = evocc_lex::decode_utf8_plain_character(spelling) {
+        return PpInteger {
+            bits: (value as i32 as i64) as u64,
+            unsigned: false,
+        };
+    }
     // A multi-character constant is an `int` (EvoIR 10.5).
     if let Some(value) = evocc_lex::decode_multicharacter_literal(spelling) {
         return PpInteger {
