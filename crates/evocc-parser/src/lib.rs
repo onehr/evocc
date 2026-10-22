@@ -170,7 +170,8 @@ use evocc_chir::{
 use evocc_common::{Arena, FileId, SourceSpan};
 use evocc_cpp::availability::{self, Availability};
 use evocc_cpp::{
-    pragma_pack_action, pragma_visibility_action, PragmaPackAction, PragmaVisibilityAction,
+    pragma_ms_struct_action, pragma_pack_action, pragma_visibility_action, PragmaPackAction,
+    PragmaVisibilityAction,
 };
 use evocc_lex::{Token, TokenKind, TokenText};
 use evocc_types::{
@@ -583,6 +584,39 @@ fn convention_attribute(name: &str) -> Option<(&'static str, &'static str)> {
         .iter()
         .copied()
         .find(|(attribute, _)| *attribute == name)
+}
+
+/// Clang attributes whose meaning changes a type, a value, the layout or the
+/// ABI. EvoCC refuses them on Darwin instead of silently treating the source
+/// as the unannotated type.
+fn darwin_refuses_attribute(name: &str) -> bool {
+    matches!(
+        name,
+        "ext_vector_type"
+            | "matrix_type"
+            | "address_space"
+            | "pass_object_size"
+            | "pass_dynamic_object_size"
+            | "noderef"
+            | "ms_struct"
+            | "neon_vector_type"
+            | "neon_polyvector_type"
+            | "counted_by"
+            | "counted_by_or_null"
+            | "sized_by"
+            | "sized_by_or_null"
+            | "ended_by"
+            | "internal_linkage"
+            | "unsafe_indexable"
+            | "indexable"
+            | "bidi_indexable"
+            | "terminated_by"
+            | "decay_discards_count_in_parameters"
+    )
+}
+
+fn nullability_keyword(text: &str) -> bool {
+    matches!(text, "_Nonnull" | "_Nullable" | "_Null_unspecified")
 }
 
 /// EvoIR 10.1.9: whether a function that a declaration marks with a list
@@ -1231,7 +1265,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 decls.append(&mut self.builtin_declarations);
                 continue;
             }
-            if self.consume_pragma_pack_marker()
+            if self.consume_pragma_ms_struct_marker()
+                || self.consume_pragma_pack_marker()
                 || self.consume_visibility_marker()
                 || self.consume_fenv_marker(true)
             {
@@ -1409,6 +1444,17 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     fn reached_error_limit(&self) -> bool {
         self.error_limit
             .is_some_and(|limit| self.error_count >= limit.get())
+    }
+
+    fn consume_pragma_ms_struct_marker(&mut self) -> bool {
+        let Some(action) = self.peek().and_then(pragma_ms_struct_action) else {
+            return false;
+        };
+        let span = self.advance().expect("peeked ms_struct marker").span;
+        if action == "on" && self.target_layout.names_clang_extensions() {
+            self.report("E2967", "unsupported-darwin-attribute", span);
+        }
+        true
     }
 
     fn consume_pragma_pack_marker(&mut self) -> bool {
@@ -2731,6 +2777,21 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         }
     }
 
+    fn report_internal_linkage_attributes(
+        &mut self,
+        attributes: &[Attribute],
+        storage: StorageClass,
+    ) {
+        if !self.target_layout.names_clang_extensions() || storage.base() == StorageClass::Static {
+            return;
+        }
+        for attribute in attributes {
+            if attribute.semantic_name() == Some("internal_linkage") {
+                self.report("E2967", "unsupported-darwin-attribute", attribute.span);
+            }
+        }
+    }
+
     fn parse_declaration_inner(
         &mut self,
         context: DeclarationContext,
@@ -2840,6 +2901,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             AttributePlacement::AfterDeclarator
         };
         attributes.extend(self.parse_attribute_specifiers(trailing_placement));
+        self.report_internal_linkage_attributes(&attributes, storage);
         let mut full_type = self.apply_declarator(specifier.surface.type_id(), &declarator.derived);
         if let Some(DerivedDeclarator::Function {
             parameters: syntax @ ParameterSyntax::IdentifierList { .. },
@@ -6337,6 +6399,12 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 };
                 let gnu_name = matches!(&syntax, AttributeSyntax::Gnu)
                     || matches!(&syntax, AttributeSyntax::Brackets { namespace: Some(ns) } if matches!(ns.as_str(), "gnu" | "__gnu__"));
+                if self.target_layout.names_clang_extensions()
+                    && name != "internal_linkage"
+                    && darwin_refuses_attribute(&name)
+                {
+                    self.report("E2967", "unsupported-darwin-attribute", name_token.span);
+                }
                 // These attributes change the execution or call contract, not
                 // just optimization advice. In particular, a naked asm body
                 // cannot return through our ordinary frame. EvoIR 10.1.9
@@ -7660,6 +7728,33 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 _ => break,
             }
             self.advance();
+        }
+        qualifiers
+    }
+
+    /// Darwin accepts nullability keywords between a pointer `*` and its
+    /// qualifiers. Qualifiers after the keyword still apply. A second
+    /// nullability keyword at the same pointer level conflicts.
+    fn parse_darwin_pointer_qualifiers(&mut self, mut qualifiers: Qualifiers) -> Qualifiers {
+        let mut saw_nullability = false;
+        loop {
+            if !self
+                .peek()
+                .is_some_and(|token| nullability_keyword(self.token_text(token)))
+            {
+                break;
+            }
+            let keyword = self.advance().expect("peeked nullability keyword");
+            if saw_nullability {
+                self.report("E1001", "expected-declaration", keyword.span);
+            }
+            saw_nullability = true;
+            let trailing = self.parse_qualifiers();
+            qualifiers.is_const |= trailing.is_const;
+            qualifiers.is_volatile |= trailing.is_volatile;
+            qualifiers.is_restrict |= trailing.is_restrict;
+            qualifiers.is_atomic |= trailing.is_atomic;
+            qualifiers.aligned = qualifiers.aligned.or(trailing.aligned);
         }
         qualifiers
     }
@@ -9163,7 +9258,10 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         let mut pointers = Vec::new();
         while self.peek_kind() == Some(TokenKind::Star) {
             let star = self.advance().expect("peeked star");
-            let qualifiers = self.parse_qualifiers();
+            let mut qualifiers = self.parse_qualifiers();
+            if self.target_layout.names_clang_extensions() {
+                qualifiers = self.parse_darwin_pointer_qualifiers(qualifiers);
+            }
             let attributes = self.parse_attribute_specifiers(AttributePlacement::PointerDeclarator);
             self.validate_pointer_attributes(&attributes);
             let end = self
@@ -9343,7 +9441,10 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         let mut symbol_attributes = Vec::new();
         while self.peek_kind() == Some(TokenKind::Star) {
             let star = self.advance().expect("peeked star");
-            let qualifiers = self.parse_qualifiers();
+            let mut qualifiers = self.parse_qualifiers();
+            if self.target_layout.names_clang_extensions() {
+                qualifiers = self.parse_darwin_pointer_qualifiers(qualifiers);
+            }
             let attributes = self.parse_attribute_specifiers(AttributePlacement::PointerDeclarator);
             self.validate_pointer_attributes(&attributes);
             // Linkage, placement and retention marks describe the declared symbol,

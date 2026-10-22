@@ -1744,6 +1744,34 @@ int main(void) { return reverse_bits(1u) == 0x80000000u ? 0 : 1; }
 
 Write the operation in C, or use inline assembly for the instruction.
 
+### E2967: unsupported-darwin-attribute
+
+The source uses a Clang attribute that EvoCC does not implement on `aarch64-apple-darwin`.
+The attribute changes a type, a value, the layout, the linkage or the ABI. EvoCC refuses it
+instead of compiling a silently different type. The refused group is `ext_vector_type`,
+`matrix_type`, `address_space`, `pass_object_size`, `pass_dynamic_object_size`, `noderef`,
+`ms_struct`, `neon_vector_type`, `neon_polyvector_type`, `counted_by`, `counted_by_or_null`,
+`sized_by`, `sized_by_or_null`, `ended_by`, `internal_linkage`, `unsafe_indexable`, `indexable`,
+`bidi_indexable`, `terminated_by` and `decay_discards_count_in_parameters`. `#pragma ms_struct on`
+is refused in the same way; `off` and `reset` are accepted. `internal_linkage` is accepted when
+the declaration is already `static`.
+
+Flags: --target=aarch64-apple-darwin
+
+```c
+typedef float f4 __attribute__((ext_vector_type(4)));
+float lane(f4 v) { return v[0]; }
+int main(void) { return 0; }
+```
+
+```c
+typedef float f4;
+float lane(f4 v) { return v; }
+int main(void) { return 0; }
+```
+
+Remove the Clang extension, or use a GNU vector whose size and lane rules EvoCC implements.
+
 ## E3xxx
 
 ### E3001: read-of-uninitialized-object

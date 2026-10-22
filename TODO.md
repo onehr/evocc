@@ -5711,6 +5711,19 @@ refusal; changing the P13 demo does not close it.
   the headers that need `__BLOCKS__` and `infiniband/verbs.h` (GCC 14 refuses
   it). The full offline workspace gate passes 498 suites, 3,766 tests, zero
   failures and 38 ignores, plus Clippy and formatting.
+  October 23 (EvoIR 2.29.1): on Darwin, a Clang attribute that changes a type, a
+  value, the layout, the linkage or the ABI is E2967 at the attribute. The group
+  is `ext_vector_type`, `matrix_type`, `address_space`, `pass_object_size`,
+  `pass_dynamic_object_size`, `noderef`, `ms_struct` (also `#pragma ms_struct
+  on`), `neon_vector_type`, `neon_polyvector_type`, the `counted_by` and
+  `sized_by` family, the bounds-safety names, and `internal_linkage` on a
+  declaration without `static`. Before, EvoCC ignored them: `sizeof` of a
+  `neon_vector_type(4)` type was 4, where Apple clang gives 16. The nullability
+  keywords are accepted without effect on Darwin. The 123 attribute names of the
+  SDK and Clang headers were measured with Apple clang 21 and GCC 14, and 1,900
+  SDK header units give the same results as before. Other attributes that EvoCC
+  does not know are still ignored on Darwin, and on Linux EvoCC gives no warning
+  where GCC 14 warns. Spatial, Blocks and `infiniband/verbs.h` remain.
 
 - [x] **D20 — Implement `__builtin_tgmath` for glibc `<tgmath.h>`** — `DONE`, P2, 2026-10-21.
   Found on 2026-10-21 during D17. glibc's `<tgmath.h>` defines its type-generic

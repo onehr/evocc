@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 2.29.0** | **Pinned ground truth** | Integer complex updates and imaginary constants on 2026-10-23
+**Revision 2.29.1** | **Pinned ground truth** | Darwin Clang attributes on 2026-10-23
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract of the parser, the C lowering, equality saturation,
@@ -2857,6 +2857,7 @@ for them. Codes `E4xxx` belong to EvoMIR (`spec/evomir.md`).
 | `E2964` | `unsupported-overloadable-attribute` | front end |
 | `E2965` | `unsupported-os-log-builtin` | front end |
 | `E2966` | `unsupported-acle-builtin` | front end |
+| `E2967` | `unsupported-darwin-attribute` | front end |
 | `E3001` | `read-of-uninitialized-object` | runtime |
 | `E3002` | `integer-division-by-zero` | runtime |
 | `E3003` | `integer-remainder-by-zero` | runtime |
@@ -5096,6 +5097,27 @@ attaches to: name as written, arguments as written, source span, and the
 attachment position from the table above. Preservation does not depend on
 whether the attribute is understood. A C-HIR dump shows every attribute present
 in the source, so a reviewer can confirm nothing was dropped on the way in.
+
+**Darwin Clang attributes.** On `aarch64-apple-darwin`, Clang attributes
+that change a type, a value, the layout, the linkage or the ABI are `E2967`
+(`unsupported-darwin-attribute`) at the attribute rather than being ignored.
+The group is `ext_vector_type`, `matrix_type`, `address_space`,
+`pass_object_size`, `pass_dynamic_object_size`, `noderef`, `ms_struct`,
+`neon_vector_type`, `neon_polyvector_type`, `counted_by`,
+`counted_by_or_null`, `sized_by`, `sized_by_or_null`, `ended_by`,
+`internal_linkage`, `unsafe_indexable`, `indexable`, `bidi_indexable`,
+`terminated_by` and `decay_discards_count_in_parameters`. `internal_linkage`
+is accepted when the declaration is already `static`. `#pragma ms_struct on`
+is `E2967` at the pragma; `off` and `reset` are accepted without effect.
+Attributes that only affect diagnostics, static analysis or another language
+are accepted without effect. Every other attribute that EvoCC does not know
+is ignored on Darwin, as on Linux. The nullability keywords `_Nonnull`,
+`_Nullable` and `_Null_unspecified` are accepted without effect there.
+Qualifiers after a nullability keyword still apply, and a second nullability
+keyword at the same pointer level is `E1001`. On Linux GCC 14 warns about an
+unknown attribute and EvoCC ignores it without a warning; an unknown
+nullability keyword is refused, as GCC 14 refuses it. `__has_attribute(name)`
+on Darwin answers 0 for every name in the `E2967` group.
 
 **Applied semantics.** `aligned` and `packed` act on layout; integer `mode`
 selects the canonical integer type as specified below. The separately stated
@@ -8867,6 +8889,16 @@ to the signature spelling.
 ---
 
 ## Revision
+
+**Revision 2.29.1, 2026-10-23.** Section 10.1.9 refuses type-, value-,
+layout-, linkage- and ABI-changing Clang attributes on Darwin with `E2967`,
+including the measured vector, counted/sized-family, `ms_struct` and
+external-linkage `internal_linkage` names; `internal_linkage` on a `static`
+declaration is accepted. It accepts diagnostic-only attributes and pointer
+nullability keywords without effect, refuses a second nullability keyword, and
+refuses `#pragma ms_struct on`. Linux keeps GCC 14's warning-and-ignore
+behavior for unknown attributes; EvoCC ignores them without the warning.
+`__has_attribute` answers 0 for the refused group.
 
 **Revision 2.29.0, 2026-10-23.** The integer-complex paragraph admits `++`
 and `--` on integer complex values and GNU imaginary integer constants with

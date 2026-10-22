@@ -621,6 +621,7 @@ pub enum PragmaVisibilityAction {
 const PRAGMA_VISIBILITY_MARKER_PREFIX: &str = "\u{1e}evocc-pragma-visibility:";
 const PRAGMA_ARM_NEON_MARKER: &str = "\u{1e}evocc-pragma-arm-neon";
 const PRAGMA_FENV_MARKER: &str = "\u{1e}evocc-pragma-fenv:";
+const PRAGMA_MS_STRUCT_MARKER_PREFIX: &str = "\u{1e}evocc-pragma-ms-struct:";
 
 /// Preserve lexical FENV_ACCESS changes, including expanded `_Pragma`, until
 /// the parser can enforce declaration/block placement and scope restoration.
@@ -672,6 +673,23 @@ pub fn pragma_visibility_action(token: &Token) -> Option<PragmaVisibilityAction>
 }
 
 const PRAGMA_PACK_MARKER_PREFIX: &str = "\u{1e}evocc-pragma-pack:";
+
+/// Decode the synthetic token that carries a `#pragma ms_struct` action.
+/// `on` changes the Darwin layout; `off` and `reset` restore the default.
+pub fn pragma_ms_struct_action(token: &Token) -> Option<&'static str> {
+    if token.kind != TokenKind::Identifier {
+        return None;
+    }
+    let TokenText::Decoded(text) = &token.text else {
+        return None;
+    };
+    match text.strip_prefix(PRAGMA_MS_STRUCT_MARKER_PREFIX)? {
+        "on" => Some("on"),
+        "off" => Some("off"),
+        "reset" => Some("reset"),
+        _ => None,
+    }
+}
 
 /// Decode the synthetic token that carries a supported `#pragma pack` across
 /// the preprocessor/parser boundary. The control-character prefix cannot be
@@ -2270,6 +2288,17 @@ impl Preprocessor {
                 span,
                 message: "unsupported-target-header-pragma".into(),
             });
+            return None;
+        }
+
+        if first == "ms_struct" {
+            if tokens.len() == 2 && matches!(second, "on" | "off" | "reset") {
+                return Some(Token::new(
+                    TokenKind::Identifier,
+                    span,
+                    TokenText::Decoded(format!("{PRAGMA_MS_STRUCT_MARKER_PREFIX}{second}")),
+                ));
+            }
             return None;
         }
 

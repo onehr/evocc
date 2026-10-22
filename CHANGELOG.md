@@ -210,6 +210,10 @@ The first public version.
 
 ### Fixed
 
+- On Darwin, Clang attributes that change a type, a value, the layout, the linkage or the ABI,
+  such as `ext_vector_type`, `neon_vector_type`, `ms_struct` and `counted_by`, are E2967. Before,
+  EvoCC ignored them and compiled another type or layout. The nullability keywords `_Nonnull`,
+  `_Nullable` and `_Null_unspecified` are accepted without effect on Darwin.
 - Integer constant suffixes follow GCC's grammar: `4lL`, `1i0` and `4lil` are E0112, as both
   references refuse them. An imaginary integer constant in `#if` is E0111; before, `#if 4i` was
   false with no diagnostic.
