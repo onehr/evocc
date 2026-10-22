@@ -137,7 +137,7 @@ was found in the read-only process check at this planning checkpoint.
 | KERNEL | K01, K02, K03, K04, K10, K11, K11f, K12, N08, N09, N11 | Start with K02/K03's existing current-Image profiles; produce a cause-backed hot-path reduction, then address BPF/pidfd budgets and intermittent sched_ext/ublk failures. |
 | APPLICATION | B08, B08b, L05b, L11a, P17a, P22 | P21 completed 144 registered sessions: P1-P3 held; P4 and the earlier control penalty did not. P22's pilot of 2026-10-20 failed two go criteria on a false escape record. P01 through P20 retain their completed scope: P20 had no repair-count advantage; P18 stopped at the provider key limit. Existing application tasks keep separate exits. |
 | REVIEW |  | No rule decision is open. The 2026-10-13 decisions for K07, L03 to L10 and L11a to L11c are in docs/archive/notebook/rules-20261013/DECISIONS.md. |
-| AUDIT | D19, D24, D26, D27, D28, D30 | D19 keeps the remaining Darwin SDK groups; D24 to D27 are follow-ups of D22, D23 and L04. D01-D15 are closed in their recorded scope. Keep the T03 audit boundary; kernel/application acceptance and deferred proof domains remain separate. |
+| AUDIT | D19, D24, D27, D28, D30 | D19 keeps the remaining Darwin SDK groups; D24 to D27 are follow-ups of D22, D23 and L04. D01-D15 are closed in their recorded scope. Keep the T03 audit boundary; kernel/application acceptance and deferred proof domains remain separate. |
 | ACCEPTANCE | T04, T02, K13, K14, B10, T05, R05, R05a, R05e, R05k | Independently freeze repaired kernel/application subjects, run their existing paired/serial acceptance and refresh health/docs. |
 | LATER | R05m, R01, R02, R03, R03a, R03b, R03c, R03d, R03e, R03f, R03g, R03h, R04, R04a, R04b, R04c, R04d, R04e, N06, N06a, N06b, N06c, N06d, N06e | S1–S5 and R02e first slice are closed; S6 stays with R01's two G2 builds. R03 V1 negative-admission study is frozen; positive Q3 remains unachieved and R03a/b/c/d NOT_ADMITTED, R03e deferred. No VM timing or audit expansion; x86-64 and release stay separate. The bounded N01–N05/N07 batch is dispositioned, not a complete optimizing compiler: N03b/N03e preflights are negative, N07 E3 has zero SMT proofs, and all five library size targets remain missed. N03d C5 has size/correctness evidence but three compile-cost misses; C2/C5 remain outside the admitted cumulative configuration, and T1's misses stay frozen. All new defaults remain OFF. Retain N02's 70 admitted/187 opaque inputs and source-bridge mismatch. Broader inlining, mid-level and allocator work need newly scoped designs; no paused R activity is automatically reopened. |
 <!-- closure-queues:end -->
@@ -5815,12 +5815,29 @@ refusal; changing the P13 demo does not close it.
   gate passes 490 suites, 3,710 tests, zero failures and 35 ignores, plus Clippy
   and formatting.
 
-- [ ] **D26 — Run aggregate statement expressions in the EvoIR interpreter** — `OPEN`, P2.
+- [x] **D26 — Run aggregate statement expressions in the EvoIR interpreter** — `DONE`, P2, 2026-10-22.
   Found on 2026-10-21 by rust-r9. `--interpret-evoir` reports E3010 for a
   statement expression whose value is an aggregate, for example `({ struct S t =
   { 1, 2 }; t; })`; native code and the C-HIR interpreter run it. Exit: both
   interpreters run every aggregate statement-expression value, with tests for
   records, unions and complex values.
+  Closed on 2026-10-22 (EvoIR 2.28.2). The lowering ended the lifetimes of a
+  statement expression's objects before it copied an aggregate value out of
+  them, so the EvoIR read a dead object and the EvoIR interpreter reported
+  E3010; native code relied on storage that was no longer live. An aggregate
+  value is now copied into a fresh temporary before the lifetimes end. The value
+  has the unqualified type, so a volatile source object is read once and the
+  copy out of the temporary is not volatile: the volatile accesses of five probe
+  functions are unchanged. Records, unions, records with arrays, integer and
+  floating complex values, nested statement expressions, arguments, returns and
+  address-taken objects agree in both interpreters and natively at O0 and O2 on
+  both targets, and ten cases agree with GCC 14 and Apple clang. The assembly of
+  8 of 1,017 fixtures changes, each with an aggregate statement expression. The
+  temporary lives until the function returns, as the existing call-result
+  temporaries do.
+  [Tests](crates/evocc/tests/aggregate_statement_expressions.rs). The full
+  offline workspace gate passes 3,783 tests, zero failures and 41 ignores, plus
+  Clippy and formatting.
 
 - [ ] **D27 — Close the small complex gaps that L04 left** — `OPEN`, P3.
   Found on 2026-10-21 by rust-r9. Integer complex `++` and `--` stay E2102, but
@@ -5847,10 +5864,9 @@ refusal; changing the P13 demo does not close it.
   operand of `if`, `while`, `do`, `for`, `?:`, `!`, `&&` and `||`; vector
   operands of `!`, `&&` and `||` keep E2102, and a vector `?:` condition keeps
   E2202. The accepted set equals that of GCC 14 and Apple clang in 64 cases on
-  both targets, and `if (v)` no longer ends in E3101. This part came from the
-  opencode team's first goal. The interpreter refusals of four originals, the
-  Darwin masks of `long` vectors and the E3101 of 32-byte `long double` vectors
-  remain open.
+  both targets, and `if (v)` no longer ends in E3101. The interpreter refusals
+  of four originals, the Darwin masks of `long` vectors and the E3101 of 32-byte
+  `long double` vectors remain open.
 
 - [x] **D29 — Run by-value records in general registers in the EvoMIR interpreter** — `DONE`, P2, 2026-10-21.
   Found on 2026-10-21 by rust-r12. A by-value `struct { char c; int i; }` stops

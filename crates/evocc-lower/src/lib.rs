@@ -7052,13 +7052,16 @@ impl<'a> FunctionLowerer<'a> {
                 .is_some_and(|ty| ty.qualifiers.is_volatile),
             CHirExpr::Cast(_, operand, _) => self.aggregate_source_is_volatile(operand),
             CHirExpr::MemoryRead { place, .. } => place.access_qualifiers().is_volatile,
-            CHirExpr::Ident { facts, .. }
-            | CHirExpr::MemoryAssign { facts, .. }
-            | CHirExpr::StatementExpr { facts, .. } => self
+            CHirExpr::Ident { facts, .. } | CHirExpr::MemoryAssign { facts, .. } => self
                 .unit
                 .types()
                 .get(facts.ty())
                 .is_some_and(|ty| ty.qualifiers.is_volatile),
+            // A statement expression undergoes lvalue conversion. Its value
+            // has the unqualified type even when its final expression named a
+            // volatile object, so the copy out of its temporary is not
+            // volatile.
+            CHirExpr::StatementExpr { .. } => false,
             CHirExpr::CompoundLit(ty, _, _) => self
                 .unit
                 .types()
@@ -11322,6 +11325,25 @@ impl<'a> FunctionLowerer<'a> {
             }
         }
 
+        if let Some(result) = &mut result {
+            if self.is_aggregate_type(facts.ty()) {
+                // The copy reads the source object before its lifetime ends.
+                // A volatile source object keeps its volatile accesses.
+                let copy_is_volatile =
+                    value.is_some_and(|value| self.aggregate_source_is_volatile(value));
+                let origin = self.synthetic_origin()?;
+                let temporary = self.emit_alloca(facts.ty(), span, origin, &mut continued)?;
+                self.emit_aggregate_transfer(
+                    temporary.clone(),
+                    result.value.clone(),
+                    facts.ty(),
+                    CopyVolatility::new(copy_is_volatile, false),
+                    span,
+                    &mut continued,
+                )?;
+                result.value = temporary;
+            }
+        }
         let result_key = result
             .as_ref()
             .map(|result| self.retain_temporary(result.value.clone(), &mut continued));

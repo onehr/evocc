@@ -208,6 +208,9 @@ The first public version.
 
 ### Fixed
 
+- A GNU statement expression whose value is a record, a union or a complex value copies the
+  value out before its own objects end. Before, the EvoIR read a dead object: the EvoIR
+  interpreter reported E3010, and native code relied on storage that was no longer live.
 - A record, union, vector or void controlling expression, for example `if (v)` for a vector, is
   the new front-end error E2103 at the operand. Before, it reached a later stage, and a vector
   `if` ended in an internal error (E3101).

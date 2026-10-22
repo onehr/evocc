@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 2.28.1** | **Pinned ground truth** | Scalar controlling expressions on 2026-10-22
+**Revision 2.28.2** | **Pinned ground truth** | Aggregate statement-expression values on 2026-10-22
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract of the parser, the C lowering, equality saturation,
@@ -5579,6 +5579,10 @@ lvalue and its type is never an array or function type.
 
 Objects declared inside end their lifetime at the closing brace, exactly as for
 any block, so a pointer to one that escapes is dangling under Section 5.2.
+An aggregate value is copied into a fresh temporary before those objects end.
+The copy precedes every `lifetime.end` for an object declared inside the
+expression, and the statement expression's value is the temporary. The
+temporary lives at least until the end of the enclosing full expression.
 `break`, `continue`, `goto` and `return` may leave a statement expression;
 jumping into one is `E2918` (`jump-into-statement-expression`) at the `goto`.
 
@@ -8820,6 +8824,11 @@ to the signature spelling.
 ---
 
 ## Revision
+
+**Revision 2.28.2, 2026-10-22.** Section 10.1.11 copies an aggregate
+statement-expression value into a fresh temporary before the objects declared
+inside end. The copy precedes their `lifetime.end` sequence, and the temporary
+lives at least until the end of the enclosing full expression.
 
 **Revision 2.28.1, 2026-10-22.** Section 10.1.8 requires a scalar controlling
 expression and adds `E2103` (`controlling-expression-not-scalar`) at the
