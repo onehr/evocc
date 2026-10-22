@@ -1579,6 +1579,11 @@ KUnit, and it closes none of those separate tasks.
   6.09% / 1.96% of kernel instructions. Dropped and irregular records are zero.
   This is an integrated checkpoint, not causal attribution to one repair or
   native timing; the diagnostic's 1,200-second budget is not the original exit.
+  October 23 (diagnostic TCG profile of the rebuilt K16 Image 63087e12, compiler
+  f6c6f5e1): the fixed 256 MiB demand-paging VM runs 2.79 times GCC's kernel
+  instructions (October 13: 5.43). The unchanged original still ends at the
+  120-s limit with EvoCC, while GCC now finishes it on a quiet host.
+  [Record](tests/fixtures/kernel-tcg-profile-20261023.out).
 
   - [x] **K02a — Remove redundant negated-truth materialization**, 2026-09-23.
     [Minimal C case](tests/fixtures/negated-truth-branch.c) went RED → GREEN;
@@ -1730,6 +1735,10 @@ KUnit, and it closes none of those separate tasks.
   6.07% / 1.96% of kernel instructions. Dropped and irregular records are zero.
   Snapshot 7 covers VM creation through destruction. This remains a diagnostic,
   with full translated blocks charged at entry and concurrent waits included.
+  October 23 (same profile): the fixed 256 MiB memslot VM runs 2.79 times GCC's
+  kernel instructions (October 13: 5.81). The unchanged original still ends at
+  the 120-s limit with EvoCC, while GCC now finishes it.
+  [Record](tests/fixtures/kernel-tcg-profile-20261023.out).
 
   - [x] **K03a — Substitute bounded private leaf helpers**, 2026-09-23.
     The [small C case](tests/fixtures/private-leaf-substitution.c) goes RED → GREEN
@@ -1933,6 +1942,10 @@ KUnit, and it closes none of those separate tasks.
   spread-out slowdown, not one stuck test. A raw-BPF proxy workload runs 3.75
   times GCC's kernel instructions for the same work (verifier about 3 times,
   hash-map updates 13 times). It needs N08 to N11 and a BTF-capable pair.
+  October 23 (same profile): the raw-BPF proxy runs 2.54 times GCC's kernel
+  instructions (October 13: 3.75); the largest excess is the verifier's
+  `backtrack_insn` (2.58 times, 16.7 percent).
+  [Record](tests/fixtures/kernel-tcg-profile-20261023.out).
 
   - [x] **K10a — Reject incomplete BPF summaries and label selected replays**.
     A [small TAP fixture](tests/fixtures/kselftest-bpf-truncated.tap) and malformed,
@@ -2061,6 +2074,12 @@ KUnit, and it closes none of those separate tasks.
     9,000-byte `copy_page_range`. The dynamic ratios of October 13 therefore
     describe the old compiler. A new TCG profile with the current compiler comes
     before any fix is chosen.
+    October 23 (TCG profile of the K16 Image rebuilt on October 19, 63087e12,
+    compiler f6c6f5e1): per fork/exit cycle EvoCC runs 2.83 times GCC's kernel
+    instructions (October 13: 11.6), and `copy_pte_range` 4.19 times (205.94). The largest excess is now
+    `zap_present_ptes` (5.42 times, 7.6 percent); boot to the first mark is 2.81
+    times. Both originals still end at the 45-second limit of the recycling
+    loop. [Record](tests/fixtures/kernel-tcg-profile-20261023.out).
 
   - [x] **K11g — Attribute delayed dying-memcg release** — `DONE`, P1, 2026-09-26.
     The [small frozen-workload control](tests/fixtures/cgroup-stock-displacement.c)

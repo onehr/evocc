@@ -1,0 +1,47 @@
+2026-10-23: executed-instruction attribution again, on the current K16 Image.
+Diagnostic only. No kernel, Image, contract, timeout or verdict changes.
+K02, K03, K10 and K11f stay OPEN.
+
+The October 13 profile (kernel-tcg-instruction-profile.out) measured the EvoCC
+Image of compiler 820bfa29. On October 19 the same tree was rebuilt with
+compiler f6c6f5e1 (kernel-direct-virt-receipt.json). This run repeats the
+October 13 lane, plugin, payloads, marks and limits on the rebuilt Image.
+The final October 13 BPF runs used the mark __arm64_sys_arm64_personality,
+and so does this run. The payloads were copied before use; every result.json
+reports its inputs unchanged.
+
+Inputs (SHA-256):
+  EvoCC Image    63087e1283ac58ba5a8843b924918ece3cda1d09072a932c3519dd1363945853
+  EvoCC vmlinux  214230c309d2561026468c35778a00c9bf860eb6458f9d345204626f040cc1b1
+  GCC Image      b6f206dea584b7e28f0c0ab255a9d6e68b30970f7e31f81210571c9929373f35
+  GCC vmlinux    ba1939e1eba5ddc173d6ebc3783db7a91646a71e5a560f1b92f6286941e5ccdd
+  tbprof.dylib   f8c86df28f06157919458905d2eb4b2cab8e3516f303ef1a61c0b7a7b8109bb4
+  QEMU 11.1.2    2239f9f1d01b6c06764fada9300c5701990c3f113b1c3533a19c993f08096642
+  pidfd/BPF      9fc1da06e4f17a47925f5d987342ec5c46de85bcb91def21a54f8ba1c40b5f32
+  KVM            48b694f1ba0a35cbe741f2ccdd1dc6c49011e9b9b28d86f9dc62014b72c88c7a
+  KVM fixed      0ea44075e9c793eaa920d22dc15ccb6ca251fb47db76fa4c2cc34bb26aecc519
+
+The host was nearly idle, so wall times are 5 to 10 times shorter than on
+October 13 (load 26-90). The counts include timer and spin work, which grows
+with wall time; compare ratios, not absolute counts, with October 13.
+
+Kernel instructions, EvoCC / GCC (October 13 ratio in parentheses):
+  pidfd_test, per kernel_clone     754,886 / 266,602        2.83  (11.6)
+    copy_pte_range 4.19x (205.94x); largest excess zap_present_ptes
+    5.42x, 7.6 percent of the excess
+  BPF proxy, bracketed interval    388,040,397 / 152,664,608   2.54  (3.75)
+    largest excess backtrack_insn 2.58x, 16.7 percent
+  demand_paging_256m, test VM      1,683,384,887 / 603,715,485  2.79  (5.43)
+  memslot_256m, test VM            1,686,394,255 / 605,250,366  2.79  (5.81)
+  boot to the first mark (pidfd)   942,649,723 / 334,921,949    2.81
+Both 256 MiB tests fault in the same 256 MiB of guest memory, so their
+counts agree closely. The unchanged no-argument demand_paging_test and
+memslot_modification_stress_test end at the 120-s limit with EvoCC (124),
+while GCC now finishes both (0). Their work differs, so no ratio is given.
+
+pidfd instruction classes, EvoCC / GCC: move 2.63, frame 2.98, load 2.47,
+store 3.06, branch 2.57.
+
+Evidence: .evidence/kernel-tcg-profile-20261023/ (60 MiB): profiles/*
+(result.json, boot log, block and snapshot files), tables/ (attribution
+output and snapshot lists), logs/, reference/inputs.sha256, report.md.
