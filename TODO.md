@@ -5857,6 +5857,16 @@ refusal; changing the P13 demo does not close it.
   On Darwin the SDK defines `CMPLX` only for Clang, so the L04 probe CASE 1
   stops at W0003. Exit: each form follows GCC 14 on Linux and Apple clang on
   Darwin, or keeps a named refusal with a test.
+  October 23 (EvoIR 2.29.0): `++` and `--` on an integer complex value change
+  only the real part, with the values of GCC 14 and Apple clang for `char`,
+  `short`, `int`, `long` and `unsigned` parts. A part narrower than `int` is
+  promoted and converted back; signed overflow of an `int` or wider part keeps
+  E3004. A GNU imaginary integer constant takes its letter anywhere in the
+  integer suffix (`4il`, `4li`, `4uil`) and has the type of the references. The
+  integer suffix check now follows GCC: `1i0`, `0xi1`, `4lil` and the mixed-case
+  `4lL` are E0112, and each imaginary integer constant in `#if` is E0111.
+  Before, `#if 4i` was false with no diagnostic. The Darwin `CMPLX` part remains
+  open.
 
 - [ ] **D28 — Close the vector gaps that L05 found** — `OPEN`, P3.
   Found on 2026-10-21 by rust-r10. The front end accepts a controlling

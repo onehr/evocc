@@ -11850,8 +11850,10 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             | OperandTypeClass::WideInteger { .. }
             | OperandTypeClass::Real(_) => UpdateConstraint::Scalar,
             // GNU C: `++` and `--` add or subtract one on the real part of a
-            // floating complex object, as GCC does.
-            OperandTypeClass::Complex(base) if base.executable_part().is_some() => {
+            // complex object, as GCC does for floating and integer complex.
+            OperandTypeClass::Complex(base)
+                if base.executable_part().is_some() || matches!(base, ComplexBase::Integer(_)) =>
+            {
                 UpdateConstraint::Scalar
             }
             OperandTypeClass::Pointer(pointee) => {
@@ -14112,7 +14114,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         let expression = match tok.kind {
             TokenKind::ImaginaryIntLiteral => {
                 let text = self.token_text(&tok);
-                let literal = parse_int_literal(&text[..text.len() - 1])?;
+                let real = evocc_lex::imaginary_integer_spelling(text)
+                    .expect("the lexer classified an imaginary integer constant");
+                let literal = parse_int_literal(&real)?;
                 let rank = rank_for_integer_type(integer_literal_value(literal).ok()?.ty())?;
                 let ty = self.intern(
                     TypeKind::Complex(ComplexBase::Integer(rank)),

@@ -756,7 +756,28 @@ impl<'a> FunctionLowerer<'a> {
         let real = self.emit_memory_load(address.clone(), element, volatile, span, state)?;
         let imaginary = self.emit_memory_load(next.clone(), element, volatile, span, state)?;
         let original = self.pack_complex([real.clone(), imaginary.clone()], ty, span, state)?;
-        let updated = self.floating_increment(real, operator, state)?;
+        let updated = if let Some(rank) = evocc_chir::complex::rank(self.unit.types(), ty) {
+            // A narrow component is promoted before the addition, as a scalar
+            // `++` is; the stored part converts back afterwards.
+            let component = integer_type_for_rank(rank);
+            let promoted = integer_promotion(component);
+            let real = self.cast(real, promoted, state)?;
+            let one = self.constant(state, promoted, 1)?;
+            let computed = self.emit_signed_arithmetic(
+                state,
+                if matches!(operator, UpdateOp::PreIncrement | UpdateOp::PostIncrement) {
+                    BinaryOp::Add
+                } else {
+                    BinaryOp::Sub
+                },
+                real,
+                one,
+                promoted,
+            )?;
+            self.cast(computed, component, state)?
+        } else {
+            self.floating_increment(real, operator, state)?
+        };
         self.emit_memory_store(address, updated.clone(), element, volatile, span, state)?;
         self.emit_memory_store(next, imaginary.clone(), element, volatile, span, state)?;
         if matches!(operator, UpdateOp::PreIncrement | UpdateOp::PreDecrement) {

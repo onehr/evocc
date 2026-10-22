@@ -2459,6 +2459,7 @@ impl Preprocessor {
             matches!(
                 token.kind,
                 TokenKind::IntLiteral
+                    | TokenKind::ImaginaryIntLiteral
                     | TokenKind::FloatLiteral
                     | TokenKind::ImaginaryFloatLiteral
                     | TokenKind::PpNumber
@@ -3709,11 +3710,7 @@ fn parse_pp_integer_checked(spelling: &str) -> Option<PpInteger> {
     let explicitly_unsigned = suffix
         .chars()
         .any(|character| matches!(character, 'u' | 'U'));
-    let normalized_suffix = suffix.to_ascii_lowercase();
-    if !matches!(
-        normalized_suffix.as_str(),
-        "" | "u" | "l" | "ul" | "lu" | "ll" | "ull" | "llu"
-    ) {
+    if !evocc_lex::valid_integer_suffix(suffix) {
         return None;
     }
     let (radix, digits) = if let Some(rest) = digits

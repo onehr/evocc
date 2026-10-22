@@ -14894,7 +14894,7 @@ impl<'a> FunctionLowerer<'a> {
                 state,
             );
         }
-        if evocc_chir::complex::floating(self.unit.types(), place.value_ty()).is_some() {
+        if evocc_chir::complex::admitted(self.unit.types(), place.value_ty()) {
             return self.lower_complex_update(
                 operator,
                 place.value_ty(),

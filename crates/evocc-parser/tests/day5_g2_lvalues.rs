@@ -60,8 +60,8 @@ const INVALID_STRUCT_COMPOUND: &str = concat!(
 const INVALID_POINTER_MULTIPLY: &str = "int f(int *p) { p *= 2; return 0; }\n";
 const INVALID_POINTER_FLOAT_ADD: &str = "int f(int *p) { p += 1.5; return 0; }\n";
 const INVALID_FLOAT_SHIFT: &str = "int f(void) { float x = 1.0; x <<= 1; return 0; }\n";
-// L04 admits GNU `++` on floating complex values; integer complex stays refused.
-const INVALID_COMPLEX_UPDATE: &str = "int f(void) { _Complex int z = 0; z++; return 0; }\n";
+// L04 and D27 admit GNU ++ and -- on complex values; %= stays invalid for every complex type.
+const INVALID_COMPLEX_UPDATE: &str = "int f(void) { _Complex int z = 0; z %= 2; return 0; }\n";
 const DAY7_POINTER_ADD: &str = "int f(int *p) { p += 1; return 0; }\n";
 const DAY7_POINTER_UPDATE: &str = "int f(int *p) { p++; return 0; }\n";
 const SCALAR_CONVERSION_CONTROLS: &str = concat!(
@@ -772,7 +772,7 @@ fn invalid_update_operands_report_exact_e2102() {
         (INVALID_POINTER_MULTIPLY, "p *= 2"),
         (INVALID_POINTER_FLOAT_ADD, "p += 1.5"),
         (INVALID_FLOAT_SHIFT, "x <<= 1"),
-        (INVALID_COMPLEX_UPDATE, "z++"),
+        (INVALID_COMPLEX_UPDATE, "z %= 2"),
         (INVALID_POINTER_ASSIGNMENT, "p = q"),
         (INVALID_STRUCT_COMPOUND, "left += right"),
         (INVALID_INCOMPLETE_POINTER_UPDATE, "p++"),

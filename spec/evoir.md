@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 2.28.4** | **Pinned ground truth** | Expanded `defined` and UTF-8 constants on 2026-10-22
+**Revision 2.29.0** | **Pinned ground truth** | Integer complex updates and imaginary constants on 2026-10-23
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract of the parser, the C lowering, equality saturation,
@@ -6318,6 +6318,27 @@ converted to its type, so a `_Bool` target tests both components. When either
 side has a floating type, the update follows the floating complex rules
 below. A pointer target is `E2102`.
 
+`++` and `--` add or subtract one in the real part and leave the imaginary
+part unchanged. A component narrower than `int` is promoted before the
+operation and converted back afterwards; an `int` or wider signed component
+keeps the existing `E3004` overflow obligation. The prefix form yields the
+updated complex value, and the postfix form yields the old value.
+
+**Imaginary integer constants.** A GNU imaginary integer constant is an
+integer constant with exactly one `i`, `I`, `j` or `J` letter anywhere in its
+integer suffix. The suffix starts after the last digit of the constant's base
+and follows GCC's grammar: at most one `u` or `U`, at most one imaginary
+letter, and one `l`/`L` or two adjacent `l`/`L` of the same case; it holds
+nothing else. Thus `4uil` is valid, `4lil` is not, and `4lL` is not. The type
+is `_Complex U`, where `U` is the type the underlying integer constant has
+without the letter; its real part is zero and its imaginary part is the
+constant value. `4i` and `4j` are `_Complex int`; `4il` and `4li` are
+`_Complex long`; `4ill` and `4lli` are `_Complex long long`; `4ui` and `4iu`
+are `_Complex unsigned int`; `4uli` is `_Complex unsigned long`; and `0x10i`
+is `_Complex int`. A floating imaginary constant follows the floating rules
+below, and two imaginary letters are not a constant. In `#if`, every
+imaginary integer constant and every invalid integer suffix is `E0111`.
+
 **Floating complex.** `float _Complex`, `double _Complex` and `long double
 _Complex` have two adjacent parts of the real type, real then imaginary, so
 the size is twice that of the real type and the alignment is the same. Plain
@@ -8846,6 +8867,13 @@ to the signature spelling.
 ---
 
 ## Revision
+
+**Revision 2.29.0, 2026-10-23.** The integer-complex paragraph admits `++`
+and `--` on integer complex values and GNU imaginary integer constants with
+the letter anywhere in the integer suffix. It states GCC's suffix groups,
+rejects the mixed-case `lL` spelling, and refuses every imaginary integer
+constant in `#if`. Both targets take the values and types of GCC 14 and Apple
+clang; signed component overflow keeps its `E3004` obligation.
 
 **Revision 2.28.4, 2026-10-22.** Section 10.5 evaluates a `defined` produced
 by a macro replacement list before that list is rescanned, and refuses a

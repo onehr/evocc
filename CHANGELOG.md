@@ -175,6 +175,8 @@ The first public version.
   mdBook and publishes it to GitHub Pages.
 - The Apache License 2.0 (copyright 2026 Haoran Wang, NexRidge), a `NOTICE` file and third-party
   notices.
+- `++` and `--` on integer complex values change the real part, as in GCC 14 and Apple clang.
+  GNU imaginary integer constants such as `4il`, `4li` and `4uil` have the references' types.
 
 ### Changed
 
@@ -208,6 +210,9 @@ The first public version.
 
 ### Fixed
 
+- Integer constant suffixes follow GCC's grammar: `4lL`, `1i0` and `4lil` are E0112, as both
+  references refuse them. An imaginary integer constant in `#if` is E0111; before, `#if 4i` was
+  false with no diagnostic.
 - A `defined` that macro expansion produces in `#if` is evaluated, as GCC 14 and Apple clang
   do, and one whose operand is not an identifier is E0111. A plain character constant with UTF-8
   bytes has GCC 14's value on Linux and is refused on Darwin, as Apple clang refuses it.

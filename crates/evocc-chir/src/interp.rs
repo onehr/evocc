@@ -8951,9 +8951,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 ));
                 self.apply_vector(&operation, &[previous, one])
             }
-            CValue::Aggregate { ty, .. }
-                if crate::complex::floating(self.unit.types(), ty).is_some() =>
-            {
+            CValue::Aggregate { ty, .. } if crate::complex::admitted(self.unit.types(), ty) => {
                 // GNU C: one is added to or subtracted from the real part.
                 let operation = crate::complex::ComplexExpr {
                     op: crate::complex::ComplexOp::Binary(if direction == OffsetDirection::Add {

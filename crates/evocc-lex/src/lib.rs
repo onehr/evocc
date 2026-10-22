@@ -563,10 +563,7 @@ fn preprocessing_number_len_in_bytes(bytes: &[u8], pos: usize) -> Option<usize> 
 }
 
 fn classify_c_number(spelling: &str) -> Option<TokenKind> {
-    if spelling
-        .strip_suffix(['i', 'I', 'j', 'J'])
-        .is_some_and(is_c_integer_constant)
-    {
+    if imaginary_integer_spelling(spelling).is_some() {
         Some(TokenKind::ImaginaryIntLiteral)
     } else if is_c_integer_constant(spelling) {
         Some(TokenKind::IntLiteral)
@@ -579,6 +576,31 @@ fn classify_c_number(spelling: &str) -> Option<TokenKind> {
     } else {
         None
     }
+}
+
+/// The spelling of a GNU imaginary integer constant without its `i`, `I`,
+/// `j` or `J`. The letter may stand anywhere in the integer suffix, as in
+/// `4il`, `4li` and `4uil`; the suffix keeps GCC's group grammar, so `4lil`
+/// is not an imaginary constant.
+#[must_use]
+pub fn imaginary_integer_spelling(spelling: &str) -> Option<String> {
+    let (digits, suffix) = split_integer_suffix(spelling);
+    if !valid_suffix_groups(suffix) {
+        return None;
+    }
+    let index = suffix.char_indices().find_map(|(index, character)| {
+        matches!(character, 'i' | 'I' | 'j' | 'J').then_some(index)
+    })?;
+    let mut real_suffix = String::with_capacity(suffix.len() - 1);
+    real_suffix.push_str(&suffix[..index]);
+    real_suffix.push_str(&suffix[index + 1..]);
+    if !valid_integer_suffix(&real_suffix) {
+        return None;
+    }
+    let mut real = String::with_capacity(digits.len() + real_suffix.len());
+    real.push_str(digits);
+    real.push_str(&real_suffix);
+    is_c_integer_constant(&real).then_some(real)
 }
 
 /// The spelling of a GNU imaginary floating constant without its `i`, `I`,
@@ -601,18 +623,84 @@ pub fn imaginary_floating_spelling(spelling: &str) -> Option<String> {
 }
 
 fn split_integer_suffix(spelling: &str) -> (&str, &str) {
-    let suffix_start = spelling
-        .char_indices()
-        .find_map(|(index, character)| matches!(character, 'u' | 'U' | 'l' | 'L').then_some(index))
-        .unwrap_or(spelling.len());
-    spelling.split_at(suffix_start)
+    let bytes = spelling.as_bytes();
+    let mut digits_end = 0;
+    if bytes.starts_with(b"0x") || bytes.starts_with(b"0X") {
+        digits_end = 2;
+        while bytes.get(digits_end).is_some_and(u8::is_ascii_hexdigit) {
+            digits_end += 1;
+        }
+    } else if bytes.starts_with(b"0b") || bytes.starts_with(b"0B") {
+        digits_end = 2;
+        while bytes
+            .get(digits_end)
+            .is_some_and(|byte| matches!(byte, b'0' | b'1'))
+        {
+            digits_end += 1;
+        }
+    } else {
+        let octal = bytes.first() == Some(&b'0');
+        while bytes.get(digits_end).is_some_and(|byte| {
+            if octal {
+                matches!(byte, b'0'..=b'7')
+            } else {
+                byte.is_ascii_digit()
+            }
+        }) {
+            digits_end += 1;
+        }
+    }
+    spelling.split_at(digits_end)
 }
 
-fn valid_integer_suffix(suffix: &str) -> bool {
-    matches!(
-        suffix.to_ascii_lowercase().as_str(),
-        "" | "u" | "l" | "ul" | "lu" | "ll" | "ull" | "llu"
-    )
+/// GCC's integer suffix grammar: at most one `u`/`U`, at most one imaginary
+/// letter, and one `l`/`L` or two adjacent `l`/`L` of the same case. The
+/// groups may appear in any order, but the two `l` characters stay adjacent.
+fn valid_suffix_groups(suffix: &str) -> bool {
+    let mut u_count = 0;
+    let mut imaginary_count = 0;
+    let mut l_case = None;
+    let mut l_count = 0;
+    let mut previous_was_l = false;
+    for character in suffix.chars() {
+        match character {
+            'u' | 'U' => {
+                u_count += 1;
+                if u_count > 1 {
+                    return false;
+                }
+                previous_was_l = false;
+            }
+            'i' | 'I' | 'j' | 'J' => {
+                imaginary_count += 1;
+                if imaginary_count > 1 {
+                    return false;
+                }
+                previous_was_l = false;
+            }
+            'l' | 'L' => {
+                l_count += 1;
+                if l_count > 2 || (l_count == 2 && !previous_was_l) {
+                    return false;
+                }
+                if l_case.is_some_and(|case| case != character) {
+                    return false;
+                }
+                l_case = Some(character);
+                previous_was_l = true;
+            }
+            _ => return false,
+        }
+    }
+    true
+}
+
+#[must_use]
+pub fn valid_integer_suffix(suffix: &str) -> bool {
+    !suffix
+        .chars()
+        .any(|character| matches!(character, 'i' | 'I' | 'j' | 'J'))
+        && valid_suffix_groups(suffix)
 }
 
 fn is_c_integer_constant(spelling: &str) -> bool {
