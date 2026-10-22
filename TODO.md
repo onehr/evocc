@@ -5842,6 +5842,15 @@ refusal; changing the P13 demo does not close it.
   Also found by rust-r11 on 2026-10-21: on Linux, `long double
   __attribute__((vector_size(32)))` ends in E3101, an internal lowering error,
   instead of a named refusal; the release binary of 2026-10-20 does the same.
+  October 22 (EvoIR 2.28.1, commit 7938ccd9): the front end requires a scalar
+  controlling expression and reports E2103 at a record, union, vector or void
+  operand of `if`, `while`, `do`, `for`, `?:`, `!`, `&&` and `||`; vector
+  operands of `!`, `&&` and `||` keep E2102, and a vector `?:` condition keeps
+  E2202. The accepted set equals that of GCC 14 and Apple clang in 64 cases on
+  both targets, and `if (v)` no longer ends in E3101. This part came from the
+  opencode team's first goal. The interpreter refusals of four originals, the
+  Darwin masks of `long` vectors and the E3101 of 32-byte `long double` vectors
+  remain open.
 
 - [x] **D29 — Run by-value records in general registers in the EvoMIR interpreter** — `DONE`, P2, 2026-10-21.
   Found on 2026-10-21 by rust-r12. A by-value `struct { char c; int i; }` stops

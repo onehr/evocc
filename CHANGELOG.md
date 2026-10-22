@@ -208,6 +208,9 @@ The first public version.
 
 ### Fixed
 
+- A record, union, vector or void controlling expression, for example `if (v)` for a vector, is
+  the new front-end error E2103 at the operand. Before, it reached a later stage, and a vector
+  `if` ended in an internal error (E3101).
 - Under `-mstrict-align`, a by-value record with alignment 1, 2 or 4 moves through registers
   with aligned accesses. Before, it could move as one doubleword from an address that only 4
   divides, which faults with alignment checking or with the MMU off. A new check, E4022, stops
