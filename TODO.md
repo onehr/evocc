@@ -2576,6 +2576,19 @@ KUnit, and it closes none of those separate tasks.
     Remaining diagnostic/output/assembler actions need their own equivalence
     and refusal tests, including `-Werror` behavior. No full musl
     fidelity claim may be inferred from accepting `-frounding-math` alone.
+    October 23 measurement of the 20 warning options of the musl build
+    (`.build/case/m1/musl-work/config.mak`), one defect and one clean program
+    each, against GCC 14 with `-std=c99`: the driver accepts all 20 today,
+    because `-W` options outside its five named lints are accepted without
+    effect since 2026-10-07. That is faithful for the eleven `-W` warnings and
+    `-Wno-pointer-to-int-cast`. `-Werror=` of `implicit-function-declaration`,
+    `implicit-int`, `int-conversion` and `incompatible-pointer-types` also
+    matches, because EvoCC refuses those defects. Four are false acceptances:
+    with `-Werror=pointer-sign`, `-Werror=pointer-arith`,
+    `-Werror=discarded-qualifiers` or `-Werror=discarded-array-qualifiers`, GCC
+    14 refuses a program that EvoCC accepts. Also, `-Werror` does not turn
+    `#warning` into an error, and `-pedantic-errors` accepts GNU statement
+    expressions that GCC 14 refuses.
     - [x] **B08b1 — Preserve already-satisfied conservative codegen options**, 2026-09-27.
       Ten frame/disabled-transform options now reach the driver without being
       discarded. Existing frame, source/minimum alignment and no-transform
