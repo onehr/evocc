@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 2.28.0** | **Pinned ground truth** | Multi-character constants on 2026-10-21
+**Revision 2.28.1** | **Pinned ground truth** | Scalar controlling expressions on 2026-10-22
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract of the parser, the C lowering, equality saturation,
@@ -2788,6 +2788,7 @@ for them. Codes `E4xxx` belong to EvoMIR (`spec/evomir.md`).
 | `E1307` | `invalid-enumeration-underlying-type` | front end |
 | `E2001` | `undeclared-identifier` | front end |
 | `E2002` | `incompatible-redeclaration` | front end |
+| `E2103` | `controlling-expression-not-scalar` | front end |
 | `E2202` | `invalid-initializer-type` | front end |
 | `E2203` | `variable-length-object` | front end |
 | `E2208` | `non-constant-static-initializer` | front end |
@@ -5027,6 +5028,14 @@ C control flow lowers to EvoIR block-argument SSA:
 `for` loops, `do-while` loops, `goto`, `switch`, and other C control flow
 constructs all lower to combinations of `br`, `cond_br`, and appropriate
 block structure.
+
+C requires a scalar controlling expression for `if`, `while`, `do` and `for`,
+for the first operand of `?:`, and for the operands of `!`, `&&` and `||`
+(C11 6.5.3.3, 6.5.13, 6.5.14, 6.5.15, 6.8.4.1, 6.8.5). Pointers and complex
+values are scalar. A record, union or void operand is `E2103`
+(`controlling-expression-not-scalar`) at the operand. A vector controlling
+expression is also `E2103`, except that the existing vector operand
+diagnostics remain for `!`, `&&` and `||` (`E2102`) and for `?:` (`E2202`).
 
 #### 10.1.9 GNU Attributes
 
@@ -8811,6 +8820,11 @@ to the signature spelling.
 ---
 
 ## Revision
+
+**Revision 2.28.1, 2026-10-22.** Section 10.1.8 requires a scalar controlling
+expression and adds `E2103` (`controlling-expression-not-scalar`) at the
+operand for a record, union, vector or void operand. A vector operand of `!`,
+`&&` or `||` keeps `E2102`, and a vector condition of `?:` keeps `E2202`.
 
 **Revision 2.28.0, 2026-10-21.** Section 10.5 admits the multi-character
 constants of GCC 14 and Apple clang 21 on both targets: an unprefixed

@@ -17,6 +17,7 @@ E1306	Choose an underlying type that holds every value, or change the value.
 E1307	Name an integer type after the colon, and the same type in every declaration.
 E2001	Declare the object or function before use, and check the spelling of its name.
 E2002	Correct the conflicting declaration instead of casting each use.
+E2103	Use a member, lane, or comparison to obtain a scalar condition.
 E2202	Use a compatible value rather than a cast that hides the type error.
 E2203	Create the array first and assign its elements during execution.
 E2208	Move the computation into a function that runs before the value is used.

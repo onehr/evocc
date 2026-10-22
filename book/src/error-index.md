@@ -373,6 +373,24 @@ int count = 0;
 int main(void) { return count; }
 ```
 
+### E2103: controlling-expression-not-scalar
+
+A condition or logical operand must have a scalar type.
+
+A record, union, vector or void value has no truth value in C. Use a member,
+a lane, or an explicit comparison.
+
+```c
+struct Record { int member; };
+int subject(struct Record value) { if (value) return 1; return 0; }
+```
+
+```c
+struct Record { int member; };
+int subject(struct Record value) { if (value.member) return 1; return 0; }
+int main(void) { struct Record value = {1}; return subject(value) == 1 ? 0 : 1; }
+```
+
 ### E2202: invalid-initializer-type
 
 The supplied value cannot initialize or convert to the required type.

@@ -1549,6 +1549,22 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         }
     }
 
+    /// C requires a scalar value in a controlling expression. Pointers and
+    /// complex values are scalar; records, unions, vectors and void are not.
+    fn require_scalar_controlling_expression(
+        &mut self,
+        expression: &CHirExpr<'arena>,
+        code: &'static str,
+        message: &'static str,
+    ) -> Option<()> {
+        let inferred = self.converted_expression_type(expression)?;
+        if is_scalar_class(self.operand_type_class(inferred.ty)) {
+            return Some(());
+        }
+        self.report(code, message, expression.span());
+        None
+    }
+
     // ── availability contexts (EvoIR 10.1.9) ──────────────────────────
 
     fn push_availability_frame(&mut self, exempt: Option<bool>, parent: Option<usize>) -> usize {
@@ -10364,6 +10380,11 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         self.expect(TokenKind::LParen)?;
         let condition = self.parse_expression()?;
         self.expect(TokenKind::RParen)?;
+        self.require_scalar_controlling_expression(
+            condition,
+            "E2103",
+            "controlling-expression-not-scalar",
+        )?;
         let then_branch = self.parse_statement()?;
         let else_branch = if self.match_kind(TokenKind::Else) {
             Some(self.parse_statement()?)
@@ -10408,6 +10429,11 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         self.expect(TokenKind::LParen)?;
         let condition = self.parse_expression()?;
         self.expect(TokenKind::RParen)?;
+        self.require_scalar_controlling_expression(
+            condition,
+            "E2103",
+            "controlling-expression-not-scalar",
+        )?;
         self.loop_depth += 1;
         let body = self.parse_statement();
         self.loop_depth -= 1;
@@ -10426,6 +10452,11 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         self.expect(TokenKind::LParen)?;
         let condition = self.parse_expression()?;
         self.expect(TokenKind::RParen)?;
+        self.require_scalar_controlling_expression(
+            condition,
+            "E2103",
+            "controlling-expression-not-scalar",
+        )?;
         let semicolon = self.expect(TokenKind::Semicolon)?;
         let span = self.merge_span(keyword.span, semicolon.span);
         Some(self.alloc_node(CHirStmt::DoWhile(body, condition, span)))
@@ -10470,6 +10501,11 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         } else {
             let expression = self.parse_expression()?;
             self.expect(TokenKind::Semicolon)?;
+            self.require_scalar_controlling_expression(
+                expression,
+                "E2103",
+                "controlling-expression-not-scalar",
+            )?;
             Some(expression)
         };
         let step = if self.peek_kind() == Some(TokenKind::RParen) {
@@ -13165,6 +13201,17 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         if !self.match_kind(TokenKind::Question) {
             return Some(condition);
         }
+        let (conditional_code, conditional_message) =
+            if self.vector_expression_type(condition).is_some() {
+                ("E2202", "invalid-initializer-type")
+            } else {
+                ("E2103", "controlling-expression-not-scalar")
+            };
+        self.require_scalar_controlling_expression(
+            condition,
+            conditional_code,
+            conditional_message,
+        )?;
         if self.match_kind(TokenKind::Colon) {
             let fallback = self.parse_conditional()?;
             self.require_supported_conditional_promotion(condition, fallback)?;
@@ -13225,6 +13272,16 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             self.advance();
             let rhs = self.parse_binary(op_prec + 1)?;
             let span = self.merge_span(lhs.span(), rhs.span());
+            if matches!(op, BinaryOp::And | BinaryOp::Or) {
+                for operand in [lhs, rhs] {
+                    let (code, message) = if self.vector_expression_type(operand).is_some() {
+                        ("E2102", "invalid-vector-operand")
+                    } else {
+                        ("E2103", "controlling-expression-not-scalar")
+                    };
+                    self.require_scalar_controlling_expression(operand, code, message)?;
+                }
+            }
             if self.complex_expression_type(lhs).is_some()
                 || self.complex_expression_type(rhs).is_some()
             {
@@ -13385,6 +13442,14 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         if let Some(op) = unary {
             let token = self.advance().unwrap();
             let operand = self.parse_unary()?;
+            if op == UnaryOp::Not {
+                let (code, message) = if self.vector_expression_type(operand).is_some() {
+                    ("E2102", "invalid-vector-operand")
+                } else {
+                    ("E2103", "controlling-expression-not-scalar")
+                };
+                self.require_scalar_controlling_expression(operand, code, message)?;
+            }
             if let Some(ty) = self.complex_expression_type(operand) {
                 if matches!(
                     op,
