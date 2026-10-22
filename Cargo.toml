@@ -44,3 +44,9 @@ license = "Apache-2.0"
 # for crash forensics and disable nothing that changes semantics.
 debug = true
 lto = false
+
+[profile.dist]
+# The release archive keeps symbols but no debug map or source paths.
+inherits = "release"
+debug = false
+strip = "debuginfo"

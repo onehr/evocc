@@ -50,13 +50,13 @@ the check compares the headers of the archive with the contract of the release c
 not export them again.
 
 Put the programs where `tools/release.sh --skip-build` looks for them. `evo`, `evocc` and
-`evocc-checker` go in `release/` of `CARGO_TARGET_DIR`, and `evoir-sem` goes in
+`evocc-checker` go in `dist/` of `CARGO_TARGET_DIR`, and `evoir-sem` goes in
 `lean/.lake/build/bin/` of the checkout. These commands take them from the archive that you
 unpacked beside the checkout:
 
 ```console
-$ mkdir -p ../programs/release lean/.lake/build/bin
-$ cp ../evocc-0.1.0-aarch64-apple-darwin/bin/evo ../evocc-0.1.0-aarch64-apple-darwin/bin/evocc ../evocc-0.1.0-aarch64-apple-darwin/bin/evocc-checker ../programs/release/
+$ mkdir -p ../programs/dist lean/.lake/build/bin
+$ cp ../evocc-0.1.0-aarch64-apple-darwin/bin/evo ../evocc-0.1.0-aarch64-apple-darwin/bin/evocc ../evocc-0.1.0-aarch64-apple-darwin/bin/evocc-checker ../programs/dist/
 $ cp ../evocc-0.1.0-aarch64-apple-darwin/bin/evoir-sem lean/.lake/build/bin/
 $ CARGO_TARGET_DIR="$PWD/../programs" tools/release.sh --skip-build --out ../repack
 $ shasum -a 256 ../repack/evocc-0.1.0-aarch64-apple-darwin.tar.gz
@@ -68,17 +68,23 @@ writes the digest to `../repack/SHA256SUMS`.
 These steps were checked with the macOS archive. Three checkouts of the same commit, at three
 paths, gave archives with the same SHA-256, with the exported headers and with the headers of the
 archive. For the Linux archive, put `evo`, `evocc` and `evocc-checker` in
-`aarch64-unknown-linux-musl/release/` of `CARGO_TARGET_DIR`, and give
+`aarch64-unknown-linux-musl/dist/` of `CARGO_TARGET_DIR`, and give
 `--target aarch64-unknown-linux-gnu`. No Linux archive was available to check these steps.
 
 ## Build the programs again
 
 Without `--skip-build`, `tools/release.sh` builds the programs first. It runs
-`cargo build --release --offline --locked -p evocc -p evocc-proofcheck`. It builds `evoir-sem` with
-Lake when `evoir-sem` is absent, or when you give `--with-lean`. A build must run on its target
-host. [Installation](install.md#build-from-source) lists what the build needs.
+`cargo build --profile dist --offline --locked -p evocc -p evocc-proofcheck`. It builds
+`evoir-sem` with Lake when `evoir-sem` is absent, or when you give `--with-lean`. A build must run
+on its target host. The checkout path must not contain a space, because `RUSTFLAGS` splits at
+spaces. [Installation](install.md#build-from-source) lists what the build needs.
 
-The programs are not yet reproducible. `evo`, `evocc` and `evocc-checker` hold paths of the
-machine that built them, so a build in another directory gives other bytes. Thus the archive of
-a new build has another SHA-256 than the published archive. The task R05e in
-[TODO.md](https://github.com/onehr/evocc/blob/main/TODO.md) tracks this work.
+The dist profile removes the debug map and remaps the checkout, the Rust sysroot and the Cargo
+target directory. Before it writes an archive, the script refuses a program that holds the path
+of the checkout or of the Cargo target directory, and a Cargo program that holds `$HOME`.
+`evoir-sem` holds paths of the Lean toolchain's own build. They are the same for every builder of
+the release, so the script does not look for `$HOME` in it.
+
+On an Apple silicon Mac with macOS 26.6 and Rust 1.97.1, two checkouts at two paths, each with its
+own target directory, gave byte-identical programs and archives. The Linux archive was not built;
+it needs an AArch64 Linux host.

@@ -180,6 +180,10 @@ The first public version.
 
 ### Changed
 
+- `tools/release.sh` builds the archive programs with a `dist` profile that keeps symbols but
+  removes the debug map and the paths of the build machine. Two checkouts at two paths give
+  byte-identical macOS programs and archives, and the script refuses a program that still holds
+  a build path.
 - A clean check now states that it did not check pointer relations, in both `full-1` and
   `concise-1`. Records of earlier versions keep their old scope sentence, so a replay of a
   frozen experiment needs its recorded compiler.

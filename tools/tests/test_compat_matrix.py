@@ -157,7 +157,7 @@ class ReleaseChangelogTests(unittest.TestCase):
             else:
                 manifest.write_text('[package]\nversion = "0.1.0"\n')
             # --skip-build reads these tiny stand-ins; no Cargo or Lake runs.
-            for relative in ("prebuilt/release", f"prebuilt/{target}/release",
+            for relative in ("prebuilt/dist", f"prebuilt/{target}/dist",
                              "lean/.lake/build/bin"):
                 directory = root / relative
                 directory.mkdir(parents=True)

@@ -12,10 +12,12 @@
 #   --skip-build     Build nothing. Package the binaries that exist.
 #
 # The script builds evo, evocc and evocc-checker with Cargo, offline, in
-# target/frontend. On Linux it builds them for aarch64-unknown-linux-musl, so
-# they are static. That needs `rustup target add aarch64-unknown-linux-musl`.
-# Without it the script builds for glibc and warns. evoir-sem comes from Lake
-# and links glibc dynamically on Linux in all cases.
+# target/frontend using the dist profile. The dist profile removes the debug map
+# and remaps the checkout, the Rust sysroot and the target directory. On Linux
+# it builds them for aarch64-unknown-linux-musl, so they are static. That needs
+# `rustup target add aarch64-unknown-linux-musl`. Without it the script builds
+# for glibc and warns. evoir-sem comes from Lake and links glibc dynamically on
+# Linux in all cases.
 #
 # The version is the second word of `evocc --version`. If that fails, the
 # version comes from the package manifest or its inherited workspace version.
@@ -80,6 +82,10 @@ if [ "$target" != "$host" ] && [ "$skip_build" = false ]; then
 fi
 
 CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-target/frontend}"
+case "$CARGO_TARGET_DIR" in
+    /*) ;;
+    *) CARGO_TARGET_DIR="$ROOT/$CARGO_TARGET_DIR" ;;
+esac
 export CARGO_TARGET_DIR
 musl="aarch64-unknown-linux-musl"
 
@@ -87,7 +93,7 @@ musl="aarch64-unknown-linux-musl"
 rust_triple="$target"
 if [ "$target" = "aarch64-unknown-linux-gnu" ]; then
     if [ "$skip_build" = true ]; then
-        [ -x "$CARGO_TARGET_DIR/$musl/release/evocc" ] && rust_triple="$musl"
+        [ -x "$CARGO_TARGET_DIR/$musl/dist/evocc" ] && rust_triple="$musl"
     else
         libdir="$(rustc --print target-libdir --target "$musl" 2>/dev/null || true)"
         if [ -n "$libdir" ] && ls "$libdir"/libstd-*.rlib >/dev/null 2>&1; then
@@ -99,18 +105,23 @@ if [ "$target" = "aarch64-unknown-linux-gnu" ]; then
     fi
 fi
 if [ "$rust_triple" = "$host" ]; then
-    bin_dir="$CARGO_TARGET_DIR/release"
+    bin_dir="$CARGO_TARGET_DIR/dist"
     triple_arg=""
 else
-    bin_dir="$CARGO_TARGET_DIR/$rust_triple/release"
+    bin_dir="$CARGO_TARGET_DIR/$rust_triple/dist"
     triple_arg="--target=$rust_triple"
 fi
 lean_bin="lean/.lake/build/bin/evoir-sem"
 
 if [ "$skip_build" = false ]; then
-    echo "== cargo build --release ($rust_triple) =="
+    echo "== cargo build --profile dist ($rust_triple) =="
+    rust_sysroot="$(rustc --print sysroot)"
+    rust_commit="$(rustc -vV | sed -n 's/^commit-hash: //p' | head -n 1)"
+    [ -n "$rust_commit" ] || rust_commit=unknown
+    RUSTFLAGS="${RUSTFLAGS:-} --remap-path-prefix=$ROOT=/build --remap-path-prefix=$rust_sysroot=/rustc/$rust_commit --remap-path-prefix=$CARGO_TARGET_DIR=/target"
+    export RUSTFLAGS
     # shellcheck disable=SC2086 # triple_arg is empty or one word.
-    CARGO_BUILD_JOBS="${CARGO_BUILD_JOBS:-2}" cargo build --release --offline --locked \
+    CARGO_BUILD_JOBS="${CARGO_BUILD_JOBS:-2}" cargo build --profile dist --offline --locked \
         $triple_arg -p evocc -p evocc-proofcheck
     if [ "$with_lean" = true ] || [ ! -x "$lean_bin" ]; then
         echo "== lake build evoir-sem ($(cat lean/lean-toolchain)) =="
@@ -121,6 +132,18 @@ fi
 
 for file in "$bin_dir/evo" "$bin_dir/evocc" "$bin_dir/evocc-checker" "$lean_bin"; do
     [ -x "$file" ] || die "missing binary: $file"
+done
+for file in "$bin_dir/evo" "$bin_dir/evocc" "$bin_dir/evocc-checker" "$lean_bin"; do
+    for path in "$ROOT" "$CARGO_TARGET_DIR"; do
+        [ -n "$path" ] || continue
+        if LC_ALL=C grep -a -F -q -- "$path" "$file"; then
+            die "binary $file contains build path: $path"
+        fi
+    done
+    if [ "$file" != "$lean_bin" ] && [ -n "$HOME" ] &&
+        LC_ALL=C grep -a -F -q -- "$HOME" "$file"; then
+        die "binary $file contains build path: $HOME"
+    fi
 done
 if [ "${lean_built:-false}" = false ] &&
     [ -n "$(find lean -path lean/.lake -prune -o -name '*.lean' -newer "$lean_bin" -print | head -n 1)" ]; then

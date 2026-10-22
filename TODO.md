@@ -138,7 +138,7 @@ was found in the read-only process check at this planning checkpoint.
 | APPLICATION | B08, B08b, L05b, L11a, P17a, P22 | P21 completed 144 registered sessions: P1-P3 held; P4 and the earlier control penalty did not. P22's pilot of 2026-10-20 failed two go criteria on a false escape record. P01 through P20 retain their completed scope: P20 had no repair-count advantage; P18 stopped at the provider key limit. Existing application tasks keep separate exits. |
 | REVIEW |  | No rule decision is open. The 2026-10-13 decisions for K07, L03 to L10 and L11a to L11c are in docs/archive/notebook/rules-20261013/DECISIONS.md. |
 | AUDIT | D19, D27, D28 | D19 keeps the remaining Darwin SDK groups; D24 to D27 are follow-ups of D22, D23 and L04. D01-D15 are closed in their recorded scope. Keep the T03 audit boundary; kernel/application acceptance and deferred proof domains remain separate. |
-| ACCEPTANCE | T04, T02, K13, K14, B10, T05, R05, R05a, R05e, R05k | Independently freeze repaired kernel/application subjects, run their existing paired/serial acceptance and refresh health/docs. |
+| ACCEPTANCE | T04, T02, K13, K14, B10, T05, R05, R05a, R05k | Independently freeze repaired kernel/application subjects, run their existing paired/serial acceptance and refresh health/docs. |
 | LATER | R05m, R01, R02, R03, R03a, R03b, R03c, R03d, R03e, R03f, R03g, R03h, R04, R04a, R04b, R04c, R04d, R04e, N06, N06a, N06b, N06c, N06d, N06e | S1–S5 and R02e first slice are closed; S6 stays with R01's two G2 builds. R03 V1 negative-admission study is frozen; positive Q3 remains unachieved and R03a/b/c/d NOT_ADMITTED, R03e deferred. No VM timing or audit expansion; x86-64 and release stay separate. The bounded N01–N05/N07 batch is dispositioned, not a complete optimizing compiler: N03b/N03e preflights are negative, N07 E3 has zero SMT proofs, and all five library size targets remain missed. N03d C5 has size/correctness evidence but three compile-cost misses; C2/C5 remain outside the admitted cumulative configuration, and T1's misses stay frozen. All new defaults remain OFF. Retain N02's 70 admitted/187 opaque inputs and source-bridge mismatch. Broader inlining, mid-level and allocator work need newly scoped designs; no paused R activity is automatically reopened. |
 <!-- closure-queues:end -->
 
@@ -4496,10 +4496,21 @@ Reopening any of them needs a new owner decision after the N03 slices land.
     headers stay because they are on the search path, as the notices say. No
     kept header includes a dropped file. zlib 1.3.2's `example` and the cross
     hello link and pass in the sealed container.
-  - [ ] **R05e — Build path-independent binaries** — `OPEN`, P2.
+  - [x] **R05e — Build path-independent binaries** — `DONE`, P2, 2026-10-23.
     Exit: `strings` finds no builder home path in the binaries, and builds
     from two checkout paths are identical, so a rebuild from a clean checkout
     reproduces the macOS archive digest (the rebuild half of R05f).
+    Closed on 2026-10-23. `tools/release.sh` builds the programs of the archive
+    with a new `dist` Cargo profile: no debug map, and `--remap-path-prefix` for
+    the checkout, the Rust sysroot and the target directory. A byte search,
+    which also reads the symbol table that Apple `strings` skips, finds no path
+    of the build machine in `evo`, `evocc` and `evocc-checker`; before, `evocc`
+    held 434. Two checkouts at two paths, each with its own target directory,
+    gave byte-identical programs and the same archive SHA-256 on macOS 26.6 with
+    Rust 1.97.1. Before it writes an archive, the script refuses a program that
+    holds the checkout or target path, and a Cargo program that holds `$HOME`.
+    `evoir-sem` keeps five paths of the Lean toolchain's own build, the same for
+    every builder. The Linux archive was not built (R05a).
   - [x] **R05f — Document how to reproduce a release archive** — `DONE`, P2, 2026-10-14.
     Exit: a book page gives the commands, and a second build from a clean
     checkout reproduces the macOS archive digest.
