@@ -2052,6 +2052,15 @@ KUnit, and it closes none of those separate tasks.
     is a coverage gap, not a reference failure or an EvoCC regression. The
     comparison now records it separately; a new subject-only skip still
     fails. This does not close the historical timeout or full-campaign exit.
+    October 23 (static sizes, no kernel run): the `mm/memory.c` of the K16 tree,
+    preprocessed with GCC 14 and compiled under the kernel flags, gives a
+    21,404-byte `copy_pte_range` (5,381 instructions, 1,904-byte frame) with the
+    release compiler of 31b4e6e2, and 1,329,212 bytes with the profile's frozen
+    compiler 820bfa29. All text of the unit falls from 2,425,156 to 236,812
+    bytes; GCC 14 gives 61,848 bytes and inlines `copy_pte_range` into a
+    9,000-byte `copy_page_range`. The dynamic ratios of October 13 therefore
+    describe the old compiler. A new TCG profile with the current compiler comes
+    before any fix is chosen.
 
   - [x] **K11g — Attribute delayed dying-memcg release** — `DONE`, P1, 2026-09-26.
     The [small frozen-workload control](tests/fixtures/cgroup-stock-displacement.c)
