@@ -962,6 +962,11 @@ are gone. This is not host-wide disk attribution. Last free-space check: 188.95 
   [Receipt](tests/contracts/agent-repair-6-pilot-20261020.json). Next action:
   the owner approves registration and the 400-request measured run (cap USD
   3.50), or stops here.
+  October 22: the owner unfroze the release binaries, which had stayed at commit
+  7fec1ce5 for the agent experiments. The pilots of 2026-10-20 used that
+  compiler, so a measured run now needs a new pilot with the current compiler
+  and a new registration commit, because commits followed the registration of
+  3a19ce9a.
 
 - [x] **P21 — Replicate repair effort and test larger programs** — `DONE`, P1.
   Keep experiment 4 repetition 1 descriptive. Register two new repetitions
@@ -1153,6 +1158,9 @@ are gone. This is not host-wide disk attribution. Last free-space check: 188.95 
   [receipt](tests/contracts/agent-repair-7-pilot-20261020.json). Next action:
   the owner chooses a new pilot with no concurrent repository writer, or the
   measured run.
+  October 22: the owner unfroze the release binaries, which had stayed at commit
+  7fec1ce5 for the agent experiments. The pilots of 2026-10-20 used that
+  compiler, so a measured run now needs a new pilot with the current compiler.
 
 - [x] **P20 — Agent repairs of silent undefined behavior** — `DONE`, P1.
   All 24 items qualify: six each of E3001/E3010/E3011 and two each of
