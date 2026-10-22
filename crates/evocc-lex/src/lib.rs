@@ -389,7 +389,12 @@ pub fn decode_character_literal(text: &str) -> Option<(u32, &str)> {
     if matches!(prefix, "" | "u8") && value > u32::from(u8::MAX) {
         return None;
     }
-    char::from_u32(value)?;
+    // A wide character constant is an integer value of the target's wchar_t.
+    // The target decides whether an out-of-range hexadecimal escape is
+    // truncated, sign-extended or refused.
+    if prefix != "L" {
+        char::from_u32(value)?;
+    }
     Some((value, prefix))
 }
 

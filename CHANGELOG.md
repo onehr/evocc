@@ -208,6 +208,9 @@ The first public version.
 
 ### Fixed
 
+- Wide character constants have the value and signedness of the target `wchar_t`, also in
+  `#if`: on Linux `#if L'\0' - 1 < 0` is false, as with GCC 14, and `L'\xffffffff'` is
+  accepted. Before, `#if` treated them as signed on every target, and `L'\xffffffff'` was E1006.
 - A GNU statement expression whose value is a record, a union or a complex value copies the
   value out before its own objects end. Before, the EvoIR read a dead object: the EvoIR
   interpreter reported E3010, and native code relied on storage that was no longer live.

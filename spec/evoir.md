@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 2.28.2** | **Pinned ground truth** | Aggregate statement-expression values on 2026-10-22
+**Revision 2.28.3** | **Pinned ground truth** | Wide character values on 2026-10-22
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract of the parser, the C lowering, equality saturation,
@@ -7869,9 +7869,18 @@ zero, and a wide literal concatenated with a narrow one is wide (`L"" "abc"` is
 string element types, decoding, initialization and the `wchar_t` predefined
 macros. By default a wide literal holds UTF-32 units, and `wchar_t` is
 `unsigned int` on Linux and `int` on Darwin. `-fshort-wchar` selects
-`unsigned short` and UTF-16 units on both targets, with a code
-point above U+FFFF written as a surrogate pair; a wide character constant above
-U+FFFF is then `E1006`, never a truncated value.
+`unsigned short` and UTF-16 units on both targets, with a code point above
+U+FFFF written as a surrogate pair.
+
+A wide character constant has the value of the target `wchar_t`. On Linux a
+hexadecimal escape above the type's range is the unsigned value; under
+`-fshort-wchar` GCC 14 truncates it to the low 16 bits. On Darwin a value above
+`INT_MAX` sign-extends through the `int` result, and under `-fshort-wchar`
+Apple clang refuses every value above `0xffff` with `E1006`. A universal
+character name above the short range stays `E1006` on both targets. In `#if`
+the constant has the same value, width and signedness as in an ordinary
+expression. Plain, `u`, `U` and `u8` character constants keep their existing
+rules.
 
 **Multi-character constants.** An unprefixed character constant with two or
 more elements has type `int` on both targets when each element is an ASCII
@@ -8824,6 +8833,13 @@ to the signature spelling.
 ---
 
 ## Revision
+
+**Revision 2.28.3, 2026-10-22.** Section 10.5 gives a wide character constant
+the value, width and signedness of the target `wchar_t` in `#if` and in
+ordinary expressions. Linux accepts the unsigned value and, under
+`-fshort-wchar`, truncates an out-of-range hexadecimal escape as GCC 14 does;
+a universal character name above that range stays `E1006`. Darwin sign-extends
+through `int` and refuses an out-of-range value under `-fshort-wchar`.
 
 **Revision 2.28.2, 2026-10-22.** Section 10.1.11 copies an aggregate
 statement-expression value into a fresh temporary before the objects declared

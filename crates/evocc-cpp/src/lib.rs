@@ -733,6 +733,9 @@ pub struct Preprocessor {
     errors: Vec<PreprocessError>,
     standard_includes: bool,
     signed_char: bool,
+    wide_character_bits: u8,
+    wide_character_unsigned: bool,
+    wide_character_refuses_out_of_range_hex: bool,
     source_ids: HashMap<String, FileId>,
     source_paths: HashMap<FileId, String>,
     source_contents: HashMap<String, Vec<u8>>,
@@ -786,6 +789,9 @@ impl Preprocessor {
             errors: Vec::new(),
             standard_includes: true,
             signed_char: false,
+            wide_character_bits: 32,
+            wide_character_unsigned: true,
+            wide_character_refuses_out_of_range_hex: false,
             source_ids: HashMap::new(),
             source_paths: HashMap::new(),
             source_contents: HashMap::new(),
@@ -952,6 +958,13 @@ impl Preprocessor {
 
     pub fn set_signed_char(&mut self, enabled: bool) {
         self.signed_char = enabled;
+    }
+
+    /// Select the target's `wchar_t` width and signedness for `#if`.
+    pub fn set_wide_character(&mut self, bits: u8, unsigned: bool, refuses_out_of_range_hex: bool) {
+        self.wide_character_bits = bits;
+        self.wide_character_unsigned = unsigned;
+        self.wide_character_refuses_out_of_range_hex = refuses_out_of_range_hex;
     }
 
     pub fn set_legacy_literal_prefixes(&mut self, enabled: bool) {
@@ -2353,6 +2366,37 @@ impl Preprocessor {
         None
     }
 
+    /// The target's `wchar_t` width, signedness and short-wchar refusal,
+    /// supplied by the driver.
+    fn wide_character_setting(&self) -> (u8, bool, bool) {
+        (
+            self.wide_character_bits,
+            self.wide_character_unsigned,
+            self.wide_character_refuses_out_of_range_hex,
+        )
+    }
+
+    fn character_literal_is_admitted(&self, spelling: &str) -> bool {
+        if evocc_lex::decode_multicharacter_literal(spelling).is_some() {
+            return true;
+        }
+        let Some((value, prefix)) = evocc_lex::decode_character_literal(spelling) else {
+            return false;
+        };
+        let (bits, _, refuses) = self.wide_character_setting();
+        if prefix == "L" && bits < 32 {
+            let maximum = (1_u32 << bits) - 1;
+            if value > maximum {
+                let hexadecimal_escape = spelling
+                    .split_once('\'')
+                    .and_then(|(_, contents)| contents.strip_suffix('\''))
+                    .is_some_and(|contents| contents.starts_with("\\x"));
+                return !refuses && hexadecimal_escape;
+            }
+        }
+        true
+    }
+
     fn evaluate_conditional_expression(
         &mut self,
         tokens: &[Token],
@@ -2370,8 +2414,7 @@ impl Preprocessor {
         let expanded = expanded.into_vec();
         if let Some(token) = expanded.iter().find(|token| {
             token.kind == TokenKind::CharLiteral
-                && evocc_lex::decode_character_literal(token_lexeme(token, source)).is_none()
-                && evocc_lex::decode_multicharacter_literal(token_lexeme(token, source)).is_none()
+                && !self.character_literal_is_admitted(token_lexeme(token, source))
         }) {
             self.errors.push(PreprocessError {
                 code: "E1006",
@@ -2396,9 +2439,16 @@ impl Preprocessor {
             });
             return false;
         }
-        IfExpression::new(&expanded, source, self.signed_char)
-            .conditional()
-            .is_true()
+        let (wide_character_bits, wide_character_unsigned, _) = self.wide_character_setting();
+        IfExpression::new(
+            &expanded,
+            source,
+            self.signed_char,
+            wide_character_bits,
+            wide_character_unsigned,
+        )
+        .conditional()
+        .is_true()
     }
 
     fn presumed_location(&self, span: SourceSpan) -> Option<&LineControl> {
@@ -3302,15 +3352,25 @@ struct IfExpression<'a> {
     source: &'a [u8],
     index: usize,
     signed_char: bool,
+    wide_character_bits: u8,
+    wide_character_unsigned: bool,
 }
 
 impl<'a> IfExpression<'a> {
-    fn new(tokens: &'a [Token], source: &'a [u8], signed_char: bool) -> Self {
+    fn new(
+        tokens: &'a [Token],
+        source: &'a [u8],
+        signed_char: bool,
+        wide_character_bits: u8,
+        wide_character_unsigned: bool,
+    ) -> Self {
         Self {
             tokens,
             source,
             index: 0,
             signed_char,
+            wide_character_bits,
+            wide_character_unsigned,
         }
     }
 
@@ -3528,9 +3588,12 @@ impl<'a> IfExpression<'a> {
             TokenKind::IntLiteral | TokenKind::PpNumber => {
                 parse_pp_integer(token_lexeme(token, self.source))
             }
-            TokenKind::CharLiteral => {
-                parse_pp_character(token_lexeme(token, self.source), self.signed_char)
-            }
+            TokenKind::CharLiteral => parse_pp_character(
+                token_lexeme(token, self.source),
+                self.signed_char,
+                self.wide_character_bits,
+                self.wide_character_unsigned,
+            ),
             _ => PpInteger::ZERO,
         }
     }
@@ -3620,7 +3683,12 @@ fn parse_pp_integer_checked(spelling: &str) -> Option<PpInteger> {
     })
 }
 
-fn parse_pp_character(spelling: &str, signed_char: bool) -> PpInteger {
+fn parse_pp_character(
+    spelling: &str,
+    signed_char: bool,
+    wide_character_bits: u8,
+    wide_character_unsigned: bool,
+) -> PpInteger {
     // A multi-character constant is an `int` (EvoIR 10.5).
     if let Some(value) = evocc_lex::decode_multicharacter_literal(spelling) {
         return PpInteger {
@@ -3630,6 +3698,21 @@ fn parse_pp_character(spelling: &str, signed_char: bool) -> PpInteger {
     }
     let (value, prefix) = evocc_lex::decode_character_literal(spelling)
         .expect("conditional character operands were validated before evaluation");
+    if prefix == "L" {
+        let value = if wide_character_bits < 32 {
+            value & ((1_u32 << wide_character_bits) - 1)
+        } else {
+            value
+        };
+        return PpInteger {
+            bits: if wide_character_unsigned {
+                u64::from(value)
+            } else {
+                (value as i32 as i64) as u64
+            },
+            unsigned: wide_character_unsigned,
+        };
+    }
     PpInteger {
         bits: if signed_char && prefix.is_empty() && value <= 255 {
             (value as u8 as i8 as i64) as u64

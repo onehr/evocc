@@ -1502,6 +1502,13 @@ fn configured_preprocessor(options: &DriverOptions) -> Result<Preprocessor, Stri
         }
     }
     pp.set_signed_char(options.signed_char);
+    let wide_character =
+        evocc_chir::integer::integer_type_for_rank(options.target_layout().wide_character_rank());
+    pp.set_wide_character(
+        wide_character.bits(),
+        !wide_character.is_signed(),
+        options.short_wchar && options.target.is_darwin(),
+    );
     pp.set_legacy_literal_prefixes(options.language.legacy_literal_prefixes());
     if options.signed_char {
         pp.undefine("__CHAR_UNSIGNED__");

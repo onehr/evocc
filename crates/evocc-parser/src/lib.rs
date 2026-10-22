@@ -18953,6 +18953,10 @@ fn parse_char_literal(text: &str, target: TargetDataLayout) -> Option<CharLit> {
         });
     }
     let (value, prefix) = evocc_lex::decode_character_literal(text)?;
+    let hexadecimal_escape = text
+        .split_once('\'')
+        .and_then(|(_, contents)| contents.strip_suffix('\''))
+        .is_some_and(|contents| contents.starts_with("\\x"));
     let prefix = match prefix {
         "u8" => CharPrefix::U8,
         "u" => CharPrefix::U16,
@@ -18965,7 +18969,19 @@ fn parse_char_literal(text: &str, target: TargetDataLayout) -> Option<CharLit> {
         "" => CharPrefix::None,
         _ => return None,
     };
-    let value = if prefix == CharPrefix::None && target.plain_char_is_signed() && value <= 255 {
+    let value = if prefix == CharPrefix::L16 {
+        if value > u32::from(u16::MAX) {
+            // Apple clang refuses every out-of-range value. Linux keeps the
+            // reviewed refusal for a universal character name, but follows
+            // GCC 14 for a hexadecimal escape and truncates its low bits.
+            if target.names_clang_extensions() || !hexadecimal_escape {
+                return None;
+            }
+            value & u32::from(u16::MAX)
+        } else {
+            value
+        }
+    } else if prefix == CharPrefix::None && target.plain_char_is_signed() && value <= 255 {
         (value as u8 as i8 as i32) as u32
     } else {
         value
