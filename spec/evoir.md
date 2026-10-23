@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 2.29.1** | **Pinned ground truth** | Darwin Clang attributes on 2026-10-23
+**Revision 2.29.2** | **Pinned ground truth** | Vector comparison masks on 2026-10-23
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract of the parser, the C lowering, equality saturation,
@@ -6142,9 +6142,12 @@ to L05b. A `vector_size` attribute on a half format is `E2903` (3.13.6).
   accept it.
 - A comparison gives a vector of signed integer lanes of the lane width, all
   ones for true and zero for false. A relational lane is a signaling
-  comparison and an equality lane is a quiet one (3.13.1). A 64-bit mask lane
-  is `long` on Linux, as in GCC 14, and `long long` on Darwin, as in Apple
-  clang. Both have one representation and one ABI.
+  comparison and an equality lane is a quiet one (3.13.1). An 8-bit mask lane
+  is `signed char` on Linux, as in GCC 14, and `char` on Darwin, as in Apple
+  clang. A 64-bit mask lane is `long` on Linux, as in GCC 14, and `long long`
+  on Darwin, as in Apple clang, for integer and floating lanes alike. These
+  mask types do not depend on `-fsigned-char` or `-funsigned-char`. The mask
+  lane types have one representation and one ABI.
 - Lanes execute in ascending order. In a strict region (3.13.1, 3.13.3) each
   lane is a strict operation, so the vector operation raises the union of the
   flags of its lanes, and each lane rounds in the current direction.
@@ -8889,6 +8892,12 @@ to the signature spelling.
 ---
 
 ## Revision
+
+**Revision 2.29.2, 2026-10-23.** The vector comparison paragraph gives 8-bit
+character lanes `signed char` masks on Linux and `char` masks on Darwin, and
+gives every 64-bit lane type the target's 64-bit mask type, including integer
+lanes. Both mask rules are independent of `-fsigned-char` and
+`-funsigned-char`. The representation and ABI are unchanged.
 
 **Revision 2.29.1, 2026-10-23.** Section 10.1.9 refuses type-, value-,
 layout-, linkage- and ABI-changing Clang attributes on Darwin with `E2967`,

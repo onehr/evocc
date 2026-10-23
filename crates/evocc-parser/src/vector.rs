@@ -100,18 +100,14 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             .ok()?
             .size_bytes
             * 8;
-        // Darwin follows Apple clang: `double` lanes give `long long` masks.
-        let floating = matches!(
-            self.types.get(element).map(|ty| &ty.kind),
-            Some(TypeKind::Float(_))
-        );
+        // Darwin follows Apple clang: 64-bit lanes give `long long` masks and
+        // character lanes give `char` masks. Linux follows GCC 14.
         let signed = match bits {
+            8 if self.target_layout.long_long_vector_masks() => TypeKind::Int(IntRank::Char),
             8 => TypeKind::Int(IntRank::SChar),
             16 => TypeKind::Int(IntRank::Short),
             32 => TypeKind::Int(IntRank::Int),
-            64 if floating && self.target_layout.long_long_vector_masks() => {
-                TypeKind::Int(IntRank::LongLong)
-            }
+            64 if self.target_layout.long_long_vector_masks() => TypeKind::Int(IntRank::LongLong),
             64 => TypeKind::Int(IntRank::Long),
             128 => TypeKind::GnuInt128(GnuInt128Signedness::Signed),
             _ => return None,

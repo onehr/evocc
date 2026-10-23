@@ -17,8 +17,8 @@
       "registry_rules": 51,
       "relation": "byte prefix of p0.scalar.v4: the first 51 rules and their exact bytes are the same, so a certificate naming p0.scalar.v3 fires only rules this receipt covers"
     },
-    "spec_revision": "**Revision 2.29.1** | **Pinned ground truth** | Darwin Clang attributes on 2026-10-23",
-    "spec_sha256": "a5911cdf02a39236b8dd5eaf2b36721520eef5600b09b132703515d04e407efd",
+    "spec_revision": "**Revision 2.29.2** | **Pinned ground truth** | Vector comparison masks on 2026-10-23",
+    "spec_sha256": "ff6e2385fe95cff64ce155403d89c2fdd3c31b725af277f74809d3a393d2fd8e",
     "lean_commit": "f81a13d420df202b6eefcdfe75158d734574c263",
     "lean_worktree_clean": true,
     "toolchain": "leanprover/lean4:v4.32.2",

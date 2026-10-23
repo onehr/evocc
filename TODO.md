@@ -5966,6 +5966,14 @@ refusal; changing the P13 demo does not close it.
   both targets, and `if (v)` no longer ends in E3101. The interpreter refusals
   of four originals, the Darwin masks of `long` vectors and the E3101 of 32-byte
   `long double` vectors remain open.
+  October 23 (EvoIR 2.29.2): a vector comparison gives the mask type of each
+  target's reference for every lane type and both vector sizes. On Darwin 64-bit
+  lanes give `long long` masks, also for `long` lanes, and 8-bit lanes give
+  plain `char` masks; on Linux they give `long` and `signed char`, as in GCC 14.
+  Neither depends on `-fsigned-char` or `-funsigned-char`. A 32-byte `long
+  double` vector no longer reaches E3101: `sizeof` compiles, and passing,
+  returning, a lane read, a store, a comparison and arithmetic are the named
+  refusal E3050. The interpreter refusals of the four originals remain open.
 
 - [x] **D29 — Run by-value records in general registers in the EvoMIR interpreter** — `DONE`, P2, 2026-10-21.
   Found on 2026-10-21 by rust-r12. A by-value `struct { char c; int i; }` stops

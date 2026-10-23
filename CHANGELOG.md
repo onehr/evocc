@@ -214,6 +214,10 @@ The first public version.
 
 ### Fixed
 
+- A GNU vector comparison has the mask type of the target's reference: `long long` lanes for
+  64-bit lanes and `char` lanes for 8-bit lanes on Darwin, as in Apple clang, and `long` and
+  `signed char` on Linux, as in GCC 14. Before, Darwin gave `long` masks for integer 64-bit
+  lanes and `signed char` masks for 8-bit lanes.
 - On Darwin, Clang attributes that change a type, a value, the layout, the linkage or the ABI,
   such as `ext_vector_type`, `neon_vector_type`, `ms_struct` and `counted_by`, are E2967. Before,
   EvoCC ignored them and compiled another type or layout. The nullability keywords `_Nonnull`,
