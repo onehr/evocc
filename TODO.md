@@ -137,7 +137,7 @@ was found in the read-only process check at this planning checkpoint.
 | KERNEL | K01, K02, K03, K04, K10, K11, K11f, K12, N08, N09, N11 | Start with K02/K03's existing current-Image profiles; produce a cause-backed hot-path reduction, then address BPF/pidfd budgets and intermittent sched_ext/ublk failures. |
 | APPLICATION | B08, B08b, L05b, L11a, P17a, P22 | P21 completed 144 registered sessions: P1-P3 held; P4 and the earlier control penalty did not. P22's pilot of 2026-10-20 failed two go criteria on a false escape record. P01 through P20 retain their completed scope: P20 had no repair-count advantage; P18 stopped at the provider key limit. Existing application tasks keep separate exits. |
 | REVIEW |  | No rule decision is open. The 2026-10-13 decisions for K07, L03 to L10 and L11a to L11c are in docs/archive/notebook/rules-20261013/DECISIONS.md. |
-| AUDIT | D19, D27, D28 | D19 keeps the remaining Darwin SDK groups; D24 to D27 are follow-ups of D22, D23 and L04. D01-D15 are closed in their recorded scope. Keep the T03 audit boundary; kernel/application acceptance and deferred proof domains remain separate. |
+| AUDIT | D27, D28 | D24 to D27 are follow-ups of D22, D23 and L04. D01-D15 are closed in their recorded scope. Keep the T03 audit boundary; kernel/application acceptance and deferred proof domains remain separate. |
 | ACCEPTANCE | T04, T02, K13, K14, B10, T05, R05, R05a, R05k | Independently freeze repaired kernel/application subjects, run their existing paired/serial acceptance and refresh health/docs. |
 | LATER | R05m, R01, R02, R03, R03a, R03b, R03c, R03d, R03e, R03f, R03g, R03h, R04, R04a, R04b, R04c, R04d, R04e, N06, N06a, N06b, N06c, N06d, N06e | S1–S5 and R02e first slice are closed; S6 stays with R01's two G2 builds. R03 V1 negative-admission study is frozen; positive Q3 remains unachieved and R03a/b/c/d NOT_ADMITTED, R03e deferred. No VM timing or audit expansion; x86-64 and release stay separate. The bounded N01–N05/N07 batch is dispositioned, not a complete optimizing compiler: N03b/N03e preflights are negative, N07 E3 has zero SMT proofs, and all five library size targets remain missed. N03d C5 has size/correctness evidence but three compile-cost misses; C2/C5 remain outside the admitted cumulative configuration, and T1's misses stay frozen. All new defaults remain OFF. Retain N02's 70 admitted/187 opaque inputs and source-bridge mismatch. Broader inlining, mid-level and allocator work need newly scoped designs; no paused R activity is automatically reopened. |
 <!-- closure-queues:end -->
@@ -5737,7 +5737,7 @@ refusal; changing the P13 demo does not close it.
   workspace gate of rust-r7 on the final tree passes 477 suites, 3,580 tests,
   zero failures and 20 ignores, plus Clippy and formatting.
 
-- [ ] **D19 — Close the Darwin SDK header gaps of the header sweep** — `OPEN`, P2.
+- [x] **D19 — Close the Darwin SDK header gaps of the header sweep** — `DONE`, P2, 2026-10-23.
   Found on 2026-10-20; also present in the compiler of 366fd796. Of 1,259 Darwin
   SDK headers that Apple clang compiles alone, EvoCC refuses 173 at O0 and at
   O2. Apart from D18's 64, the largest groups are: an attribute in a
@@ -5788,6 +5788,15 @@ refusal; changing the P13 demo does not close it.
   SDK header units give the same results as before. Other attributes that EvoCC
   does not know are still ignored on Darwin, and on Linux EvoCC gives no warning
   where GCC 14 warns. Spatial, Blocks and `infiniband/verbs.h` remain.
+  Closed on 2026-10-23. Of the 1,496 SDK and framework headers that Apple clang
+  21 compiles alone, EvoCC at ed7e423f compiles 1,443 at O0 and at O2. Each of
+  the other 53 is kept by a rule: 21 need Blocks (19 report E2963; `notify.h`
+  and `os/activity.h` hide their declarations without `__BLOCKS__`, and Apple
+  clang with `-fno-blocks` fails at the same lines), 2 need `overloadable`
+  (E2964), 29 Spatial headers need the Clang vector types that `<simd/base.h>`
+  requires (E2967 and E2964), and `infiniband/verbs.h` passes a pointer to a
+  struct declared in a parameter list, which GCC 14 refuses.
+  [Record](tests/fixtures/darwin-sdk-sweep-20261023.out).
 
 - [x] **D20 — Implement `__builtin_tgmath` for glibc `<tgmath.h>`** — `DONE`, P2, 2026-10-21.
   Found on 2026-10-21 during D17. glibc's `<tgmath.h>` defines its type-generic

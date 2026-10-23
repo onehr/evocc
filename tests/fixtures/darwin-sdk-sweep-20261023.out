@@ -1,0 +1,37 @@
+2026-10-23: Darwin SDK header sweep for the D19 exit.
+
+Compiler: the debug evocc of ed7e423f, --target=aarch64-apple-darwin, at -O0
+and at -O2, -S -o /dev/null. Reference: Apple clang 21.0.0 (clang-2100.1.1.101)
+with -std=gnu17 -fsyntax-only, macOS SDK 26.5. Units: 1,900 files, each one
+#include of an SDK or framework header (the units of the October 21 sweep).
+
+Counts:
+  units                                   1,900
+  candidates (Apple clang compiles alone) 1,496
+  EvoCC compiles at -O0 and at -O2        1,443
+  EvoCC refuses at both levels               53
+  refusals that a D19 rule keeps             53
+  open refusals                               0
+
+Kept refusals, by the rule that keeps them:
+  Blocks, 21 units:
+    19 report E2963 at a Blocks declarator (AppleEXR.h, SecTransform.h,
+       MDItem.h, ESClient.h, odmoduleconfig.h).
+     1 notify.h:336 reports E1004 at `bool`: notify.h includes
+       <dispatch/dispatch.h>, which brings <stdbool.h>, only under __BLOCKS__.
+       Apple clang with -fno-blocks fails at the same line.
+     1 os/activity.h:161 reports E1001: os_block_t exists only with Blocks.
+       Apple clang with -fno-blocks fails at the same line.
+  overloadable, 2 units: E2964 (AppleArchive/AAHeader.h, tgmath.h).
+  Clang vector types, 29 units: Spatial/Structures.h and StructuresFloat.h
+    report E1004 at __API_AVAILABLE. <simd/base.h> declares nothing unless
+    __has_attribute(__ext_vector_type__) and __has_attribute(__overloadable__)
+    are true; EvoCC refuses both (E2967, E2964), so <simd/simd.h> also leaves
+    __API_AVAILABLE undefined.
+  GCC 14 refuses the construct, 1 unit: infiniband/verbs.h:1358 reports E2202.
+    `struct ibv_modify_cq_attr` first appears inside a parameter list, so the
+    call passes a pointer to another struct type. GCC 14 refuses the reduced
+    construct (-Wincompatible-pointer-types is an error); Apple clang warns.
+
+Evidence: .evidence/darwin-sdk-sweep-20261023/ (results.tsv, groups.md,
+report.md, commands.log, candidates.txt, reference/).

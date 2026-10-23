@@ -214,6 +214,9 @@ The first public version.
 
 ### Fixed
 
+- Of the 1,496 Darwin SDK and framework headers that Apple clang compiles alone, EvoCC
+  compiles 1,443; each of the other 53 needs Blocks, `overloadable`, the Clang vector types,
+  or a construct that GCC 14 refuses too.
 - A GNU vector comparison has the mask type of the target's reference: `long long` lanes for
   64-bit lanes and `char` lanes for 8-bit lanes on Darwin, as in Apple clang, and `long` and
   `signed char` on Linux, as in GCC 14. Before, Darwin gave `long` masks for integer 64-bit
