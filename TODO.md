@@ -2589,6 +2589,14 @@ KUnit, and it closes none of those separate tasks.
     14 refuses a program that EvoCC accepts. Also, `-Werror` does not turn
     `#warning` into an error, and `-pedantic-errors` accepts GNU statement
     expressions that GCC 14 refuses.
+    October 23 (EvoIR 2.30.0): four front-end lints close the four false
+    acceptances: W0006 `pointer-sign`, W0007 `pointer-arith`, W0008
+    `discarded-qualifiers` and W0009 `discarded-array-qualifiers`. They report
+    the conversions and operations that GCC 14 reports under the same names, at
+    GCC 14's default levels; `-Wall` enables `pointer-sign` and `-Wpedantic`
+    enables both of the first two. With `-Werror=<name>` each musl defect case
+    is refused, and each clean case keeps its assembly. `-Werror` with
+    `#warning` and `-pedantic-errors` remain.
     - [x] **B08b1 — Preserve already-satisfied conservative codegen options**, 2026-09-27.
       Ten frame/disabled-transform options now reach the driver without being
       discarded. Existing frame, source/minimum alignment and no-transform

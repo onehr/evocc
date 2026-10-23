@@ -177,6 +177,10 @@ The first public version.
   notices.
 - `++` and `--` on integer complex values change the real part, as in GCC 14 and Apple clang.
   GNU imaginary integer constants such as `4il`, `4li` and `4uil` have the references' types.
+- Four warnings follow GCC 14: W0006 `pointer-sign`, W0007 `pointer-arith`, W0008
+  `discarded-qualifiers` and W0009 `discarded-array-qualifiers`, with GCC 14's default levels.
+  `-Werror=<name>` now refuses the programs that GCC 14 refuses; before, EvoCC accepted the
+  option and the program.
 
 ### Changed
 

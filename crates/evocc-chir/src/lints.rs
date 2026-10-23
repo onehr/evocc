@@ -6,12 +6,16 @@ use evocc_types::{TargetDataLayout, TypeKind};
 
 use crate::{semantic::ScopeKind, *};
 
-pub const NAMES: [&str; 5] = [
+pub const NAMES: [&str; 9] = [
     "unused-variable",
     "unused-parameter",
     "implicit-function-declaration",
     "implicit-int",
     "return-type",
+    "pointer-sign",
+    "pointer-arith",
+    "discarded-qualifiers",
+    "discarded-array-qualifiers",
 ];
 
 #[derive(Clone, Copy, Debug)]
@@ -28,6 +32,10 @@ impl Finding {
             "function has no declaration",
             "declaration has no type specifier",
             "function does not return the required value",
+            "pointer target differs in signedness",
+            "pointer arithmetic on void or function type",
+            "pointer target discards qualifiers",
+            "pointer target discards array element qualifiers",
         ][self.lint]
     }
 
@@ -38,6 +46,10 @@ impl Finding {
             "declare the function before its first call",
             "write an explicit type specifier",
             "return a value on each path or change the result type to void",
+            "make both pointer targets the same signedness, or add a cast",
+            "use a byte pointer or a complete object type for arithmetic",
+            "preserve the source qualifier, or add a cast",
+            "preserve the array element qualifier, or add a cast",
         ][self.lint]
     }
 }

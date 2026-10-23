@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 2.29.2** | **Pinned ground truth** | Vector comparison masks on 2026-10-23
+**Revision 2.30.0** | **Pinned ground truth** | Pointer conversion lints on 2026-10-23
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract of the parser, the C lowering, equality saturation,
@@ -2916,23 +2916,33 @@ for them. Codes `E4xxx` belong to EvoMIR (`spec/evomir.md`).
 | `W0003` | `function has no declaration` | front-end lint |
 | `W0004` | `declaration has no type specifier` | front-end lint |
 | `W0005` | `function does not return the required value` | front-end lint |
+| `W0006` | `pointer target differs in signedness` | front-end lint |
+| `W0007` | `pointer arithmetic on void or function type` | front-end lint |
+| `W0008` | `pointer target discards qualifiers` | front-end lint |
+| `W0009` | `pointer target discards array element qualifiers` | front-end lint |
 
-The five warning names, in code order, are `unused-variable`, `unused-parameter`,
-`implicit-function-declaration`, `implicit-int` and `return-type`. The unused
-warnings default to allow; the other three default to warn, except an implicit
-function declaration defaults to deny in C99 and later modes. The driver keeps
-implicit declaration evidence before lowering. An allowed or warned implicit
-declaration uses the existing implicit `int` and unprototyped-function rules.
-This does not enable old-style definitions in a modern language mode.
+The nine warning names, in code order, are `unused-variable`,
+`unused-parameter`, `implicit-function-declaration`, `implicit-int`,
+`return-type`, `pointer-sign`, `pointer-arith`, `discarded-qualifiers` and
+`discarded-array-qualifiers`. The unused warnings default to allow; the
+implicit and return warnings default to warn, except an implicit function
+declaration defaults to deny in C99 and later modes. The pointer sign and
+pointer arithmetic warnings default to allow. The two discarded-qualifier
+warnings default to warn. The driver keeps implicit declaration evidence
+before lowering. An allowed or warned implicit declaration uses the existing
+implicit `int` and unprototyped-function rules. This does not enable old-style
+definitions in a modern language mode.
 
 `-WNAME`, `-Wno-NAME` and `-Werror=NAME` set warn, allow and deny. The last
-setting of the same specificity wins. `-Wall` and `-Wextra` enable all five;
-an explicit named setting takes priority over either group. `-Werror` promotes
-enabled warnings to errors. `-w` suppresses all five. `--cap-lints=allow|warn|deny`
-limits the final severity; it never enables a lint. A denied lint returns exit
-1 before output publication. A warning does not change the exit status.
-Warning codes remain `Wxxxx` when promoted to errors. Their presentation uses
-`spec/diagnostics.md`. These diagnostics do not change executable IR.
+setting of the same specificity wins. `-Wall` and `-Wextra` enable the unused
+warnings and `pointer-sign`, but not `pointer-arith`; `-Wpedantic` enables
+`pointer-sign` and `pointer-arith`. An explicit named setting takes priority
+over a group. `-Werror` promotes enabled warnings to errors. `-w` suppresses
+all nine. `--cap-lints=allow|warn|deny` limits the final severity; it never
+enables a lint. A denied lint returns exit 1 before output publication. A
+warning does not change the exit status. Warning codes remain `Wxxxx` when
+promoted to errors. Their presentation uses `spec/diagnostics.md`. These
+diagnostics do not change executable IR.
 
 `E3017` compares a call site to its pointer type; `E3019` compares the runtime
 symbol selected by that value to the same type. The separation is deliberate:
@@ -8892,6 +8902,12 @@ to the signature spelling.
 ---
 
 ## Revision
+
+**Revision 2.30.0, 2026-10-23.** Section 6.3 gives pointer-sign,
+pointer-arith, discarded-qualifiers and discarded-array-qualifiers their four
+new lints, codes and default levels. The checks cover assignment,
+initialization, argument passing, return, pointer arithmetic and pointer
+subscripts as measured against GCC 14.
 
 **Revision 2.29.2, 2026-10-23.** The vector comparison paragraph gives 8-bit
 character lanes `signed char` masks on Linux and `char` masks on Darwin, and

@@ -137,3 +137,7 @@ W0002	Use the parameter, or mark it `__attribute__((unused))` when the interface
 W0003	Declare the function before its first call, normally by including its header.
 W0004	Write an explicit type specifier, such as `int`.
 W0005	Return a value on each path, or change the result type to `void`.
+W0006	Make both pointer targets the same signedness, or add a cast.
+W0007	Use a byte pointer or a complete object type for the arithmetic.
+W0008	Preserve the source qualifier, or add an explicit cast.
+W0009	Preserve the array element qualifier, or add an explicit cast.

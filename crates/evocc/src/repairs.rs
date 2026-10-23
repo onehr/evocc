@@ -126,6 +126,10 @@ pub fn suggest<'a>(
         "W0003.insert-prototype",
         "W0004.insert-int",
         "W0005.return-zero",
+        "W0006.no-repair",
+        "W0007.no-repair",
+        "W0008.no-repair",
+        "W0009.no-repair",
     ][finding.lint];
     let title = finding.help();
     let (safe, replacement) = match finding.lint {

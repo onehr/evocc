@@ -2826,3 +2826,95 @@ int value(int x) { if (x) return 3; return 0; }
 int main(void) { return value(0); }
 ```
 
+### W0006: pointer target differs in signedness
+
+An assignment, initialization, argument or return converts between pointer targets.
+The two target types differ only in signedness, so a value can change its sign.
+
+ISO C refuses this conversion without a cast. GCC 14 accepts it with this warning, and EvoCC
+does the same. EvoCC reports this warning only when it is enabled.
+
+Flags: -Werror=pointer-sign
+
+```c
+void f(void) { char *p = 0; unsigned char *q = 0; p = q; }
+int main(void) { return 0; }
+```
+
+```c
+void f(void) { char *p = 0; char *q = 0; p = q; }
+int main(void) { return 0; }
+```
+
+Make both pointer targets the same signedness, or add a cast where the
+representation is intended.
+
+### W0007: pointer arithmetic on void or function type
+
+The source performs arithmetic on a `void *` or a pointer to a function.
+GNU C gives `void *` arithmetic a one-byte element size.
+
+C does not define arithmetic on these pointer types.
+EvoCC reports this warning only when it is enabled.
+
+Flags: -Werror=pointer-arith
+
+```c
+void f(void) { void *p = 0; p += 1; }
+int main(void) { return 0; }
+```
+
+```c
+void f(void) { char *p = 0; p += 1; }
+int main(void) { return 0; }
+```
+
+Use a byte pointer or a complete object type for the arithmetic.
+
+### W0008: pointer target discards qualifiers
+
+An assignment, initialization, argument or return drops a pointer target qualifier.
+The qualifier can be `const`, `volatile` or `restrict`.
+
+ISO C refuses this conversion without a cast. GCC 14 accepts it with this warning, and EvoCC
+does the same. A write through the result can change an object that was declared `const`.
+EvoCC reports this warning by default.
+
+Flags: -Werror=discarded-qualifiers
+
+```c
+void f(void) { const int *p = 0; int *q = p; }
+int main(void) { return 0; }
+```
+
+```c
+void f(void) { const int *p = 0; const int *q = p; }
+int main(void) { return 0; }
+```
+
+Preserve the source qualifier, or add an explicit cast when the write is
+intended.
+
+### W0009: pointer target discards array element qualifiers
+
+An assignment, initialization, argument or return drops an array element qualifier.
+The qualifier is on the element type of a pointed-to array.
+
+ISO C refuses this conversion without a cast. GCC 14 accepts it with this warning, and EvoCC
+does the same. EvoCC reports this warning by default.
+
+Flags: -Werror=discarded-array-qualifiers
+
+```c
+void f(void) { const int a[2] = {0}; int (*p)[2] = &a; }
+int main(void) { return 0; }
+```
+
+```c
+void f(void) { const int a[2] = {0}; const int (*p)[2] = &a; }
+int main(void) { return 0; }
+```
+
+Preserve the array element qualifier, or add an explicit cast when the write is
+intended.
+

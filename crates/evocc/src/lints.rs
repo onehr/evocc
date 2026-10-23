@@ -9,8 +9,9 @@ pub enum Level {
 }
 
 pub struct Levels {
-    specific: [Option<Level>; 5],
+    specific: [Option<Level>; 9],
     all: bool,
+    pedantic: bool,
     errors: bool,
     quiet: bool,
     cap: Level,
@@ -19,8 +20,9 @@ pub struct Levels {
 impl Default for Levels {
     fn default() -> Self {
         Self {
-            specific: [None; 5],
+            specific: [None; 9],
             all: false,
+            pedantic: false,
             errors: false,
             quiet: false,
             cap: Level::Deny,
@@ -47,6 +49,8 @@ impl Levels {
     pub fn option(&mut self, flag: &str) -> Result<(), String> {
         match flag {
             "-Wall" | "-Wextra" => self.all = true,
+            "-Wpedantic" => self.pedantic = true,
+            "-Wno-pedantic" => self.pedantic = false,
             "-Werror" => self.errors = true,
             "-Wno-error" => self.errors = false,
             "-w" => self.quiet = true,
@@ -78,6 +82,18 @@ impl Levels {
     pub fn level(&self, lint: usize, legacy: bool) -> Level {
         let default = if lint == 2 && !legacy {
             Level::Deny
+        } else if lint == 5 {
+            if self.all || self.pedantic {
+                Level::Warn
+            } else {
+                Level::Allow
+            }
+        } else if lint == 6 {
+            if self.pedantic {
+                Level::Warn
+            } else {
+                Level::Allow
+            }
         } else if lint >= 2 || self.all {
             Level::Warn
         } else {

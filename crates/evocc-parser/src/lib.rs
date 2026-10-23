@@ -923,6 +923,7 @@ pub struct Parser<'src, 'arena> {
     lint_declarations: bool,
     lint_uses: HashSet<SymbolId>,
     lint_findings: Vec<evocc_chir::lints::Finding>,
+    pointer_lint_findings: std::cell::RefCell<Vec<evocc_chir::lints::Finding>>,
     gnu_inline: bool,
     unprototyped_calls: Vec<(SymbolId, Vec<TypeId>, SourceSpan)>,
     standard_allocation_calls: Vec<(SymbolId, SourceSpan)>,
@@ -1075,6 +1076,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             lint_declarations: false,
             lint_uses: HashSet::new(),
             lint_findings: Vec::new(),
+            pointer_lint_findings: std::cell::RefCell::new(Vec::new()),
             gnu_inline: false,
             rollback_error_count: usize::from(lexical_diagnostic.is_some()),
             diagnostics: lexical_diagnostic.into_iter().collect(),
@@ -1365,6 +1367,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         );
         unit.set_gnu_inline(self.gnu_inline);
         if self.lint_declarations {
+            self.lint_findings
+                .extend(self.pointer_lint_findings.borrow().iter().copied());
             self.lint_findings.extend(evocc_chir::lints::check(
                 &unit,
                 &self.lint_uses,
@@ -5682,12 +5686,15 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         let Some(kind) = self.types.get(target).map(|canonical| &canonical.kind) else {
             return false;
         };
+        if matches!(kind, TypeKind::Pointer(_)) {
+            self.note_pointer_conversion(target, expression);
+            return true;
+        }
         if matches!(
             kind,
             TypeKind::Int(_)
                 | TypeKind::Float(_)
                 | TypeKind::Complex(_)
-                | TypeKind::Pointer(_)
                 | TypeKind::Enum(_)
                 | TypeKind::GnuInt128(_)
         ) || matches!(kind, TypeKind::TargetBuiltin(kind) if kind.layout().is_some())
@@ -11121,6 +11128,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             return None;
         }
         let span = self.merge_span(target.span(), value.span());
+        if matches!(op, AssignmentOp::Add | AssignmentOp::Subtract) {
+            self.note_pointer_arithmetic_operands(target, value, span);
+        }
         if complex_update && !complex_target {
             // A real target is read and written through its object, so the
             // complex computation sees one evaluated place.
@@ -11784,6 +11794,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         target_ty: TypeId,
         value: &CHirExpr<'_>,
     ) -> UpdateConstraint {
+        if op == AssignmentOp::Simple {
+            self.note_pointer_conversion(target_ty, value);
+        }
         let left = self.operand_type_class(InferredType::Canonical(target_ty));
         let Some(right) = self.converted_expression_type(value) else {
             return UpdateConstraint::Invalid;
@@ -13134,6 +13147,124 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         })
     }
 
+    fn note_pointer_arithmetic_operands(
+        &self,
+        left: &CHirExpr<'_>,
+        right: &CHirExpr<'_>,
+        span: SourceSpan,
+    ) {
+        for expression in [left, right] {
+            if let Some(InferredExpressionType {
+                ty: InferredType::Canonical(ty),
+                ..
+            }) = self.converted_expression_type(expression)
+            {
+                if let OperandTypeClass::Pointer(pointer) =
+                    self.operand_type_class(InferredType::Canonical(ty))
+                {
+                    self.note_pointer_arithmetic_pointee(pointer.pointee, span);
+                }
+            }
+        }
+    }
+
+    fn note_pointer_arithmetic_pointee(&self, pointee: TypeId, span: SourceSpan) {
+        if matches!(
+            self.types.get(pointee).map(|ty| &ty.kind),
+            Some(TypeKind::Void | TypeKind::Function { .. })
+        ) {
+            self.pointer_lint_findings
+                .borrow_mut()
+                .push(evocc_chir::lints::Finding { lint: 6, span });
+        }
+    }
+
+    fn note_pointer_arithmetic_type(&self, ty: TypeId, span: SourceSpan) {
+        if matches!(
+            self.types.get(ty).map(|ty| &ty.kind),
+            Some(TypeKind::Void | TypeKind::Function { .. })
+        ) {
+            self.pointer_lint_findings
+                .borrow_mut()
+                .push(evocc_chir::lints::Finding { lint: 6, span });
+        }
+    }
+
+    /// Record the GCC pointer conversion warnings that depend on the source
+    /// and target pointer types. The driver applies the selected lint level.
+    fn note_pointer_conversion(&self, target_ty: TypeId, value: &CHirExpr<'_>) {
+        let Some(source_inferred) = self.converted_expression_type(value) else {
+            return;
+        };
+        let target_class = self.operand_type_class(InferredType::Canonical(target_ty));
+        let source_class = self.operand_type_class(source_inferred.ty);
+        let (OperandTypeClass::Pointer(target), OperandTypeClass::Pointer(source)) =
+            (target_class, source_class)
+        else {
+            return;
+        };
+        let span = value.span();
+        let source_array = self
+            .types
+            .get(source.pointee)
+            .and_then(|ty| match &ty.kind {
+                TypeKind::Array { element, .. } => Some(*element),
+                _ => None,
+            });
+        let target_array = self
+            .types
+            .get(target.pointee)
+            .and_then(|ty| match &ty.kind {
+                TypeKind::Array { element, .. } => Some(*element),
+                _ => None,
+            });
+        if let (Some(source_element), Some(target_element)) = (source_array, target_array) {
+            let source_qualifiers = self
+                .types
+                .get(source_element)
+                .map_or(Qualifiers::default(), |ty| ty.qualifiers);
+            let target_qualifiers = self
+                .types
+                .get(target_element)
+                .map_or(Qualifiers::default(), |ty| ty.qualifiers);
+            let source_array_qualifiers = self
+                .types
+                .get(source.pointee)
+                .map_or(Qualifiers::default(), |ty| ty.qualifiers);
+            let target_array_qualifiers = self
+                .types
+                .get(target.pointee)
+                .map_or(Qualifiers::default(), |ty| ty.qualifiers);
+            if drops_qualifiers(source_qualifiers, target_qualifiers)
+                || drops_qualifiers(source_array_qualifiers, target_array_qualifiers)
+            {
+                self.pointer_lint_findings
+                    .borrow_mut()
+                    .push(evocc_chir::lints::Finding { lint: 8, span });
+            }
+        } else if drops_qualifiers(source.qualifiers, target.qualifiers) {
+            self.pointer_lint_findings
+                .borrow_mut()
+                .push(evocc_chir::lints::Finding { lint: 7, span });
+        }
+        if let (Ok(source_integer), Ok(target_integer)) = (
+            self.canonical_integer_type(source.pointee),
+            self.canonical_integer_type(target.pointee),
+        ) {
+            let source_kind = self.types.get(source.pointee).map(|ty| &ty.kind);
+            let target_kind = self.types.get(target.pointee).map(|ty| &ty.kind);
+            if source_integer.bits() == target_integer.bits()
+                && source_kind != target_kind
+                && matches!(source_kind, Some(TypeKind::Int(_)))
+                && matches!(target_kind, Some(TypeKind::Int(_)))
+            {
+                self.pointer_lint_findings
+                    .borrow_mut()
+                    .push(evocc_chir::lints::Finding { lint: 5, span });
+            }
+        }
+    }
+
     fn pointer_assignment_compatible(
         &self,
         target: InferredPointerType,
@@ -13412,6 +13543,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             ) {
                 self.require_one_half_format(lhs, rhs, span)?;
             }
+            if matches!(op, BinaryOp::Add | BinaryOp::Sub) {
+                self.note_pointer_arithmetic_operands(lhs, rhs, span);
+            }
             let expression = self.alloc_node(CHirExpr::Binary(op, lhs, rhs, span));
             self.discharge_unsigned_sign_comparison(op, lhs, rhs);
             self.require_supported_binary_promotion(op, lhs, rhs, expression)?;
@@ -13496,6 +13630,11 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             self.require_supported_update_promotion(target)?;
             let typed_target = self.typed_update_target(target)?;
             self.require_admitted_atomic_update(&typed_target, true, target.span())?;
+            if let OperandTypeClass::Pointer(pointer) =
+                self.operand_type_class(InferredType::Canonical(typed_target.ty()))
+            {
+                self.note_pointer_arithmetic_pointee(pointer.pointee, target.span());
+            }
             let op = if token.kind == TokenKind::PlusPlus {
                 UpdateOp::PreIncrement
             } else {
@@ -13639,6 +13778,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     }
                     return Some(size);
                 }
+                self.note_pointer_arithmetic_type(ty, span);
                 return Some(self.alloc_node(CHirExpr::SizeOf(ty, span)));
             }
             let operand = self.parse_unary()?;
@@ -13656,6 +13796,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     return Some(self.alloc_node(CHirExpr::Comma(operand, size, span)));
                 }
             }
+            self.note_pointer_arithmetic_type(operand_ty, span);
             return Some(self.alloc_node(CHirExpr::SizeOfExpr(operand, operand_ty, span)));
         }
 
@@ -13724,6 +13865,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 let declaration = self.finish_tag_event(event, span, Vec::new());
                 self.side_declarations.push(declaration);
             }
+            self.note_pointer_arithmetic_type(ty, span);
             return Some(self.alloc_node(CHirExpr::AlignOf(ty, span)));
         }
 
@@ -13875,13 +14017,19 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                         self.types
                             .compatible_ignoring_top_qualifiers(field.ty, source)
                             || (matches!(
-                                self.types.get(field.ty).map(|ty| &ty.kind),
-                                Some(TypeKind::Pointer(_))
-                            ) && self.assignment_constraint(
-                                AssignmentOp::Simple,
-                                field.ty,
-                                operand,
-                            ) != UpdateConstraint::Invalid)
+                                self.operand_type_class(InferredType::Canonical(field.ty)),
+                                OperandTypeClass::Pointer(_)
+                                    if self.is_null_pointer_constant(operand)
+                            ) || matches!(
+                                (
+                                    self.operand_type_class(InferredType::Canonical(field.ty)),
+                                    self.operand_type_class(InferredType::Canonical(source)),
+                                ),
+                                (
+                                    OperandTypeClass::Pointer(target),
+                                    OperandTypeClass::Pointer(source),
+                                ) if self.pointer_assignment_compatible(target, source)
+                            ))
                     })
                     .map(|(index, field)| (index, field.ty))
             }
@@ -14093,6 +14241,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                             continue;
                         }
                     }
+                    self.note_pointer_arithmetic_operands(expression, index, span);
                     let subscript = self.alloc_node(CHirExpr::Index(expression, index, span));
                     expression = self.convert_projected_lvalue(subscript);
                 }
@@ -14164,6 +14313,11 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     self.require_supported_update_promotion(target)?;
                     let typed_target = self.typed_update_target(target)?;
                     self.require_admitted_atomic_update(&typed_target, true, target.span())?;
+                    if let OperandTypeClass::Pointer(pointer) =
+                        self.operand_type_class(InferredType::Canonical(typed_target.ty()))
+                    {
+                        self.note_pointer_arithmetic_pointee(pointer.pointee, target.span());
+                    }
                     let op = if token.kind == TokenKind::PlusPlus {
                         UpdateOp::PostIncrement
                     } else {
@@ -17822,6 +17976,12 @@ fn complex_base_for_float(kind: FloatKind) -> ComplexBase {
         FloatKind::F64 => ComplexBase::CF64,
         FloatKind::F128 => ComplexBase::CF128,
     }
+}
+
+fn drops_qualifiers(source: Qualifiers, target: Qualifiers) -> bool {
+    (source.is_const && !target.is_const)
+        || (source.is_volatile && !target.is_volatile)
+        || (source.is_restrict && !target.is_restrict)
 }
 
 fn qualifiers_include(target: Qualifiers, source: Qualifiers) -> bool {
