@@ -3129,6 +3129,18 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
   L05 vector types. Exit: those originals compile and pass on both targets,
   and each intrinsic has a crossed test against GCC 14 on Linux and Apple
   clang on Darwin.
+  October 23 inventory of the two pinned LLVM originals (test suite 2919e551;
+  the source of `aarch64_neon_intrinsics.c` matches its recorded
+  `sourceSha256`). No torture original on disk includes `arm_neon.h`.
+  `Vector/NEON/simple.c` uses 18 intrinsics: on Linux, EvoCC objects at O0 and
+  O2 now print exactly the output of the GCC 14 build. On Darwin it stops at
+  `typedef __mfp8 mfloat8_t;` (`arm_vector_types.h:20`, E1004), before any
+  intrinsic; the header then needs `neon_vector_type` (E2967 since D19a) and
+  `__builtin_neon_*` calls. `AArch64/aarch64_neon_intrinsics.c` uses 3,361
+  distinct intrinsics in 23,950 calls; GCC 14's header implements them with
+  about 1,870 distinct `__builtin_aarch64_*` builtins, Apple clang's with 632
+  `__builtin_neon_*` builtins. On Linux it stops at E3050 in `vcreate_f32`
+  (`arm_neon.h:2571`, an integer-to-float-vector cast).
 
 - [x] **L06 — Sub-8-byte integer-vector external ABI** — `DONE`, P2, 2026-10-20.
   GCC GPR and Clang SIMD conventions disagree and crossed controls fail.
