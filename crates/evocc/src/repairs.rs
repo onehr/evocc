@@ -130,6 +130,7 @@ pub fn suggest<'a>(
         "W0007.no-repair",
         "W0008.no-repair",
         "W0009.no-repair",
+        "W0010.no-repair",
     ][finding.lint];
     let title = finding.help();
     let (safe, replacement) = match finding.lint {

@@ -6,7 +6,7 @@ use evocc_types::{TargetDataLayout, TypeKind};
 
 use crate::{semantic::ScopeKind, *};
 
-pub const NAMES: [&str; 9] = [
+pub const NAMES: [&str; 10] = [
     "unused-variable",
     "unused-parameter",
     "implicit-function-declaration",
@@ -16,6 +16,7 @@ pub const NAMES: [&str; 9] = [
     "pointer-arith",
     "discarded-qualifiers",
     "discarded-array-qualifiers",
+    "cpp",
 ];
 
 #[derive(Clone, Copy, Debug)]
@@ -36,6 +37,7 @@ impl Finding {
             "pointer arithmetic on void or function type",
             "pointer target discards qualifiers",
             "pointer target discards array element qualifiers",
+            "warning directive",
         ][self.lint]
     }
 
@@ -50,6 +52,7 @@ impl Finding {
             "use a byte pointer or a complete object type for arithmetic",
             "preserve the source qualifier, or add a cast",
             "preserve the array element qualifier, or add a cast",
+            "address the warning or suppress it with -Wno-cpp",
         ][self.lint]
     }
 }

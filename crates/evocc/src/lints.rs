@@ -9,7 +9,8 @@ pub enum Level {
 }
 
 pub struct Levels {
-    specific: [Option<Level>; 9],
+    specific: [Option<Level>; 10],
+    no_error: [bool; 10],
     all: bool,
     pedantic: bool,
     errors: bool,
@@ -20,7 +21,8 @@ pub struct Levels {
 impl Default for Levels {
     fn default() -> Self {
         Self {
-            specific: [None; 9],
+            specific: [None; 10],
+            no_error: [false; 10],
             all: false,
             pedantic: false,
             errors: false,
@@ -62,6 +64,12 @@ impl Levels {
                     _ => return Err("unsupported lint cap; expected allow, warn or deny".into()),
                 }
             }
+            _ if flag.starts_with("-Wno-error=") => {
+                let name = &flag["-Wno-error=".len()..];
+                if let Some(index) = NAMES.iter().position(|&item| item == name) {
+                    self.no_error[index] = true;
+                }
+            }
             _ => {
                 let (name, level) = if let Some(name) = flag.strip_prefix("-Werror=") {
                     (name, Level::Deny)
@@ -72,6 +80,9 @@ impl Levels {
                 };
                 if let Some(index) = NAMES.iter().position(|&item| item == name) {
                     self.specific[index] = Some(level);
+                    if level == Level::Deny {
+                        self.no_error[index] = false;
+                    }
                 }
                 // Other GCC warning options retain the driver's existing acceptance.
             }
@@ -100,7 +111,7 @@ impl Levels {
             Level::Allow
         };
         let mut level = self.specific[lint].unwrap_or(default);
-        if level == Level::Warn && self.errors {
+        if level == Level::Warn && self.errors && !self.no_error[lint] {
             level = Level::Deny;
         }
         if self.quiet {

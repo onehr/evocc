@@ -84,6 +84,7 @@ E2964	Give each function its own name, or select the function with `_Generic`.
 E2965	Write the message with the C library instead of the os_log builtins.
 E2966	Write the operation in C, or use inline assembly for the instruction.
 E2967	Remove the Clang extension, or use a supported GNU vector or ordinary C type.
+E2968	Use `-pedantic` or `-Wpedantic`, or remove `-pedantic-errors`.
 E3001	Initialize the object on every path before reading it.
 E3002	Check the divisor and choose the required error behavior before dividing.
 E3003	Handle zero separately before evaluating `%`.
@@ -141,3 +142,4 @@ W0006	Make both pointer targets the same signedness, or add a cast.
 W0007	Use a byte pointer or a complete object type for the arithmetic.
 W0008	Preserve the source qualifier, or add an explicit cast.
 W0009	Preserve the array element qualifier, or add an explicit cast.
+W0010	Address the warning, or remove the `#warning` directive.

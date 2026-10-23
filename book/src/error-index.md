@@ -1772,6 +1772,20 @@ int main(void) { return 0; }
 
 Remove the Clang extension, or use a GNU vector whose size and lane rules EvoCC implements.
 
+### E2968: unsupported-pedantic-errors
+
+The driver refuses `-pedantic-errors`.
+EvoCC has no ISO pedantic diagnostic mode, so it cannot keep the command's
+diagnostic contract by silently ignoring the option.
+
+Trigger: none
+
+Reason: This is a command-line option refusal; no C source can trigger it
+without the option.
+
+Use `-pedantic` or `-Wpedantic` for the supported warning policy, or remove
+the option.
+
 ## E3xxx
 
 ### E3001: read-of-uninitialized-object
@@ -2917,4 +2931,27 @@ int main(void) { return 0; }
 
 Preserve the array element qualifier, or add an explicit cast when the write is
 intended.
+
+### W0010: warning directive
+
+The preprocessor reached a `#warning` directive whose condition is active.
+The directive does not stop translation and emits this warning.
+
+EvoCC reports this warning by default.
+`-Wno-cpp` suppresses it, `-Werror` or `-Werror=cpp` promotes it to an error,
+and `-w` suppresses it.
+
+Flags: -Werror=cpp
+
+```c
+#warning "text"
+int main(void) { return 0; }
+```
+
+```c
+int main(void) { return 0; }
+```
+
+Address the warning, or remove the directive when the diagnostic is no longer
+needed.
 

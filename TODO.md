@@ -2597,6 +2597,15 @@ KUnit, and it closes none of those separate tasks.
     enables both of the first two. With `-Werror=<name>` each musl defect case
     is refused, and each clean case keeps its assembly. `-Werror` with
     `#warning` and `-pedantic-errors` remain.
+    October 23 (EvoIR 2.31.0): `#warning` is the lint W0010 (`cpp`): a warning
+    by default, an error under `-Werror` or `-Werror=cpp`, silent under `-w` or
+    `-Wno-cpp`, as in GCC 14. `-pedantic-errors`, `--pedantic-errors` and
+    `-Werror=pedantic` are the driver refusal E2968, because EvoCC has no ISO
+    pedantic diagnostics; no pinned build passes them to EvoCC (the libc-test
+    commands that use them run musl's GCC wrapper). `-Wno-error=<name>` no
+    longer enables a lint. `-Werror` promotes only EvoCC's ten lints, so a
+    program that only GCC 14 warns about stays accepted under `-Werror`. Output
+    and assembler actions remain.
     - [x] **B08b1 — Preserve already-satisfied conservative codegen options**, 2026-09-27.
       Ten frame/disabled-transform options now reach the driver without being
       discarded. Existing frame, source/minimum alignment and no-transform

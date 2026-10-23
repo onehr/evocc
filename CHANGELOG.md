@@ -181,6 +181,9 @@ The first public version.
   `discarded-qualifiers` and W0009 `discarded-array-qualifiers`, with GCC 14's default levels.
   `-Werror=<name>` now refuses the programs that GCC 14 refuses; before, EvoCC accepted the
   option and the program.
+- `#warning` is the warning W0010, which `-Werror` and `-Werror=cpp` turn into an error, as in
+  GCC 14. `-pedantic-errors`, `--pedantic-errors` and `-Werror=pedantic` are refused with E2968,
+  because EvoCC has no ISO pedantic diagnostics; before, EvoCC accepted them without effect.
 
 ### Changed
 

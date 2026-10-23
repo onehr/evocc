@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 2.30.0** | **Pinned ground truth** | Pointer conversion lints on 2026-10-23
+**Revision 2.31.0** | **Pinned ground truth** | Warning directives and pedantic refusal on 2026-10-23
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract of the parser, the C lowering, equality saturation,
@@ -2858,6 +2858,7 @@ for them. Codes `E4xxx` belong to EvoMIR (`spec/evomir.md`).
 | `E2965` | `unsupported-os-log-builtin` | front end |
 | `E2966` | `unsupported-acle-builtin` | front end |
 | `E2967` | `unsupported-darwin-attribute` | front end |
+| `E2968` | `unsupported-pedantic-errors` | driver |
 | `E3001` | `read-of-uninitialized-object` | runtime |
 | `E3002` | `integer-division-by-zero` | runtime |
 | `E3003` | `integer-remainder-by-zero` | runtime |
@@ -2920,15 +2921,19 @@ for them. Codes `E4xxx` belong to EvoMIR (`spec/evomir.md`).
 | `W0007` | `pointer arithmetic on void or function type` | front-end lint |
 | `W0008` | `pointer target discards qualifiers` | front-end lint |
 | `W0009` | `pointer target discards array element qualifiers` | front-end lint |
+| `W0010` | `warning directive` | preprocessor lint |
 
-The nine warning names, in code order, are `unused-variable`,
+The ten warning names, in code order, are `unused-variable`,
 `unused-parameter`, `implicit-function-declaration`, `implicit-int`,
-`return-type`, `pointer-sign`, `pointer-arith`, `discarded-qualifiers` and
-`discarded-array-qualifiers`. The unused warnings default to allow; the
+`return-type`, `pointer-sign`, `pointer-arith`, `discarded-qualifiers`,
+`discarded-array-qualifiers` and `cpp`. The unused warnings default to allow; the
 implicit and return warnings default to warn, except an implicit function
 declaration defaults to deny in C99 and later modes. The pointer sign and
 pointer arithmetic warnings default to allow. The two discarded-qualifier
-warnings default to warn. The driver keeps implicit declaration evidence
+warnings default to warn. The `cpp` warning for an active `#warning` defaults
+to warn; `-Wcpp`, `-Wno-cpp` and `-Werror=cpp` set its level, and
+`-Wno-error=cpp` keeps it a warning under `-Werror`. The driver keeps implicit
+declaration evidence
 before lowering. An allowed or warned implicit declaration uses the existing
 implicit `int` and unprototyped-function rules. This does not enable old-style
 definitions in a modern language mode.
@@ -2938,11 +2943,18 @@ setting of the same specificity wins. `-Wall` and `-Wextra` enable the unused
 warnings and `pointer-sign`, but not `pointer-arith`; `-Wpedantic` enables
 `pointer-sign` and `pointer-arith`. An explicit named setting takes priority
 over a group. `-Werror` promotes enabled warnings to errors. `-w` suppresses
-all nine. `--cap-lints=allow|warn|deny` limits the final severity; it never
-enables a lint. A denied lint returns exit 1 before output publication. A
-warning does not change the exit status. Warning codes remain `Wxxxx` when
-promoted to errors. Their presentation uses `spec/diagnostics.md`. These
-diagnostics do not change executable IR.
+all ten. `-Wno-error=NAME` only stops `-Werror` from promoting that lint; it
+does not enable or change the lint's own level. `-Werror` promotes only
+EvoCC's lints, so a program that only GCC 14 would warn about stays accepted.
+`--cap-lints=allow|warn|deny` limits the final severity; it never enables a
+lint. A denied lint returns exit 1 before output publication. A warning does
+not change the exit status. Warning codes remain `Wxxxx` when promoted to
+errors. Their presentation uses `spec/diagnostics.md`. These diagnostics do
+not change executable IR.
+
+`-pedantic-errors`, `--pedantic-errors` and `-Werror=pedantic` are `E2968` at
+the command line; EvoCC has no ISO pedantic diagnostic mode. `-pedantic` and
+`-Wpedantic` remain accepted.
 
 `E3017` compares a call site to its pointer type; `E3019` compares the runtime
 symbol selected by that value to the same type. The separation is deliberate:
@@ -8902,6 +8914,13 @@ to the signature spelling.
 ---
 
 ## Revision
+
+**Revision 2.31.0, 2026-10-23.** Section 6.3 adds the `cpp` lint for
+`#warning` and its option levels, and the diagnostic table adds `W0010` and
+the pedantic driver refusal `E2968` for `-pedantic-errors`,
+`--pedantic-errors` and `-Werror=pedantic`. It also states that
+`-Wno-error=NAME` does not enable a lint and that `-Werror` promotes only
+EvoCC's own lints.
 
 **Revision 2.30.0, 2026-10-23.** Section 6.3 gives pointer-sign,
 pointer-arith, discarded-qualifiers and discarded-array-qualifiers their four

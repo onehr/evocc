@@ -604,6 +604,13 @@ pub struct PreprocessError {
     pub message: String,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct PreprocessWarning {
+    pub code: &'static str,
+    pub span: SourceSpan,
+    pub message: String,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PragmaPackAction {
     Set(u32),
@@ -749,6 +756,7 @@ pub struct Preprocessor {
     macro_prefix_maps: Vec<(String, String)>,
     cond_stack: Vec<CondState>,
     errors: Vec<PreprocessError>,
+    warnings: Vec<PreprocessWarning>,
     standard_includes: bool,
     signed_char: bool,
     wide_character_bits: u8,
@@ -807,6 +815,7 @@ impl Preprocessor {
             macro_prefix_maps: Vec::new(),
             cond_stack: Vec::new(),
             errors: Vec::new(),
+            warnings: Vec::new(),
             standard_includes: true,
             signed_char: false,
             wide_character_bits: 32,
@@ -1000,6 +1009,10 @@ impl Preprocessor {
 
     pub fn errors(&self) -> &[PreprocessError] {
         &self.errors
+    }
+
+    pub fn warnings(&self) -> &[PreprocessWarning] {
+        &self.warnings
     }
 
     pub fn has_errors(&self) -> bool {
@@ -1811,8 +1824,25 @@ impl Preprocessor {
                         }
                         skip_line(&raw, &mut i, source);
                     }
+                    "warning" => {
+                        let message_tokens = collect_line_tokens(&raw, &mut i, source);
+                        if self.cond_active() {
+                            let message = message_tokens
+                                .iter()
+                                .map(|token| token_lexeme(token, source))
+                                .filter(|text| !text.is_empty())
+                                .collect::<Vec<_>>()
+                                .join(" ");
+                            self.warnings.push(PreprocessWarning {
+                                code: "W0010",
+                                span: tok.span,
+                                message: format!("warning-directive: {message}"),
+                            });
+                        }
+                        skip_line(&raw, &mut i, source);
+                    }
                     _ => {
-                        // Unknown directives (including #warning): skip.
+                        // Unknown directives are skipped.
                         skip_line(&raw, &mut i, source);
                     }
                 }

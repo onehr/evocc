@@ -506,6 +506,27 @@ fn main() -> ExitCode {
         return ExitCode::from(NOT_IMPLEMENTED_EXIT);
     }
 
+    if let Some(option) = args.iter().find(|arg| {
+        matches!(
+            arg.as_str(),
+            "-pedantic-errors" | "--pedantic-errors" | "-Werror=pedantic"
+        )
+    }) {
+        let mut diagnostic = diagnostics::Diagnostic::argument(
+            "E2968",
+            "unsupported-pedantic-errors: EvoCC has no ISO pedantic diagnostics",
+            Some(option),
+        );
+        diagnostic
+            .help
+            .push("use -pedantic or -Wpedantic for the supported warning policy".into());
+        eprint!(
+            "{}",
+            diagnostics::render(&diagnostic, error_format, diagnostics::Color::Auto)
+        );
+        return ExitCode::from(1);
+    }
+
     if !is_development_invocation(&args) {
         return cc::run(&args);
     }
@@ -1060,6 +1081,7 @@ fn parse_options(args: &[String], lenient: bool) -> Result<DriverOptions, String
             _ if arg.starts_with("-std=") => {
                 return Err(format!("unsupported C language mode `{arg}`"));
             }
+            "-pedantic" => {}
             _ if arg.starts_with("-W") || arg == "-w" || arg.starts_with("--cap-lints=") => {
                 lints.option(arg)?
             }
@@ -1306,6 +1328,38 @@ fn set_mode(slot: &mut Option<DriverMode>, mode: DriverMode) -> Result<(), Strin
     Ok(())
 }
 
+/// Emit `#warning` records at the selected cpp lint level. Returns true when
+/// one is denied, so the caller publishes no output.
+fn emit_cpp_warnings(options: &DriverOptions, pp: &evocc_cpp::Preprocessor) -> bool {
+    let mut denied = false;
+    for warning in pp.warnings() {
+        let level = options
+            .lints
+            .level(9, options.language.legacy_declarations());
+        if level == lints::Level::Allow {
+            continue;
+        }
+        let file = pp.source_path(warning.span.file).unwrap_or(&options.input);
+        let bytes = options.diagnostic_source(file);
+        let mut diagnostic = diagnostics::Diagnostic::new(
+            warning.code,
+            &warning.message,
+            diagnostics::Span::source(file, &bytes, warning.span, &warning.message),
+        );
+        diagnostic.level = if level == lints::Level::Deny {
+            "error"
+        } else {
+            "warning"
+        };
+        eprint!(
+            "{}",
+            diagnostics::render(&diagnostic, options.error_format, options.color)
+        );
+        denied |= level == lints::Level::Deny;
+    }
+    denied
+}
+
 fn run_preprocess(options: &DriverOptions) -> ExitCode {
     let (src, tokens) = match read_and_lex(options) {
         Ok(value) => value,
@@ -1321,6 +1375,7 @@ fn run_preprocess(options: &DriverOptions) -> ExitCode {
     };
     let result = pp.process_bytes(evocc_cpp::TokenStream::new(tokens), &src);
     options.record_opened_files(&pp);
+    let cpp_denied = emit_cpp_warnings(options, &pp);
     if pp.has_errors() {
         for error in pp.errors() {
             options.emit_span(
@@ -1331,6 +1386,9 @@ fn run_preprocess(options: &DriverOptions) -> ExitCode {
                 &error.message,
             );
         }
+        return ExitCode::from(1);
+    }
+    if cpp_denied {
         return ExitCode::from(1);
     }
 
@@ -1843,6 +1901,7 @@ fn run_parsed(options: &DriverOptions, action: ParsedAction) -> ExitCode {
     };
     let result = pp.process_bytes(evocc_cpp::TokenStream::new(tokens), &src);
     options.record_opened_files(&pp);
+    let cpp_denied = emit_cpp_warnings(options, &pp);
     if pp.has_errors() {
         for error in pp.errors() {
             options.emit_span(
@@ -1853,6 +1912,9 @@ fn run_parsed(options: &DriverOptions, action: ParsedAction) -> ExitCode {
                 &error.message,
             );
         }
+        return ExitCode::from(1);
+    }
+    if cpp_denied {
         return ExitCode::from(1);
     }
     let processed = result.into_vec();
