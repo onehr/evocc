@@ -6013,6 +6013,17 @@ refusal; changing the P13 demo does not close it.
   `argv[1]` is null. `scal-to-vec1.c` and `scal-to-vec3.c` now run to exit 0 in
   both interpreters on both targets. The E3012 of `20060420-1.c` and `pr92618.c`
   remains.
+  October 24 diagnosis of the E3012 of `20060420-1.c` and `pr92618.c`: both run
+  natively, and both accesses are aligned at the native address. The EvoIR model
+  (5.4, step 5, and `accessObject` in `lean/EvoIR/Core/IRExecution.lean`) judges
+  alignment by the object's declared alignment and the offset, not by an
+  address. `20060420-1.c` aligns its pointer by integer arithmetic on the
+  address of a `float[64]` (alignment 4); `pr92618.c` stores a 16-byte vector
+  into an `unsigned long long[4]` (alignment 8) that the native compilers happen
+  to place on 16 bytes. With `_Alignas(16)` both reductions pass. The E3012
+  explain page now states this boundary. Accepting such programs needs objects
+  with concrete addresses in the EvoIR and Lean memory models; that is a
+  decision for the owner.
 
 - [x] **D29 — Run by-value records in general registers in the EvoMIR interpreter** — `DONE`, P2, 2026-10-21.
   Found on 2026-10-21 by rust-r12. A by-value `struct { char c; int i; }` stops
