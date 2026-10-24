@@ -2802,6 +2802,11 @@ int value(void) { return 3; }
 int main(void) { return value(); }
 ```
 
+On Darwin, `<complex.h>` defines `CMPLX`, `CMPLXF` and `CMPLXL` only when
+`__clang__` is defined. EvoCC does not claim that macro, so a call such as
+`CMPLX(1.0, 2.0)` has no declaration there. Use `__builtin_complex(1.0, 2.0)`
+instead; it copies both parts exactly on both targets.
+
 ### W0004: declaration has no type specifier
 
 A declaration omits its type specifier.

@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 2.31.1** | **Pinned ground truth** | Hosted interpreter main arguments on 2026-10-23
+**Revision 2.31.2** | **Pinned ground truth** | Darwin CMPLX guidance on 2026-10-24
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract of the parser, the C lowering, equality saturation,
@@ -6408,6 +6408,9 @@ strict forms in strict regions:
   after lvalue conversion and without promotion, and copies them exactly: no
   arithmetic and no status. A floating imaginary constant, such as `2.5i`, has
   a positive zero real part. `x + y * I` is arithmetic: `0 * inf` gives NaN.
+  The Darwin SDK defines `CMPLX`, `CMPLXF` and `CMPLXL` only when `__clang__`
+  is defined. EvoCC does not define that macro, so those spellings remain
+  undeclared on Darwin; `__builtin_complex` is the supported replacement.
 - Addition and subtraction add or subtract each part. A real operand is not
   converted to complex (C11 6.3.1.8, G.5.1), as GCC and Clang compute: the
   usual arithmetic conversions give the real type of each part, `r - x` has
