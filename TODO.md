@@ -137,7 +137,7 @@ was found in the read-only process check at this planning checkpoint.
 | KERNEL | K01, K02, K03, K04, K10, K11, K11f, K12, N08, N09, N11 | Start with K02/K03's existing current-Image profiles; produce a cause-backed hot-path reduction, then address BPF/pidfd budgets and intermittent sched_ext/ublk failures. |
 | APPLICATION | B08, L05b, L11a, P17a, P22 | P21 completed 144 registered sessions: P1-P3 held; P4 and the earlier control penalty did not. P22's pilot of 2026-10-20 failed two go criteria on a false escape record. P01 through P20 retain their completed scope: P20 had no repair-count advantage; P18 stopped at the provider key limit. Existing application tasks keep separate exits. |
 | REVIEW |  | No rule decision is open. The 2026-10-13 decisions for K07, L03 to L10 and L11a to L11c are in docs/archive/notebook/rules-20261013/DECISIONS.md. |
-| AUDIT | D28 | D24 to D28 are follow-ups of D22, D23, L04 and L05. D01-D15 are closed in their recorded scope. Keep the T03 audit boundary; kernel/application acceptance and deferred proof domains remain separate. |
+| AUDIT | D33 | D24 to D28 closed the follow-ups of D22, D23, L04 and L05; D33 changes the alignment model. D01-D15 are closed in their recorded scope. Keep the T03 audit boundary; kernel/application acceptance and deferred proof domains remain separate. |
 | ACCEPTANCE | T04, T02, K13, K14, B10, T05, R05, R05a, R05k | Independently freeze repaired kernel/application subjects, run their existing paired/serial acceptance and refresh health/docs. |
 | LATER | R05m, R01, R02, R03, R03a, R03b, R03c, R03d, R03e, R03f, R03g, R03h, R04, R04a, R04b, R04c, R04d, R04e, N06, N06a, N06b, N06c, N06d, N06e | S1–S5 and R02e first slice are closed; S6 stays with R01's two G2 builds. R03 V1 negative-admission study is frozen; positive Q3 remains unachieved and R03a/b/c/d NOT_ADMITTED, R03e deferred. No VM timing or audit expansion; x86-64 and release stay separate. The bounded N01–N05/N07 batch is dispositioned, not a complete optimizing compiler: N03b/N03e preflights are negative, N07 E3 has zero SMT proofs, and all five library size targets remain missed. N03d C5 has size/correctness evidence but three compile-cost misses; C2/C5 remain outside the admitted cumulative configuration, and T1's misses stay frozen. All new defaults remain OFF. Retain N02's 70 admitted/187 opaque inputs and source-bridge mismatch. Broader inlining, mid-level and allocator work need newly scoped designs; no paused R activity is automatically reopened. |
 <!-- closure-queues:end -->
@@ -3177,6 +3177,11 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
   about 1,870 distinct `__builtin_aarch64_*` builtins, Apple clang's with 632
   `__builtin_neon_*` builtins. On Linux it stops at E3050 in `vcreate_f32`
   (`arm_neon.h:2571`, an integer-to-float-vector cast).
+  Owner decision of 2026-10-24: L05b closes when `Vector/NEON/simple.c` compiles
+  and passes on both targets, with a crossed test for each of its 18 intrinsics
+  against GCC 14 on Linux and Apple clang on Darwin.
+  `AArch64/aarch64_neon_intrinsics.c` (3,361 intrinsics) stays a named refusal
+  on both targets; full intrinsic support is outside this item.
 
 - [x] **L06 — Sub-8-byte integer-vector external ABI** — `DONE`, P2, 2026-10-20.
   GCC GPR and Clang SIMD conventions disagree and crossed controls fail.
@@ -5997,7 +6002,7 @@ refusal; changing the P13 demo does not close it.
   in both interpreters, including infinite and NaN imaginary parts and the sign
   of zero. On Linux, glibc's `CMPLX` follows GCC 14.
 
-- [ ] **D28 — Close the vector gaps that L05 found** — `OPEN`, P3.
+- [x] **D28 — Close the vector gaps that L05 found** — `DONE`, P3, 2026-10-24.
   Found on 2026-10-21 by rust-r10. The front end accepts a controlling
   expression of non-scalar type, such as `if (v)` for a vector or a record, and
   a later stage refuses it (E3007 or E3101) instead of the constraint
@@ -6043,6 +6048,10 @@ refusal; changing the P13 demo does not close it.
   explain page now states this boundary. Accepting such programs needs objects
   with concrete addresses in the EvoIR and Lean memory models; that is a
   decision for the owner.
+  Closed on 2026-10-24. The controlling expressions, the Darwin masks, the
+  interpreter `main(argc, argv)` and the 32-byte `long double` vectors (now the
+  named refusal E3050) are done. The E3012 of `20060420-1.c` and `pr92618.c`
+  moves to D33, which the owner approved.
 
 - [x] **D29 — Run by-value records in general registers in the EvoMIR interpreter** — `DONE`, P2, 2026-10-21.
   Found on 2026-10-21 by rust-r12. A by-value `struct { char c; int i; }` stops
@@ -6133,6 +6142,17 @@ refusal; changing the P13 demo does not close it.
   the execution entry cannot execute the input. It is a refusal, not a finding.
   No producer, message, fixture or contract changed; the six contract records
   already used `E3007` for interpreter refusals.
+
+- [ ] **D33 — Judge access alignment by concrete addresses** — `OPEN`, P2.
+  Owner decision of 2026-10-24, from the D28 diagnosis. The EvoIR model (5.4,
+  step 5) and `accessObject` in `lean/EvoIR/Core/IRExecution.lean` judge
+  alignment by the object's declared alignment and the offset, so `20060420-1.c`
+  and `pr92618.c` report E3012 although their native accesses are aligned. Next
+  action: give every object a deterministic concrete address in the Rust
+  interpreters and in the Lean model, and test the absolute address against the
+  required alignment. Exit: both originals run to exit 0 in both interpreters on
+  both targets; a misaligned absolute address still reports E3012; the spec, the
+  Rust/Lean model differential and the Lean gate agree.
 
 ## Codegen quality track — next quarter
 
@@ -6622,6 +6642,11 @@ plan, RED, flag, gates, one-page note, TODO update in the same commit.
   saves the callee-saved registers with single `str`/`ldr` (GCC pairs them),
   moves values through stack slots at joins, and keeps many unconditional join
   branches.
+  Owner decision of 2026-10-24: the Lean transport check (`checkRetained` in
+  `MachineTransportInstruction.lean`) may change to admit coalesced block
+  arguments, and allocator and frame improvements may become the default. A goal
+  that changes object hashes or proof-required outputs re-baselines them in the
+  same commit and lists them.
 
 - [ ] **N09 — Inline small static helpers by default** — `OPEN`, P1.
   The K02 fault path makes about 204 calls to small helpers that GCC
@@ -6677,6 +6702,9 @@ plan, RED, flag, gates, one-page note, TODO update in the same commit.
   to 17 instructions per call (GCC 14: 9), and the K16 `mm/memory.c` keeps 20 of
   its 90 `brk #3005` guards, none with a constant count. 120 constant shifts of
   every integer type give GCC 14's result at O0 and O2.
+  Owner decision of 2026-10-24: run the application ladder to check the rest of
+  the exit (the ladder programs keep their results, and their total code size
+  does not grow).
 
 - [x] **N10 — Keep one-word records and small arrays in registers** — `DONE`, P1, 2026-10-19.
   `pte_t` and `pmd_t` values live in memory: zero-filled, copied from slot to
