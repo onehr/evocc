@@ -166,7 +166,9 @@ impl Interpreter<'_, '_> {
                 .map_err(|_| bad())?;
         if !matches!(
             self.unit.types().get(character.pointee()).map(|t| &t.kind),
-            Some(TypeKind::Int(evocc_types::IntRank::Char))
+            Some(TypeKind::Int(
+                evocc_types::IntRank::Char | evocc_types::IntRank::SignedPlainChar
+            ))
         ) {
             return Err(bad());
         }

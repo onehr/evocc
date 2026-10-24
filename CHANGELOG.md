@@ -221,6 +221,9 @@ The first public version.
 
 ### Fixed
 
+- `--interpret-c-hir` and `--interpret-evoir` run a `main(int argc, char *argv[])`, as `evo run`
+  does: with no program arguments, `argc` is 1 and `argv[0]` is the source path. Before, both
+  refused it with E3007.
 - Of the 1,496 Darwin SDK and framework headers that Apple clang compiles alone, EvoCC
   compiles 1,443; each of the other 53 needs Blocks, `overloadable`, the Clang vector types,
   or a construct that GCC 14 refuses too.

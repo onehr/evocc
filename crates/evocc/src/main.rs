@@ -2110,7 +2110,7 @@ fn run_parsed(options: &DriverOptions, action: ParsedAction) -> ExitCode {
                         return ExitCode::from(1);
                     }
                 };
-                let (module, rewrites) = if options.optimize_scalar_evoir {
+                let (mut module, rewrites) = if options.optimize_scalar_evoir {
                     match optimize_scalar_evoir(module, options) {
                         Ok((module, rewrites)) => (module, Some(rewrites)),
                         Err(detail) => {
@@ -2152,7 +2152,7 @@ fn run_parsed(options: &DriverOptions, action: ParsedAction) -> ExitCode {
                     },
                     ParsedAction::InterpretEvoIr => interpret_evoir(
                         options,
-                        &module,
+                        &mut module,
                         &pp,
                         &locations,
                         original.as_deref().unwrap_or_default(),
@@ -2220,7 +2220,7 @@ fn apply_development_passes(module: Module, options: &DriverOptions) -> Result<M
     let inputs = if passes.is_empty() {
         Vec::new()
     } else {
-        let (arguments, _) = evoir_main_contract(&module)?;
+        let (arguments, _) = evoir_main_contract_canonical(&module)?;
         vec![evocc_passes::ExecutionInput::main(
             "main", arguments, 100_000,
         )]
@@ -2301,12 +2301,17 @@ fn interpret_chir(
         return ExitCode::from(1);
     };
 
+    let default_arguments = [options.input.as_bytes().to_vec()];
+    let arguments = options
+        .program_arguments
+        .as_deref()
+        .unwrap_or(&default_arguments);
     let outcome = match evocc_chir::interp::interpret_program_with_arguments(
         unit,
         entry,
         &options.target_layout(),
         InterpreterLimits::default(),
-        options.program_arguments.as_deref(),
+        Some(arguments),
     ) {
         Ok(outcome) => outcome,
         Err(error) => {
@@ -2513,12 +2518,12 @@ fn assemble(
 
 fn interpret_evoir(
     options: &DriverOptions,
-    module: &Module,
+    module: &mut Module,
     pp: &Preprocessor,
     locations: &evocc_lower::SourceLocations,
     original: &[evocc_evoir::Function],
 ) -> ExitCode {
-    let (arguments, declared_results) = match evoir_main_contract(module) {
+    let (arguments, declared_results) = match evoir_main_contract(module, &options.input) {
         Ok(contract) => contract,
         Err(message) => {
             options.emit_execution_error(&options.input, None, "E3007", message);
@@ -2623,7 +2628,166 @@ fn interpret_evoir(
     ExitCode::SUCCESS
 }
 
-fn evoir_main_contract(
+/// Add the hosted argv objects and a canonical wrapper around a C `main` that
+/// has `(int, char **)` before its memory/world effect parameters.
+fn install_hosted_main(module: &mut Module, index: usize, argv0: &str) -> Result<(), &'static str> {
+    let params = module.functions[index].params.clone();
+    let ret_tys = module.functions[index].ret_tys.clone();
+    let effects = module.functions[index].effects;
+    let (argc_ty, argv_ty, memory_ty, world_ty) = (
+        params[0].ty.clone(),
+        params[1].ty.clone(),
+        params[2].ty.clone(),
+        params[3].ty.clone(),
+    );
+    let mut origin = module
+        .globals
+        .iter()
+        .map(|global| global.origin)
+        .chain(module.functions.iter().flat_map(|function| {
+            function.blocks.iter().flat_map(|block| {
+                block.insts.iter().filter_map(|inst| match inst {
+                    evocc_evoir::Inst::Alloca { origin, .. }
+                    | evocc_evoir::Inst::DynamicAlloca { origin, .. } => Some(*origin),
+                    _ => None,
+                })
+            })
+        }))
+        .max()
+        .unwrap_or(0)
+        + 1;
+    let string_symbol = format!("__evocc_argv0_{origin}");
+    let table_symbol = format!("__evocc_argv_{origin}");
+    let string_bytes = {
+        let mut bytes = argv0.as_bytes().to_vec();
+        bytes.push(0);
+        bytes
+    };
+    let string_layout = evocc_evoir::AccessLayout::new(string_bytes.len() as u64, 1);
+    let table_layout = evocc_evoir::AccessLayout::new(16, 8);
+    module.globals.push(evocc_evoir::GlobalObject {
+        read_only: false,
+        section: None,
+        linkage: evocc_evoir::Linkage::Strong,
+        relocs: Vec::new(),
+        symbol: string_symbol.clone(),
+        origin,
+        kind: evocc_evoir::GlobalKind::File,
+        visibility: evocc_evoir::GlobalVisibility::Internal,
+        layout: string_layout,
+        initialized: vec![true; string_bytes.len()],
+        bytes: string_bytes,
+    });
+    origin += 1;
+    module.globals.push(evocc_evoir::GlobalObject {
+        read_only: false,
+        section: None,
+        linkage: evocc_evoir::Linkage::Strong,
+        relocs: vec![evocc_evoir::Relocation {
+            offset: 0,
+            symbol: string_symbol,
+            addend: 0,
+            exposed: false,
+            difference: None,
+        }],
+        symbol: table_symbol.clone(),
+        origin,
+        kind: evocc_evoir::GlobalKind::File,
+        visibility: evocc_evoir::GlobalVisibility::Internal,
+        layout: table_layout,
+        initialized: vec![true; 16],
+        bytes: vec![0; 16],
+    });
+    let mut original_name = "__evocc_hosted_main".to_owned();
+    while module
+        .functions
+        .iter()
+        .any(|function| function.name == original_name)
+    {
+        original_name.push('_');
+    }
+    module.functions[index].name = original_name.clone();
+    let memory = evocc_evoir::Value {
+        id: 0,
+        ty: memory_ty.clone(),
+    };
+    let world = evocc_evoir::Value {
+        id: 1,
+        ty: world_ty.clone(),
+    };
+    let argc = evocc_evoir::Value { id: 2, ty: argc_ty };
+    let argv = evocc_evoir::Value { id: 3, ty: argv_ty };
+    let result = evocc_evoir::Value {
+        id: 4,
+        ty: ret_tys[0].clone(),
+    };
+    let memory_out = evocc_evoir::Value {
+        id: 5,
+        ty: memory_ty.clone(),
+    };
+    let world_out = evocc_evoir::Value {
+        id: 6,
+        ty: world_ty.clone(),
+    };
+    module.functions.push(evocc_evoir::Function {
+        section: None,
+        patchable_entry: None,
+        stack_protect: false,
+        alignment: 4,
+        linkage: evocc_evoir::Linkage::Strong,
+        name: "main".to_owned(),
+        params: vec![
+            evocc_evoir::FunctionParam {
+                name: "memory".to_owned(),
+                ty: memory_ty,
+            },
+            evocc_evoir::FunctionParam {
+                name: "world".to_owned(),
+                ty: world_ty,
+            },
+        ],
+        param_marks: Vec::new(),
+        variadic: false,
+        ret_tys,
+        effects,
+        visibility: evocc_evoir::GlobalVisibility::External,
+        blocks: vec![evocc_evoir::Block {
+            id: 0,
+            args: vec![
+                evocc_evoir::BlockArg {
+                    name: "memory".to_owned(),
+                    value: memory.clone(),
+                },
+                evocc_evoir::BlockArg {
+                    name: "world".to_owned(),
+                    value: world.clone(),
+                },
+            ],
+            insts: vec![
+                evocc_evoir::Inst::Const(argc.clone(), 1),
+                evocc_evoir::Inst::GlobalAddr {
+                    result: argv.clone(),
+                    symbol: table_symbol,
+                },
+                evocc_evoir::Inst::Call {
+                    results: vec![result.clone()],
+                    callee: original_name,
+                    args: vec![argc, argv],
+                    arg_marks: Vec::new(),
+                    returns_twice: false,
+                    mem_in: memory,
+                    world_in: world,
+                    mem_out: memory_out.clone(),
+                    world_out: world_out.clone(),
+                },
+            ],
+            terminator: evocc_evoir::Inst::Ret(vec![result, memory_out, world_out]),
+        }],
+    });
+    Ok(())
+}
+
+fn evoir_main_contract_canonical(
     module: &Module,
 ) -> Result<(Vec<RuntimeValue>, Vec<EvoIRType>), &'static str> {
     let main = module
@@ -2652,6 +2816,52 @@ fn evoir_main_contract(
         return Err("evoir-main-effect-interface-is-inconsistent");
     }
     Ok((arguments, main.ret_tys.clone()))
+}
+
+fn evoir_main_contract(
+    module: &mut Module,
+    argv0: &str,
+) -> Result<(Vec<RuntimeValue>, Vec<EvoIRType>), &'static str> {
+    let index = module
+        .functions
+        .iter()
+        .position(|function| function.name == "main")
+        .ok_or("evoir-entry-function-not-found: main")?;
+    let params = module.functions[index].params.clone();
+    let ret_tys = module.functions[index].ret_tys.clone();
+    let arguments = match params.as_slice() {
+        [] => Vec::new(),
+        [memory, world]
+            if memory.ty == EvoIRType::Mem(Region::All) && world.ty == EvoIRType::World =>
+        {
+            vec![
+                RuntimeValue::new(memory.ty.clone(), 0),
+                RuntimeValue::new(world.ty.clone(), 0),
+            ]
+        }
+        [argc, argv, memory, world]
+            if argc.ty == EvoIRType::Bits(32)
+                && matches!(argv.ty, EvoIRType::Ptr(_))
+                && memory.ty == EvoIRType::Mem(Region::All)
+                && world.ty == EvoIRType::World =>
+        {
+            install_hosted_main(module, index, argv0)?;
+            vec![
+                RuntimeValue::new(memory.ty.clone(), 0),
+                RuntimeValue::new(world.ty.clone(), 0),
+            ]
+        }
+        _ => return Err("evoir-main-parameters-are-not-canonical"),
+    };
+    let has_effect_results = match ret_tys.as_slice() {
+        [EvoIRType::Bits(1..=64)] => false,
+        [EvoIRType::Bits(1..=64), EvoIRType::Mem(Region::All), EvoIRType::World] => true,
+        _ => return Err("evoir-main-results-are-not-canonical"),
+    };
+    if has_effect_results != !arguments.is_empty() {
+        return Err("evoir-main-effect-interface-is-inconsistent");
+    }
+    Ok((arguments, ret_tys))
 }
 
 fn signed_scalar(value: &RuntimeValue) -> Result<i128, &'static str> {

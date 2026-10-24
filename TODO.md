@@ -6000,6 +6000,12 @@ refusal; changing the P13 demo does not close it.
   double` vector no longer reaches E3101: `sizeof` compiles, and passing,
   returning, a lane read, a store, a comparison and arithmetic are the named
   refusal E3050. The interpreter refusals of the four originals remain open.
+  October 24 (EvoIR 2.31.1): `--interpret-c-hir` and `--interpret-evoir` accept
+  `main(void)`, `main(int, char **)` and `main(int, char *[])`, as `evo run`
+  does; with no program arguments `argc` is 1, `argv[0]` is the source path and
+  `argv[1]` is null. `scal-to-vec1.c` and `scal-to-vec3.c` now run to exit 0 in
+  both interpreters on both targets. The E3012 of `20060420-1.c` and `pr92618.c`
+  remains.
 
 - [x] **D29 — Run by-value records in general registers in the EvoMIR interpreter** — `DONE`, P2, 2026-10-21.
   Found on 2026-10-21 by rust-r12. A by-value `struct { char c; int i; }` stops

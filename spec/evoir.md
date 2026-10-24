@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 2.31.0** | **Pinned ground truth** | Warning directives and pedantic refusal on 2026-10-23
+**Revision 2.31.1** | **Pinned ground truth** | Hosted interpreter main arguments on 2026-10-23
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract of the parser, the C lowering, equality saturation,
@@ -7546,6 +7546,12 @@ diagnostic in Section 6.1. Every other instruction family, including scalar
 FP in 3.13, uses that same object/state model; forms outside their
 specified boundaries remain typed unsupported and never produce placeholders.
 
+**Hosted `main`.** The C-HIR and EvoIR command-line interpreter entry points
+accept `main(void)`, `main(int, char **)` and `main(int, char *[])`. With no
+program arguments, `argc` is 1, `argv[0]` is the source path as `evo run`
+passes it, and `argv[1]` is a null pointer. Other `main` signatures keep
+`E3007` (`unsupported-interpreter-function-signature`).
+
 **Fuel.** An interpreter that exhausts its shared step budget stops with
 `E3008` (`interpreter-fuel-exhausted`). That stop is a limit of the host, not a
 property of the program: it is neither undefined behaviour nor a comparison
@@ -8914,6 +8920,10 @@ to the signature spelling.
 ---
 
 ## Revision
+
+**Revision 2.31.1, 2026-10-23.** The interpreter paragraph lists the hosted
+`main` signatures and the no-argument `argc`/`argv` values shared by both
+interpreters and `evo run`.
 
 **Revision 2.31.0, 2026-10-23.** Section 6.3 adds the `cpp` lint for
 `#warning` and its option levels, and the diagnostic table adds `W0010` and
