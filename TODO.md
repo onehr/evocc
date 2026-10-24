@@ -6584,6 +6584,17 @@ plan, RED, flag, gates, one-page note, TODO update in the same commit.
   October 19 integration now supplies the current kernel profile: long transport
   runs occupy 6.09% of executed kernel instructions (GCC 1.96%) in demand paging.
   The original K02 workload still times out on EvoCC, so N08 remains open.
+  October 24 recount of the five reductions of
+  `tests/fixtures/kernel-codegen-reductions/` with the method of October 13
+  (tbprof, one vCPU, the GCC Image) and the compiler of 0d6aeda1, instructions
+  per call, EvoCC / GCC 14: `loop-carried-transport` 26,663 / 8,236 (3.24; was
+  179,135), `asm-goto-live-transport` 147 / 67 (2.19; was 488),
+  `leaf-helper-call` 32 / 9 (3.56; was 85; the helper is now inlined),
+  `struct-value-through-stack` 46 / 23 (2.00) and `local-array-constant-index`
+  171 / 94 (1.82). The two transport reductions still miss twice GCC 14: EvoCC
+  saves the callee-saved registers with single `str`/`ldr` (GCC pairs them),
+  moves values through stack slots at joins, and keeps many unconditional join
+  branches.
 
 - [ ] **N09 — Inline small static helpers by default** — `OPEN`, P1.
   The K02 fault path makes about 204 calls to small helpers that GCC
@@ -6622,6 +6633,16 @@ plan, RED, flag, gates, one-page note, TODO update in the same commit.
   a trap. Keep those obligations until the proof path establishes them. The
   18-instruction exit and all-ladder result/size parity remain open.
   [Current reduction](tests/fixtures/kernel-zero-branch.out).
+  October 24 recount of the five reductions of
+  `tests/fixtures/kernel-codegen-reductions/` with the method of October 13
+  (tbprof, one vCPU, the GCC Image) and the compiler of 0d6aeda1, instructions
+  per call, EvoCC / GCC 14: `loop-carried-transport` 26,663 / 8,236 (3.24; was
+  179,135), `asm-goto-live-transport` 147 / 67 (2.19; was 488),
+  `leaf-helper-call` 32 / 9 (3.56; was 85; the helper is now inlined),
+  `struct-value-through-stack` 46 / 23 (2.00) and `local-array-constant-index`
+  171 / 94 (1.82). `leaf-helper-call` no longer pays a call; its excess is a
+  shift-count guard (`movz`, `cmp #64`, `b.hs` to `brk #3005`) kept before each
+  constant shift after inlining, and `lsr`/`and` where GCC uses `ubfx`.
 
 - [x] **N10 — Keep one-word records and small arrays in registers** — `DONE`, P1, 2026-10-19.
   `pte_t` and `pmd_t` values live in memory: zero-filled, copied from slot to
