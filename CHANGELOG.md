@@ -187,6 +187,8 @@ The first public version.
 
 ### Changed
 
+- `E3007` has one meaning, `unsupported-interpreter-input`: an interpreter cannot execute the
+  input. It is a refusal, not a finding. Before, its page described a withdrawn diagnostic.
 - A shift by a constant count in range has no run-time count check any more; the K16
   `mm/memory.c` loses 70 of its 90 shift-count traps. A constant count out of range and a
   variable count keep the check.

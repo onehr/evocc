@@ -942,6 +942,8 @@ mod tests {
             let text = explain(code).unwrap();
             assert!(text.starts_with(&format!("# {code}: ")));
         }
-        assert!(explain("E3007").unwrap().contains("withdrawn"));
+        assert!(explain("E3007")
+            .unwrap()
+            .contains("cannot execute this input"));
     }
 }

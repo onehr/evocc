@@ -1899,21 +1899,28 @@ Reason: C lowering does not assert signed_shl_defined in the current GNU profile
 The code remains readable for explicit IR obligations.
 Do not treat a negative left operand alone as an E3006 source trigger.
 
-### E3007: scalar-function-fell-off-end
+### E3007: unsupported-interpreter-input
 
-This withdrawn diagnostic identified a reached end of a non-void function.
-The current IR contract represents that missing result as poison instead.
+The interpreter or the driver's execution entry cannot execute this input.
+It may use an unsupported construct or contract, or an entry, module or value
+may be malformed or inconsistent.
 
-A missing return does not supply a defined scalar value to the caller.
-Write an explicit return on each path that needs a result.
+This is a refusal, not a finding. It does not claim that the C source has
+undefined behavior or that a native build would fail.
 
-Trigger: none
-Reason: the authority table withdraws this code in favor of the poison-result contract.
+For example, the interpreters run `main(void)` and the two hosted `argc` and `argv`
+forms of `main`, and refuse every other form of `main`.
 
 ```c
-int value(void) { return 0; }
-int main(void) { return value(); }
+int main(int argc) { return argc; }
 ```
+
+```c
+int main(void) { return 0; }
+```
+
+Use a supported entry shape or run the program natively. The refusal does not
+prove that the source is invalid.
 
 ### E3008: interpreter-fuel-exhausted
 

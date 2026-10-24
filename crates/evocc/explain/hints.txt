@@ -91,7 +91,7 @@ E3003	Handle zero separately before evaluating `%`.
 E3004	Check the range before the operation, or use a suitable wider arithmetic type.
 E3005	Check the count before shifting instead of relying on hardware count masking.
 E3006	Check the shift count and the shifted value before a signed left shift.
-E3007	Write an explicit return on each path that needs a result.
+E3007	Use an input shape or contract the interpreter supports, or run natively.
 E3008	Inspect long-running loops and use a finite workload when testing termination.
 E3009	Provide a live object or handle the null case before accessing memory.
 E3010	Keep the object alive until its last use or copy its value before leaving its scope.

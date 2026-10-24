@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 2.31.3** | **Pinned ground truth** | Constant shift-count folding on 2026-10-24
+**Revision 2.31.4** | **Pinned ground truth** | One meaning for E3007 on 2026-10-24
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract of the parser, the C lowering, equality saturation,
@@ -2095,7 +2095,7 @@ reports its reason's diagnostic and ends execution. Three reasons exist:
 
 | Reason | Diagnostic | Emitted for |
 |---|---|---|
-| `scalar_function_fell_off_end` | `E3007` | nothing: the reachable end of a non-void function returns poison (10.1.3); the reason remains in the grammar, and a module can use it |
+| `scalar_function_fell_off_end` | `E3007` | a hand-written EvoIR module can trap with it; source fall-through returns poison (10.1.3) |
 | `unreachable_reached` | `E3024` | `__builtin_unreachable()` (10.1.17) |
 | `builtin_trap` | `E3047` | `__builtin_trap()` (10.1.17): an explicit termination, not a UB report |
 
@@ -2869,7 +2869,7 @@ for them. Codes `E4xxx` belong to EvoMIR (`spec/evomir.md`).
 | `E3004` | `signed-integer-overflow` | runtime |
 | `E3005` | `invalid-shift-count` | runtime |
 | `E3006` | `invalid-signed-left-shift` | runtime |
-| `E3007` | `scalar-function-fell-off-end` | runtime; withdrawn: a reachable end of a non-void function returns poison (10.1.3) |
+| `E3007` | `unsupported-interpreter-input` | interpreter or execution-entry refusal; not a finding |
 | `E3008` | `interpreter-fuel-exhausted` | host resource |
 | `E3009` | `null-pointer-access` | runtime |
 | `E3010` | `dangling-pointer-access` | runtime |
@@ -4699,8 +4699,9 @@ both interpreters report `E3002`, and checked native code traps with `brk #3002`
 C's same-object obligation cannot be checked after this lowering loses pointer
 identity through `ptr.to_int`. The C-HIR interpreter checks the enclosing
 memory-object identity and exact element difference. It refuses distinct
-objects or a non-exact difference with `E3007` and an
-`unsupported-interpreter-expression` reason; these are not `E3013` findings.
+objects or a non-exact difference as `E3007` (`unsupported-interpreter-input`,
+with an `unsupported-interpreter-expression` reason); these are not `E3013`
+findings.
 Its object identity check is not a complete C subobject relation.
 
 `--check` executes the lowered EvoIR, not the C-HIR interpreter. It does not
@@ -7557,7 +7558,8 @@ specified boundaries remain typed unsupported and never produce placeholders.
 accept `main(void)`, `main(int, char **)` and `main(int, char *[])`. With no
 program arguments, `argc` is 1, `argv[0]` is the source path as `evo run`
 passes it, and `argv[1]` is a null pointer. Other `main` signatures keep
-`E3007` (`unsupported-interpreter-function-signature`).
+`E3007` (`unsupported-interpreter-input`, with the
+`unsupported-interpreter-function-signature` message).
 
 **Fuel.** An interpreter that exhausts its shared step budget stops with
 `E3008` (`interpreter-fuel-exhausted`). That stop is a limit of the host, not a
@@ -8927,6 +8929,11 @@ to the signature spelling.
 ---
 
 ## Revision
+
+**Revision 2.31.4, 2026-10-24.** The diagnostic authority gives `E3007` one
+meaning, `unsupported-interpreter-input`: an interpreter or the execution entry
+cannot execute the input. It is a refusal, not a finding. The
+`scalar_function_fell_off_end` trap reason stays for hand-written modules.
 
 **Revision 2.31.3, 2026-10-24.** The shift lowering may give
 `shift_count_defined` the canonical `const.bits<1> 1` result when the amount

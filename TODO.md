@@ -137,7 +137,7 @@ was found in the read-only process check at this planning checkpoint.
 | KERNEL | K01, K02, K03, K04, K10, K11, K11f, K12, N08, N09, N11 | Start with K02/K03's existing current-Image profiles; produce a cause-backed hot-path reduction, then address BPF/pidfd budgets and intermittent sched_ext/ublk failures. |
 | APPLICATION | B08, B08b, L05b, L11a, P17a, P22 | P21 completed 144 registered sessions: P1-P3 held; P4 and the earlier control penalty did not. P22's pilot of 2026-10-20 failed two go criteria on a false escape record. P01 through P20 retain their completed scope: P20 had no repair-count advantage; P18 stopped at the provider key limit. Existing application tasks keep separate exits. |
 | REVIEW |  | No rule decision is open. The 2026-10-13 decisions for K07, L03 to L10 and L11a to L11c are in docs/archive/notebook/rules-20261013/DECISIONS.md. |
-| AUDIT | D28, D32 | D24 to D28 are follow-ups of D22, D23, L04 and L05; D32 gives the interpreter refusals their own code. D01-D15 are closed in their recorded scope. Keep the T03 audit boundary; kernel/application acceptance and deferred proof domains remain separate. |
+| AUDIT | D28 | D24 to D28 are follow-ups of D22, D23, L04 and L05. D01-D15 are closed in their recorded scope. Keep the T03 audit boundary; kernel/application acceptance and deferred proof domains remain separate. |
 | ACCEPTANCE | T04, T02, K13, K14, B10, T05, R05, R05a, R05k | Independently freeze repaired kernel/application subjects, run their existing paired/serial acceptance and refresh health/docs. |
 | LATER | R05m, R01, R02, R03, R03a, R03b, R03c, R03d, R03e, R03f, R03g, R03h, R04, R04a, R04b, R04c, R04d, R04e, N06, N06a, N06b, N06c, N06d, N06e | S1–S5 and R02e first slice are closed; S6 stays with R01's two G2 builds. R03 V1 negative-admission study is frozen; positive Q3 remains unachieved and R03a/b/c/d NOT_ADMITTED, R03e deferred. No VM timing or audit expansion; x86-64 and release stay separate. The bounded N01–N05/N07 batch is dispositioned, not a complete optimizing compiler: N03b/N03e preflights are negative, N07 E3 has zero SMT proofs, and all five library size targets remain missed. N03d C5 has size/correctness evidence but three compile-cost misses; C2/C5 remain outside the admitted cumulative configuration, and T1's misses stay frozen. All new defaults remain OFF. Retain N02's 70 admitted/187 opaque inputs and source-bridge mismatch. Broader inlining, mid-level and allocator work need newly scoped designs; no paused R activity is automatically reopened. |
 <!-- closure-queues:end -->
@@ -6106,7 +6106,7 @@ refusal; changing the P13 demo does not close it.
   gate passes 3,776 tests, zero failures and 39 ignores, plus Clippy and
   formatting.
 
-- [ ] **D32 — Give the interpreter refusals a code of their own** — `OPEN`, P3.
+- [x] **D32 — Give the interpreter refusals a code of their own** — `DONE`, P3, 2026-10-24.
   Found on 2026-10-23 during D28. The diagnostic authority of `spec/evoir.md`
   lists `E3007` as the withdrawn `scalar-function-fell-off-end`, and its explain
   page says the same. But both interpreters still report `E3007` for constructs
@@ -6117,6 +6117,14 @@ refusal; changing the P13 demo does not close it.
   describes the wrong one. Exit: one meaning per code, with the authority row,
   the explain page and the tests in agreement; a changed code is listed in the
   changelog.
+  Closed on 2026-10-24 (EvoIR 2.31.4). An inventory found 44 places that produce
+  `E3007`: 27 interpreter limitations, 14 malformed or inconsistent inputs, and
+  the old fall-off-end trap, which only a hand-written EvoIR module can reach.
+  The authority row, the explain page and the two spec paragraphs now give
+  `E3007` that one meaning, `unsupported-interpreter-input`: the interpreter or
+  the execution entry cannot execute the input. It is a refusal, not a finding.
+  No producer, message, fixture or contract changed; the six contract records
+  already used `E3007` for interpreter refusals.
 
 ## Codegen quality track — next quarter
 
