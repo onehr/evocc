@@ -135,7 +135,7 @@ was found in the read-only process check at this planning checkpoint.
 | Queue | Open IDs | Next deliverable |
 | --- | --- | --- |
 | KERNEL | K01, K02, K03, K04, K10, K11, K11f, K12, N08, N09, N11 | Start with K02/K03's existing current-Image profiles; produce a cause-backed hot-path reduction, then address BPF/pidfd budgets and intermittent sched_ext/ublk failures. |
-| APPLICATION | B08, B08b, L05b, L11a, P17a, P22 | P21 completed 144 registered sessions: P1-P3 held; P4 and the earlier control penalty did not. P22's pilot of 2026-10-20 failed two go criteria on a false escape record. P01 through P20 retain their completed scope: P20 had no repair-count advantage; P18 stopped at the provider key limit. Existing application tasks keep separate exits. |
+| APPLICATION | B08, L05b, L11a, P17a, P22 | P21 completed 144 registered sessions: P1-P3 held; P4 and the earlier control penalty did not. P22's pilot of 2026-10-20 failed two go criteria on a false escape record. P01 through P20 retain their completed scope: P20 had no repair-count advantage; P18 stopped at the provider key limit. Existing application tasks keep separate exits. |
 | REVIEW |  | No rule decision is open. The 2026-10-13 decisions for K07, L03 to L10 and L11a to L11c are in docs/archive/notebook/rules-20261013/DECISIONS.md. |
 | AUDIT | D28 | D24 to D28 are follow-ups of D22, D23, L04 and L05. D01-D15 are closed in their recorded scope. Keep the T03 audit boundary; kernel/application acceptance and deferred proof domains remain separate. |
 | ACCEPTANCE | T04, T02, K13, K14, B10, T05, R05, R05a, R05k | Independently freeze repaired kernel/application subjects, run their existing paired/serial acceptance and refresh health/docs. |
@@ -2570,7 +2570,7 @@ KUnit, and it closes none of those separate tasks.
     callers, alongside their reference-object controls. Full musl is separate.
     [Source, exact identities and validation](tests/fixtures/floating-assembly.out).
 
-  - [ ] **B08b — Close musl's remaining command-projection semantics** — `OPEN`, P2.
+  - [x] **B08b — Close musl's remaining command-projection semantics** — `DONE`, P2, 2026-10-24.
     The current original-command inventory has no omitted `-f`/`-m`/`-O`
     request; bounded tuning admission and fail-closed projection are below.
     Remaining diagnostic/output/assembler actions need their own equivalence
@@ -2617,6 +2617,14 @@ KUnit, and it closes none of those separate tasks.
     path where GCC 14 writes the path as given, and `-g` emits fewer debug
     sections than GCC 14. Evidence: `.evidence/b08b-output-options-20261024/`.
     Next: tests that pin these effects.
+    Closed on 2026-10-24. The diagnostic options of the musl build follow GCC
+    14: the four `-Werror=` lints W0006 to W0009, `#warning` as W0010, and E2968
+    for the pedantic error requests. The ten output and assembler options of the
+    1,339 EvoCC-run commands have GCC 14's effect, and
+    `crates/evocc/tests/musl_output_options.rs` pins them. Outside this item:
+    `-Werror` promotes only EvoCC's own lints, and `-g` and `-MD` differ from
+    GCC 14 where no musl command uses them. A fresh musl run with these commands
+    is B08.
     - [x] **B08b1 — Preserve already-satisfied conservative codegen options**, 2026-09-27.
       Ten frame/disabled-transform options now reach the driver without being
       discarded. Existing frame, source/minimum alignment and no-transform
