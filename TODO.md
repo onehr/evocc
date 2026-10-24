@@ -2606,6 +2606,17 @@ KUnit, and it closes none of those separate tasks.
     longer enables a lint. `-Werror` promotes only EvoCC's ten lints, so a
     program that only GCC 14 warns about stays accepted under `-Werror`. Output
     and assembler actions remain.
+    October 24 measurement of the output and assembler options of the 1,339
+    EvoCC-run musl commands: `-c`, `-o`, `-Wa,--noexecstack`, `-pipe`,
+    `-ffunction-sections`, `-fdata-sections`, `-fno-asynchronous-unwind-tables`,
+    `-fno-unwind-tables`, `-fPIC` (1,338) and `-fno-stack-protector` (7).
+    Against GCC 14 each already has the same effect in the cc driver:
+    `.note.GNU-stack` only with `-Wa,--noexecstack`, one section per function
+    and per object, no `.eh_frame`, GOT relocations. No EvoCC-run musl command
+    uses `-g`, `-MD` or `-MMD`; outside musl, `-MD` writes the absolute source
+    path where GCC 14 writes the path as given, and `-g` emits fewer debug
+    sections than GCC 14. Evidence: `.evidence/b08b-output-options-20261024/`.
+    Next: tests that pin these effects.
     - [x] **B08b1 — Preserve already-satisfied conservative codegen options**, 2026-09-27.
       Ten frame/disabled-transform options now reach the driver without being
       discarded. Existing frame, source/minimum alignment and no-transform
