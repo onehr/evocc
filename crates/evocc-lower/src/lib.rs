@@ -1252,11 +1252,53 @@ fn lower_resolved_unit(
     if optimize {
         preserved.extend(module.lifecycle.iter().map(|r| r.function.clone()));
         constants::remove_unreferenced_functions(&mut module, preserved);
+        fold_constant_shift_counts(&mut module);
     }
     tls::resolve(unit, &allocation_origins, &mut module)?;
     module.recompute_effect_summaries();
     validate_module(&module).map_err(|message| LowerError::InvalidGeneratedSsa { message })?;
     Ok(module)
+}
+
+/// A valid compile-time shift count is the canonical true predicate. Keeping
+/// the obligation lets checked MIR omit the branch under 8.12/9.4 without
+/// changing the EvoIR interface for a constant invalid or variable count.
+fn fold_constant_shift_counts(module: &mut Module) {
+    for function in &mut module.functions {
+        for block in &mut function.blocks {
+            let mut constants: HashMap<u32, u64> = HashMap::new();
+            for instruction in &mut block.insts {
+                match instruction {
+                    Inst::Const(value, raw) => {
+                        constants.insert(value.id, *raw);
+                    }
+                    Inst::ShiftCountDefined {
+                        result,
+                        shifted,
+                        amount,
+                        amount_signed,
+                    } => {
+                        let Some(raw) = constants.get(&amount.id).copied() else {
+                            continue;
+                        };
+                        let EvoIRType::Bits(width) = shifted.ty else {
+                            continue;
+                        };
+                        let EvoIRType::Bits(amount_width) = amount.ty else {
+                            continue;
+                        };
+                        let negative = *amount_signed
+                            && amount_width > 0
+                            && raw & (1_u64 << (amount_width - 1)) != 0;
+                        if !negative && raw < u64::from(width) {
+                            *instruction = Inst::Const(result.clone(), 1);
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
 }
 
 fn collect_global_register_symbols(unit: &CHirUnit<'_>) -> BTreeSet<SymbolId> {

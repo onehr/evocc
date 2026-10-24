@@ -6643,6 +6643,13 @@ plan, RED, flag, gates, one-page note, TODO update in the same commit.
   171 / 94 (1.82). `leaf-helper-call` no longer pays a call; its excess is a
   shift-count guard (`movz`, `cmp #64`, `b.hs` to `brk #3005`) kept before each
   constant shift after inlining, and `lsr`/`and` where GCC uses `ubfx`.
+  October 24 (EvoIR 2.31.3): the optimized lowering gives `shift_count_defined`
+  the canonical true result when the amount is a constant in `[0, N)` in the
+  same block, so checked MIR omits the count guard; a constant amount outside
+  the range and a nonconstant amount keep it. `leaf-helper-call` falls from 32
+  to 17 instructions per call (GCC 14: 9), and the K16 `mm/memory.c` keeps 20 of
+  its 90 `brk #3005` guards, none with a constant count. 120 constant shifts of
+  every integer type give GCC 14's result at O0 and O2.
 
 - [x] **N10 — Keep one-word records and small arrays in registers** — `DONE`, P1, 2026-10-19.
   `pte_t` and `pmd_t` values live in memory: zero-filled, copied from slot to

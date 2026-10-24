@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 2.31.2** | **Pinned ground truth** | Darwin CMPLX guidance on 2026-10-24
+**Revision 2.31.3** | **Pinned ground truth** | Constant shift-count folding on 2026-10-24
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract of the parser, the C lowering, equality saturation,
@@ -586,8 +586,12 @@ never traps while computing the predicate.
 `and`, `or`, `xor`: bitwise logical operations on `N`-bit values. Total.
 
 `shl`: shift left. `%b` is decoded at its own `M`-bit width. C
-lowering must first assert `shift_count_defined`. The GNU profile asserts
-nothing else for a signed left shift (Section 6.1). `signed_shl_defined`
+lowering must first assert `shift_count_defined`. When lowering knows a
+compile-time amount in `[0, N)`, it may give that predicate the canonical
+`const.bits<1> 1` result; checked MIR then omits the branch under 8.12/9.4.
+A compile-time amount outside the range and a nonconstant amount keep the
+ordinary guard. The GNU profile asserts nothing else for a signed left shift
+(Section 6.1). `signed_shl_defined`
 remains in the grammar, and a module can use it.
 
 `lshr`: logical shift right. Zeros fill the vacated high bits.
@@ -8923,6 +8927,17 @@ to the signature spelling.
 ---
 
 ## Revision
+
+**Revision 2.31.3, 2026-10-24.** The shift lowering may give
+`shift_count_defined` the canonical `const.bits<1> 1` result when the amount
+is a compile-time constant in `[0, N)`, so that checked MIR omits the branch
+under 8.12/9.4; a constant amount outside the range and a nonconstant amount
+keep the ordinary guard.
+
+**Revision 2.31.2, 2026-10-24.** The complex paragraph records that the Darwin
+SDK defines `CMPLX`, `CMPLXF` and `CMPLXL` only for `__clang__`, which EvoCC
+does not define, so those spellings stay undeclared on Darwin and
+`__builtin_complex` is the replacement.
 
 **Revision 2.31.1, 2026-10-23.** The interpreter paragraph lists the hosted
 `main` signatures and the no-argument `argc`/`argv` values shared by both

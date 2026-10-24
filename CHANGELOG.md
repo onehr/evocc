@@ -187,6 +187,9 @@ The first public version.
 
 ### Changed
 
+- A shift by a constant count in range has no run-time count check any more; the K16
+  `mm/memory.c` loses 70 of its 90 shift-count traps. A constant count out of range and a
+  variable count keep the check.
 - `tools/release.sh` builds the archive programs with a `dist` profile that keeps symbols but
   removes the debug map and the paths of the build machine. Two checkouts at two paths give
   byte-identical macOS programs and archives, and the script refuses a program that still holds
