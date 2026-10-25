@@ -2,8 +2,8 @@
  "schemaVersion": 1,
  "rung": "E5",
  "subject": "tinycc",
- "authority": "docs/roadmap.md, milestone ladder",
- "run": "20260927T083017Z",
+ "authority": "docs/archive/roadmap.md, milestone ladder",
+ "run": "20261025T103255Z",
  "pin": {
   "subject": "tinycc",
   "rung": "E5",
@@ -16,7 +16,7 @@
  "tarballSha256": {
   "tcc-0.9.27.tar.bz2": "not-fetched: savannah answered 504 during this run"
  },
- "driverSha256": "523a698237c9ab72f868fdd69b7d1a1f6e0fd3285694d986b3bf007dee691eaa",
+ "driverSha256": "978a3771912d7b2eafe89228ff2cb3d3c0c996826b2b2875c4cb74932a655ce4",
  "target": "aarch64-unknown-linux-gnu",
  "baselineTest": "tests-passed",
  "units": 11,
@@ -40,17 +40,17 @@
     "tccrun.o"
    ],
    "expectedObjectHashes": {
-    "arm64-asm.o": "30006cba29d462cbb6f5133778a66a29529c6b0ed425df1423f633dcca1217b4",
-    "arm64-gen.o": "a7d71b3513070fa002df93fe08dc86917ffd20f2812dbec7905341f3d3965ae7",
-    "arm64-link.o": "91f2ebffc8a9b56f61bb7ffeb6c4512d88ddc9a80955f2027a15f911074a7190",
-    "libtcc.o": "d085168449eac5e12dbc6ca44bd6a9576259281d11410d8b65824cd6ed1b498a",
-    "tcc.o": "713a1b710bd290c9db2057a9d60c9b0c188154fdaa75bb4db1a2e0f6b0684f99",
-    "tccasm.o": "251b46caa2c2901dd817721bab2b5d08051a2f2997c5993269a5cd8b98acd926",
-    "tccdbg.o": "d859c68217979ea603820fdf93c2e432cf3d918627b18620e18dc0ac3eed9633",
-    "tccelf.o": "2f0cbbb58ac3240d3f993bf8feff9cc41a3d41a58f6d981d5da48f1feb296fd7",
-    "tccgen.o": "c9470bcba794973b9e69ce934d42e252ef292d90540df482f25286232cbf37ca",
-    "tccpp.o": "c0d22a8782a7048085fda221cae3c0bea5b196a4ca5c44de0b383b6b076a1117",
-    "tccrun.o": "ee392baeea19187595fb1db8793aaf9cc37c27a595491dd81540f0a576a6c164"
+    "arm64-asm.o": "124d85894ae796c8ffbc74daa7d439fd3654642ad35c287be6aceaa789b3f636",
+    "arm64-gen.o": "537f560547eae6dddb5b1f65ecdef0f263e6538e5874d0d7bf43241d81d0211a",
+    "arm64-link.o": "d9be995038a0d81d94d442ef9595a7221347e3d930169abc74f01b686c5f958d",
+    "libtcc.o": "ae7fd13e9a69151d6cd2c1c2349c80107de99adbd1e742c21ce3a89f81a21961",
+    "tcc.o": "b9ab0f5f5d7cb1c4d351dd7fe8bc75cf3ae0410e3bf93f580d10ae2779875f31",
+    "tccasm.o": "ba02a36f44cdf18a8054bad8b4e22118fd633eec00ca1bc09e9ad8d53f9486ea",
+    "tccdbg.o": "495b2a16f1ee27241f1b1aff9c26e6770ded9072d1d7b7dedc2aeee8e77539f8",
+    "tccelf.o": "fc2d28b48851b3a1e7c8910ccba8d7db5d45a87a303bcf41bf199dcbd2456d9d",
+    "tccgen.o": "a41f76a3d3180490bff1cedfe019ddcebcce7610c6ff86c186346785ff2c08c5",
+    "tccpp.o": "aebaaeec4dfacfd1a3aba0e8c41007130eba4d6d17e3beece9576acd5e15cc93",
+    "tccrun.o": "c29c34f762dc43f54951a756759894930ce3fb958725da1fd9e4e6ea63465109"
    },
    "changedObjects": [],
    "passed": true,
@@ -62,10 +62,10 @@
     },
     "test": {
      "file": "test-1.log",
-     "sha256": "d98de55e00209ce63687f05dc95ed5c4e22dd680b7889ca6b7fb1724d645daa9"
+     "sha256": "a8b43e70ef2a883125498a8b39bc2fee7ac44ec9dc0f7b798d7c28d507f66760"
     }
    },
-   "binarySha256": "cb63a957639598475f4fb72c849387c7af3e342899a69f538f3a00cebda24cd2"
+   "binarySha256": "7ae3ca4bfefe218e58767072ff8424c6684477bb9e116da4f6682bce2e38f3be"
   }
  ],
  "failingUnits": [],
@@ -79,10 +79,7 @@
   "defines": []
  },
  "unconsumedGccOptions": {
-  "-Wall": 11,
-  "-Wdeclaration-after-statement": 11,
-  "-Wno-unused-result": 11,
   "-o": 11
  },
- "evidence": ".evidence/ladder/tinycc/20260927T083017Z"
+ "evidence": ".evidence/ladder/tinycc/20261025T103255Z"
 }

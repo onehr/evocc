@@ -1,11 +1,11 @@
 {
  "schemaVersion": 1,
  "rung": "E0c",
- "authority": "docs/roadmap.md, milestone ladder",
+ "authority": "docs/archive/roadmap.md, milestone ladder",
  "latest": {
-  "run": "20260919T222655Z",
-  "subject": "9f571ca",
-  "driverSha256": "ff5f51e540abf40d9f660ade9193a5930ce2f9a274e18fe43d77b4f74c691882",
+  "run": "20261025T095615Z",
+  "subject": "b2aae0da",
+  "driverSha256": "978a3771912d7b2eafe89228ff2cb3d3c0c996826b2b2875c4cb74932a655ce4",
   "csmith": {
    "repo": "https://github.com/csmith-project/csmith.git",
    "commit": "0cdc710315cfee9035e22ef4363ca479270d1934",
@@ -40,13 +40,18 @@
      "-DINT_MAX=2147483647"
     ],
     "programs": 500,
-    "agreeing": 469,
+    "agreeing": 462,
     "outcomes": {
-     "agree": 469,
-     "oracle-unusable": 31
+     "agree": 462,
+     "oracle-unusable": 31,
+     "refused": 7
     },
-    "refusalsByCode": {},
-    "refusalsByMessage": {},
+    "refusalsByCode": {
+     "E3101": 7
+    },
+    "refusalsByMessage": {
+     "E3101 evoir-lowering-failed: scalar place disagrees with its semantic identity": 7
+    },
     "miscompiles": [],
     "trapExit133Programs": [],
     "work": ".build/ladder/run-csmith-base",
@@ -87,13 +92,18 @@
      "-DINT_MAX=2147483647"
     ],
     "programs": 500,
-    "agreeing": 463,
+    "agreeing": 454,
     "outcomes": {
-     "agree": 463,
-     "oracle-unusable": 37
+     "agree": 454,
+     "oracle-unusable": 37,
+     "refused": 9
     },
-    "refusalsByCode": {},
-    "refusalsByMessage": {},
+    "refusalsByCode": {
+     "E3101": 9
+    },
+    "refusalsByMessage": {
+     "E3101 evoir-lowering-failed: scalar place disagrees with its semantic identity": 9
+    },
     "miscompiles": [],
     "trapExit133Programs": [],
     "work": ".build/ladder/run-csmith-bitfields",
@@ -112,8 +122,10 @@
   },
   "workers": 2,
   "programs": 1000,
-  "agreeing": 932,
-  "refusalsByCode": {},
+  "agreeing": 916,
+  "refusalsByCode": {
+   "E3101": 16
+  },
   "miscompiles": 0,
   "trapExit133Programs": 0,
   "trapClassification": "Exit 133 alone does not establish undefined behavior; each cause needs a reduced diagnostic or sanitizer reproduction.",
@@ -123,17 +135,5 @@
    "tests/fixtures/csmith-reductions/signed-shift-trap.c"
   ]
  },
- "evidence": ".evidence/ladder/csmith/20260919T222655Z",
- "oracleDiagnosis": {
-  "date": "2026-09-24",
-  "task": "B03",
-  "classificationOnly": true,
-  "originalRun": "20260919T222655Z",
-  "reachedRepeatingPaths": 68,
-  "undetermined": 0,
-  "originalPassNumeratorUnchanged": true,
-  "index": "docs/notebook/benchmark-applicability.md#csmith-unavailable-reference-accounting",
-  "finalRecord": "tests/fixtures/csmith-final-restarts.out",
-  "scope": "Source-bound reached-path accounting, not a terminating checksum or whole-program definedness proof. All 68 original outcomes remain oracle-unusable."
- }
+ "evidence": ".evidence/ladder/csmith/20261025T095615Z"
 }

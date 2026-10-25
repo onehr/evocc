@@ -1,8 +1,8 @@
 {
   "status": "PASS",
   "commit": "dcb7a8dbc7a16ce3dda29382ac9aae9d77d21284",
-  "compilerSha256": "d8010273cd49d7cf139e6a56ff9b860a45b0a5ff8467495b4f3a17b36a4ca48e",
-  "run": "20260928T122910Z",
+  "compilerSha256": "978a3771912d7b2eafe89228ff2cb3d3c0c996826b2b2875c4cb74932a655ce4",
+  "run": "20261025T120137Z",
   "evidence": ".build/ladder/doom",
   "sourceArchiveSha256": "1bd3f7f26220494159a38d71f2847ec81b58d6bbd7c7c8d81b08993018001148",
   "dataArchiveSha256": "3f9b264f3e3ce503b4fb7f6bdcb1f419d93c7b546f4df3e874dd878db9688f59",
@@ -116,7 +116,7 @@
   ],
   "scope": "350 frames each of two bundled demos; two repeats; no audio/window/input acceptance",
   "adapterSha256": "fea53d45adc35af0bbe63be1844b874c357f58f979a684abf76c4e8c0fae209b",
-  "driverSha256": "d8010273cd49d7cf139e6a56ff9b860a45b0a5ff8467495b4f3a17b36a4ca48e",
+  "driverSha256": "978a3771912d7b2eafe89228ff2cb3d3c0c996826b2b2875c4cb74932a655ce4",
   "nativeExitCode": 0,
   "inputAndCompilerStable": true,
   "unitsTotal": 81,
@@ -127,7 +127,7 @@
   "frameAgreement": true,
   "testResult": "PASS",
   "measurement": {
-    "driverSha256": "d8010273cd49d7cf139e6a56ff9b860a45b0a5ff8467495b4f3a17b36a4ca48e"
+    "driverSha256": "978a3771912d7b2eafe89228ff2cb3d3c0c996826b2b2875c4cb74932a655ce4"
   },
   "runtime": [
     {
@@ -135,7 +135,7 @@
       "demo": "demo1",
       "repeat": 0,
       "exitCode": 0,
-      "seconds": 0.241,
+      "seconds": 0.187,
       "uniqueFrames": 344,
       "complete": true,
       "sequenceSha256": "c7d2d86d772b22c060416e233f61786d8017a10fc6ebc39dd91ded2917e40a75"
@@ -145,7 +145,7 @@
       "demo": "demo1",
       "repeat": 1,
       "exitCode": 0,
-      "seconds": 0.194,
+      "seconds": 0.185,
       "uniqueFrames": 344,
       "complete": true,
       "sequenceSha256": "c7d2d86d772b22c060416e233f61786d8017a10fc6ebc39dd91ded2917e40a75"
@@ -155,7 +155,7 @@
       "demo": "demo1",
       "repeat": 0,
       "exitCode": 0,
-      "seconds": 0.191,
+      "seconds": 0.177,
       "uniqueFrames": 344,
       "complete": true,
       "sequenceSha256": "c7d2d86d772b22c060416e233f61786d8017a10fc6ebc39dd91ded2917e40a75"
@@ -165,7 +165,7 @@
       "demo": "demo1",
       "repeat": 1,
       "exitCode": 0,
-      "seconds": 0.195,
+      "seconds": 0.177,
       "uniqueFrames": 344,
       "complete": true,
       "sequenceSha256": "c7d2d86d772b22c060416e233f61786d8017a10fc6ebc39dd91ded2917e40a75"
@@ -175,7 +175,7 @@
       "demo": "demo1",
       "repeat": 0,
       "exitCode": 0,
-      "seconds": 0.292,
+      "seconds": 0.27,
       "uniqueFrames": 344,
       "complete": true,
       "sequenceSha256": "c7d2d86d772b22c060416e233f61786d8017a10fc6ebc39dd91ded2917e40a75"
@@ -185,33 +185,13 @@
       "demo": "demo1",
       "repeat": 1,
       "exitCode": 0,
-      "seconds": 0.289,
+      "seconds": 0.268,
       "uniqueFrames": 344,
       "complete": true,
       "sequenceSha256": "c7d2d86d772b22c060416e233f61786d8017a10fc6ebc39dd91ded2917e40a75"
     },
     {
       "compiler": "gcc-14",
-      "demo": "demo2",
-      "repeat": 0,
-      "exitCode": 0,
-      "seconds": 0.171,
-      "uniqueFrames": 347,
-      "complete": true,
-      "sequenceSha256": "957feced8acbaf6a2269b61179488ef05ca5797aed570591ed934704e9aa52a3"
-    },
-    {
-      "compiler": "gcc-14",
-      "demo": "demo2",
-      "repeat": 1,
-      "exitCode": 0,
-      "seconds": 0.171,
-      "uniqueFrames": 347,
-      "complete": true,
-      "sequenceSha256": "957feced8acbaf6a2269b61179488ef05ca5797aed570591ed934704e9aa52a3"
-    },
-    {
-      "compiler": "clang-19",
       "demo": "demo2",
       "repeat": 0,
       "exitCode": 0,
@@ -221,7 +201,7 @@
       "sequenceSha256": "957feced8acbaf6a2269b61179488ef05ca5797aed570591ed934704e9aa52a3"
     },
     {
-      "compiler": "clang-19",
+      "compiler": "gcc-14",
       "demo": "demo2",
       "repeat": 1,
       "exitCode": 0,
@@ -231,11 +211,31 @@
       "sequenceSha256": "957feced8acbaf6a2269b61179488ef05ca5797aed570591ed934704e9aa52a3"
     },
     {
+      "compiler": "clang-19",
+      "demo": "demo2",
+      "repeat": 0,
+      "exitCode": 0,
+      "seconds": 0.172,
+      "uniqueFrames": 347,
+      "complete": true,
+      "sequenceSha256": "957feced8acbaf6a2269b61179488ef05ca5797aed570591ed934704e9aa52a3"
+    },
+    {
+      "compiler": "clang-19",
+      "demo": "demo2",
+      "repeat": 1,
+      "exitCode": 0,
+      "seconds": 0.172,
+      "uniqueFrames": 347,
+      "complete": true,
+      "sequenceSha256": "957feced8acbaf6a2269b61179488ef05ca5797aed570591ed934704e9aa52a3"
+    },
+    {
       "compiler": "evocc",
       "demo": "demo2",
       "repeat": 0,
       "exitCode": 0,
-      "seconds": 0.282,
+      "seconds": 0.254,
       "uniqueFrames": 347,
       "complete": true,
       "sequenceSha256": "957feced8acbaf6a2269b61179488ef05ca5797aed570591ed934704e9aa52a3"
@@ -245,18 +245,18 @@
       "demo": "demo2",
       "repeat": 1,
       "exitCode": 0,
-      "seconds": 0.279,
+      "seconds": 0.255,
       "uniqueFrames": 347,
       "complete": true,
       "sequenceSha256": "957feced8acbaf6a2269b61179488ef05ca5797aed570591ed934704e9aa52a3"
     }
   ],
   "artifacts": {
-    "summary.json": "7b385cf8e144bb2cde082c96ff453c18cde37dece02e631292808fadb8062a67",
-    "native-build.json": "2d6b5034fd0332b0c0d8e4c2d2839af9bb203a8c1f93a0007532d2767b2df110",
-    "runtime.json": "c40e1cfb6cfbec166ad1e314da719bf314b170cc3236ec59debec8bc4d832098",
-    "object-audit.json": "23a94f11d31eab03c6e5172c92578c110447076fe567851ca28b0e2d4b6f823a",
+    "summary.json": "5d2769ef795c778b65d5db0074bb9e2fae3ccd7a5f594f3a7e10269f01d07785",
+    "native-build.json": "554502fdf8b98d81318e347d6b4d4613c72a800e9d4b0ca61d3fbc194f138869",
+    "runtime.json": "aa94fe2828301143b34ccad2c9f4087f2a9540b5d8cf01a94040f64c71bb2d7a",
+    "object-audit.json": "8721f18869aa2508bc4499211496d8807033d7e01d02851a14f23c97faca94e7",
     "angle-controls.json": "5a0339ea4bd5d4d346477a23d08df885d9cd2ebac0f07d1d069a6e739753fd30",
-    "native-environment.json": "996abaf87c2d8c2716829995f14f51235dfc2285cd8d18b983049b428045d1c2"
+    "native-environment.json": "e8c81c5c5dfba34e9ae69e2a12350b97304b2a463a1e0dd0672c5302256e04e7"
   }
 }

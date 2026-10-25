@@ -135,7 +135,7 @@ was found in the read-only process check at this planning checkpoint.
 | Queue | Open IDs | Next deliverable |
 | --- | --- | --- |
 | KERNEL | K01, K02, K03, K04, K10, K11, K11f, K12, N08, N09, N11 | Start with K02/K03's existing current-Image profiles; produce a cause-backed hot-path reduction, then address BPF/pidfd budgets and intermittent sched_ext/ublk failures. |
-| APPLICATION | B08, L05b, L11a, P17a, P22 | P21 completed 144 registered sessions: P1-P3 held; P4 and the earlier control penalty did not. P22's pilot of 2026-10-20 failed two go criteria on a false escape record. P01 through P20 retain their completed scope: P20 had no repair-count advantage; P18 stopped at the provider key limit. Existing application tasks keep separate exits. |
+| APPLICATION | B08, L11a, P17a, P22 | P21 completed 144 registered sessions: P1-P3 held; P4 and the earlier control penalty did not. P22's pilot of 2026-10-20 failed two go criteria on a false escape record. P01 through P20 retain their completed scope: P20 had no repair-count advantage; P18 stopped at the provider key limit. Existing application tasks keep separate exits. |
 | REVIEW |  | No rule decision is open. The 2026-10-13 decisions for K07, L03 to L10 and L11a to L11c are in docs/archive/notebook/rules-20261013/DECISIONS.md. |
 | AUDIT | D33 | D24 to D28 closed the follow-ups of D22, D23, L04 and L05; D33 changes the alignment model. D01-D15 are closed in their recorded scope. Keep the T03 audit boundary; kernel/application acceptance and deferred proof domains remain separate. |
 | ACCEPTANCE | T04, T02, K13, K14, B10, T05, R05, R05a, R05k | Independently freeze repaired kernel/application subjects, run their existing paired/serial acceptance and refresh health/docs. |
@@ -3158,7 +3158,7 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
   gate passes 3,649 tests, zero failures and 28 ignores, plus Clippy and
   formatting.
 
-- [ ] **L05b — `arm_neon.h` intrinsics for the NEON original** — `OPEN`, P3.
+- [x] **L05b — `arm_neon.h` intrinsics for the NEON original** — `DONE`, P3, 2026-10-25.
   The 2026-10-13 decision on L05 keeps intrinsics out of L05. The torture and
   LLVM originals that include `arm_neon.h` need the intrinsics they use. Next
   action: list the intrinsics those originals call, and implement them on the
@@ -3182,6 +3182,12 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
   against GCC 14 on Linux and Apple clang on Darwin.
   `AArch64/aarch64_neon_intrinsics.c` (3,361 intrinsics) stays a named refusal
   on both targets; full intrinsic support is outside this item.
+  Closed in the owner's bounded scope: `Vector/NEON/simple.c` passes at O0/O2
+  on Linux and Darwin, with crossed tests for all 18 integer intrinsics.
+  The Darwin implementation is in `3a101cd3`; its source tests are
+  `crates/evocc/tests/darwin_neon_simple.rs`. The combined source gate passes
+  3,867 tests with zero failures and 51 retained ignores; the refreshed Lean
+  receipt matches EvoIR 2.32.0. This is not full NEON or a new proof profile.
 
 - [x] **L06 — Sub-8-byte integer-vector external ABI** — `DONE`, P2, 2026-10-20.
   GCC GPR and Clang SIMD conventions disagree and crossed controls fail.
@@ -6705,6 +6711,26 @@ plan, RED, flag, gates, one-page note, TODO update in the same commit.
   Owner decision of 2026-10-24: run the application ladder to check the rest of
   the exit (the ladder programs keep their results, and their total code size
   does not grow).
+  October 25: all 15 application lanes and the separate Doom lane were replayed
+  with compiler SHA-256 `978a3771912d7b2eafe89228ff2cb3d3c0c996826b2b2875c4cb74932a655ce4`.
+  The original jq timeout is repaired: 70/70 units and all 30 upstream test
+  programs pass with the unchanged 300-second compiler limit. zlib, zstd,
+  cJSON, TinyCC, PolyBench, Lua, SQLite and Doom retain complete coverage.
+  Toybox's 1,669 results match GCC, including one FAIL and 20 SKIP. Musl
+  retains all 1,339 objects through two libc-test runs, with 13 shared
+  reference failures and no added failure or replaced object.
+  N09 remains OPEN. Old passing cases are lost in ctest (two), torture (five),
+  Csmith (16) and LLVM (12, including an unusable reference). Mbed TLS retains
+  91/382 units: the other units refuse under unchanged `-Werror` flags.
+  Csmith's qualified-return reduction exposes an inliner result-cell defect;
+  the first Mbed TLS refusal comes from unused parameters in the exported
+  GCC NEON header. These measurement results are not repairs or passes.
+  The frozen six-TU S1 captures are reproducible and smaller than the retained
+  default baseline: checked A/B totals 213,808/213,740 bytes versus
+  246,988/244,344; unchecked 208,068/207,984 versus 241,012/238,344.
+  Every measured TU shrinks, but these six TUs do not establish whole-ladder
+  size non-growth. [Default receipt](tests/contracts/application-size-default-20261025-receipt.json),
+  [EqSat receipt](tests/contracts/application-size-eqsat-20261025-receipt.json).
 
 - [x] **N10 — Keep one-word records and small arrays in registers** — `DONE`, P1, 2026-10-19.
   `pte_t` and `pmd_t` values live in memory: zero-filled, copied from slot to

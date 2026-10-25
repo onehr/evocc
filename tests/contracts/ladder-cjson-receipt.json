@@ -3,12 +3,12 @@
  "rung": "E3",
  "subject": "cjson",
  "authority": "docs/archive/roadmap.md, milestone ladder",
- "run": "20261025T050745Z",
+ "run": "20261025T103237Z",
  "pin": "v1.7.19 (2025-09-09, github.com/DaveGamble/cJSON)",
  "url": "https://github.com/DaveGamble/cJSON/archive/refs/tags/v1.7.19.tar.gz",
  "tarballSha256": "7fa616e3046edfa7a28a32d5f9eacfd23f92900fe1f8ccd988c1662f30454562",
  "tarball": "v1.7.19.tar.gz",
- "driverSha256": "dc02c797ef4d8a3f2d3d71c1b28f7b81d544b7ba9593811afcee53652bd0c1b9",
+ "driverSha256": "978a3771912d7b2eafe89228ff2cb3d3c0c996826b2b2875c4cb74932a655ce4",
  "target": "aarch64-unknown-linux-gnu",
  "unitsTotal": 23,
  "unmeasuredBuildUnits": [
@@ -137,6 +137,6 @@
  },
  "frontEndGaps": [],
  "defects": [],
- "evidence": ".evidence/ladder/cjson/20261025T050745Z",
+ "evidence": ".evidence/ladder/cjson/20261025T103237Z",
  "summaryLine": "cjson: 23 of 23 units by EvoCC in a passing build; refused by code {}"
 }

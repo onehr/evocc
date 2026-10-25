@@ -2,13 +2,13 @@
  "schemaVersion": 1,
  "rung": "E11",
  "subject": "lua",
- "authority": "docs/roadmap.md, milestone ladder",
- "run": "20260919T231634Z",
+ "authority": "docs/archive/roadmap.md, milestone ladder",
+ "run": "20261025T115409Z",
  "pin": "5.5.1",
  "url": "https://www.lua.org/ftp/lua-5.5.1.tar.gz",
  "tarballSha256": "1c4b4068d67061f2a2231ad2b5422e77acea1487ea9890f6320af614f4373dce",
  "tarball": "lua-5.5.1.tar.gz",
- "driverSha256": "ff5f51e540abf40d9f660ade9193a5930ce2f9a274e18fe43d77b4f74c691882",
+ "driverSha256": "978a3771912d7b2eafe89228ff2cb3d3c0c996826b2b2875c4cb74932a655ce4",
  "target": "aarch64-unknown-linux-gnu",
  "unitsTotal": 34,
  "unmeasuredBuildUnits": [],
@@ -90,9 +90,9 @@
   "portableBuildSymlinks": {},
   "sysrootAdjustmentMeaning": {},
   "includeOrder": [
-   "-I/Users/onehrxn/dev/30days/c30/.build/k7-coverage/case/ladder-sysroot/usr/lib/gcc/aarch64-linux-gnu/14/include",
-   "-I/Users/onehrxn/dev/30days/c30/.build/k7-coverage/case/ladder-sysroot/usr/include/aarch64-linux-gnu",
-   "-I/Users/onehrxn/dev/30days/c30/.build/k7-coverage/case/ladder-sysroot/usr/include"
+   "-I/Users/onehrxn/dev/30days/c30/.build/case/ladder-sysroot/usr/lib/gcc/aarch64-linux-gnu/14/include",
+   "-I/Users/onehrxn/dev/30days/c30/.build/case/ladder-sysroot/usr/include/aarch64-linux-gnu",
+   "-I/Users/onehrxn/dev/30days/c30/.build/case/ladder-sysroot/usr/include"
   ],
   "configure": "",
   "subject": [
@@ -104,13 +104,10 @@
   ],
   "buildCommand": "(make linux CC=\"gcc-14 -std=gnu99\" MYLDFLAGS=-no-pie -j2 && make -C ../lua-5.5.1-tests/libs CC=gcc-14 LUA_DIR=../../lua-5.5.1/src)",
   "optionsTheDriverRejects": [],
-  "omittedFlags": [
-   "-Wall",
-   "-Wextra"
-  ]
+  "omittedFlags": []
  },
  "frontEndGaps": [],
  "defects": [],
- "evidence": ".evidence/ladder/lua/20260919T231634Z",
+ "evidence": ".evidence/ladder/lua/20261025T115409Z",
  "summaryLine": "lua: 34 of 34 units by EvoCC in a passing build; refused by code {}"
 }
