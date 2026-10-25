@@ -2,13 +2,13 @@
  "schemaVersion": 1,
  "rung": "E1",
  "subject": "zlib",
- "authority": "docs/roadmap.md, milestone ladder",
- "run": "20260919T231524Z",
+ "authority": "docs/archive/roadmap.md, milestone ladder",
+ "run": "20261025T050551Z",
  "pin": "1.3.2 (2026-02-17, zlib.net)",
  "url": "https://zlib.net/zlib-1.3.2.tar.gz",
  "tarballSha256": "bb329a0a2cd0274d05519d61c667c062e06990d72e125ee2dfa8de64f0119d16",
  "tarball": "zlib-1.3.2.tar.gz",
- "driverSha256": "ff5f51e540abf40d9f660ade9193a5930ce2f9a274e18fe43d77b4f74c691882",
+ "driverSha256": "dc02c797ef4d8a3f2d3d71c1b28f7b81d544b7ba9593811afcee53652bd0c1b9",
  "target": "aarch64-unknown-linux-gnu",
  "unitsTotal": 19,
  "unmeasuredBuildUnits": [],
@@ -75,9 +75,9 @@
   "portableBuildSymlinks": {},
   "sysrootAdjustmentMeaning": {},
   "includeOrder": [
-   "-I/Users/onehrxn/dev/30days/c30/.build/k7-coverage/case/ladder-sysroot/usr/lib/gcc/aarch64-linux-gnu/14/include",
-   "-I/Users/onehrxn/dev/30days/c30/.build/k7-coverage/case/ladder-sysroot/usr/include/aarch64-linux-gnu",
-   "-I/Users/onehrxn/dev/30days/c30/.build/k7-coverage/case/ladder-sysroot/usr/include"
+   "-I/Users/onehrxn/dev/30days/c30/.build/case/ladder-sysroot/usr/lib/gcc/aarch64-linux-gnu/14/include",
+   "-I/Users/onehrxn/dev/30days/c30/.build/case/ladder-sysroot/usr/include/aarch64-linux-gnu",
+   "-I/Users/onehrxn/dev/30days/c30/.build/case/ladder-sysroot/usr/include"
   ],
   "configure": "CC=gcc ./configure --static",
   "subject": [
@@ -112,6 +112,6 @@
    "repro": "int g(int *a, int e) { return a[e ? 1 : 0]; }\n"
   }
  ],
- "evidence": ".evidence/ladder/zlib/20260919T231524Z",
+ "evidence": ".evidence/ladder/zlib/20261025T050551Z",
  "summaryLine": "zlib: 19 of 19 units by EvoCC in a passing build; refused by code {}"
 }

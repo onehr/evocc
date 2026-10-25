@@ -1,22 +1,25 @@
 {
   "schemaVersion": 1,
-  "run": "20260928T122910.089006Z",
-  "subject": "69c1b763842703645b67856249e293226ab1420d",
+  "run": "20261025T050551.348276Z",
+  "subject": "91348ade70307c9d3694b2965c48ec4b8ba2b628",
   "dirty": true,
-  "driver": "/Users/onehrxn/dev/30days/c30/target/pinned-check/release/evocc",
-  "driverSha256": "d8010273cd49d7cf139e6a56ff9b860a45b0a5ff8467495b4f3a17b36a4ca48e",
+  "driver": "/Users/onehrxn/dev/30days/c30/target/frontend/release/evocc",
+  "driverSha256": "dc02c797ef4d8a3f2d3d71c1b28f7b81d544b7ba9593811afcee53652bd0c1b9",
   "invocation": [
     "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
     "tools/bench.py",
-    "doom",
-    "--evocc",
-    "target/pinned-check/release/evocc",
+    "zlib",
+    "zstd",
+    "cjson",
+    "--no-build",
     "--jobs",
     "2"
   ],
   "execution": "sequential lanes; original per-program watchdogs unchanged",
   "selected": [
-    "doom"
+    "zlib",
+    "zstd",
+    "cjson"
   ],
   "status": "PASS",
   "benchmarks": {
@@ -220,9 +223,9 @@
         "portableBuildSymlinks": {},
         "sysrootAdjustmentMeaning": {},
         "includeOrder": [
-          "-I/Users/onehrxn/dev/30days/c30/.build/k7-coverage/case/ladder-sysroot/usr/lib/gcc/aarch64-linux-gnu/14/include",
-          "-I/Users/onehrxn/dev/30days/c30/.build/k7-coverage/case/ladder-sysroot/usr/include/aarch64-linux-gnu",
-          "-I/Users/onehrxn/dev/30days/c30/.build/k7-coverage/case/ladder-sysroot/usr/include"
+          "-I/Users/onehrxn/dev/30days/c30/.build/case/ladder-sysroot/usr/lib/gcc/aarch64-linux-gnu/14/include",
+          "-I/Users/onehrxn/dev/30days/c30/.build/case/ladder-sysroot/usr/include/aarch64-linux-gnu",
+          "-I/Users/onehrxn/dev/30days/c30/.build/case/ladder-sysroot/usr/include"
         ],
         "configure": "CC=gcc ./configure --static",
         "subject": [
@@ -236,18 +239,18 @@
         ]
       },
       "status": "PASS",
-      "run": "20260919T231524Z",
-      "evidence": ".evidence/ladder/zlib/20260919T231524Z",
+      "run": "20261025T050551Z",
+      "evidence": ".evidence/ladder/zlib/20261025T050551Z",
       "receipt": "tests/contracts/ladder-zlib-receipt.json",
       "command": [
         "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
         "-u",
         "/Users/onehrxn/dev/30days/c30/tools/ladder/zlib.py",
         "--evocc",
-        "/Users/onehrxn/dev/30days/c30/.build/floating-targeted/evocc-20260920-closure"
+        "/Users/onehrxn/dev/30days/c30/target/frontend/release/evocc"
       ],
       "exitCode": 0,
-      "seconds": 8.6,
+      "seconds": 7.8,
       "previous": {
         "rung": "E1",
         "note": "mixed-link program tests",
@@ -264,16 +267,20 @@
           "passed": true,
           "status": 0,
           "relinkStatus": 0,
-          "command": "make test CFLAGS='-O3 -D_LARGEFILE64_SOURCE=1 -DHAVE_HIDDEN -no-pie'"
+          "stage": "pass",
+          "signature": "",
+          "regeneratedInputs": [],
+          "command": "make test CFLAGS='-O3 -D_LARGEFILE64_SOURCE=1 -DHAVE_HIDDEN -no-pie'",
+          "completedTrial": "attempt-1"
         },
         "adjustments": {
           "sysroot": {},
           "portableBuildSymlinks": {},
           "sysrootAdjustmentMeaning": {},
           "includeOrder": [
-            "-I/Users/onehrxn/dev/30days/c30/.build/k7-coverage/case/ladder-sysroot/usr/lib/gcc/aarch64-linux-gnu/14/include",
-            "-I/Users/onehrxn/dev/30days/c30/.build/k7-coverage/case/ladder-sysroot/usr/include/aarch64-linux-gnu",
-            "-I/Users/onehrxn/dev/30days/c30/.build/k7-coverage/case/ladder-sysroot/usr/include"
+            "-I/Users/onehrxn/dev/30days/c30/.build/case/ladder-sysroot/usr/lib/gcc/aarch64-linux-gnu/14/include",
+            "-I/Users/onehrxn/dev/30days/c30/.build/case/ladder-sysroot/usr/include/aarch64-linux-gnu",
+            "-I/Users/onehrxn/dev/30days/c30/.build/case/ladder-sysroot/usr/include"
           ],
           "configure": "CC=gcc ./configure --static",
           "subject": [
@@ -287,13 +294,13 @@
           ]
         },
         "status": "PASS",
-        "run": "20260915T213940Z",
-        "evidence": ".evidence/ladder/zlib/20260915T213940Z"
+        "run": "20261024T185910Z",
+        "evidence": ".evidence/ladder/zlib/20261024T185910Z"
       },
       "measurement": {
-        "run": "20260919T222250.259791Z",
-        "subject": "9f571cac0e6be6d27915aa82b4c8866ae84eaf9a",
-        "driverSha256": "ff5f51e540abf40d9f660ade9193a5930ce2f9a274e18fe43d77b4f74c691882"
+        "run": "20261025T050551.348276Z",
+        "subject": "91348ade70307c9d3694b2965c48ec4b8ba2b628",
+        "driverSha256": "dc02c797ef4d8a3f2d3d71c1b28f7b81d544b7ba9593811afcee53652bd0c1b9"
       }
     },
     "zstd": {
@@ -323,9 +330,9 @@
         "portableBuildSymlinks": {},
         "sysrootAdjustmentMeaning": {},
         "includeOrder": [
-          "-I/Users/onehrxn/dev/30days/c30/.build/k7-coverage/case/ladder-sysroot/usr/lib/gcc/aarch64-linux-gnu/14/include",
-          "-I/Users/onehrxn/dev/30days/c30/.build/k7-coverage/case/ladder-sysroot/usr/include/aarch64-linux-gnu",
-          "-I/Users/onehrxn/dev/30days/c30/.build/k7-coverage/case/ladder-sysroot/usr/include"
+          "-I/Users/onehrxn/dev/30days/c30/.build/case/ladder-sysroot/usr/lib/gcc/aarch64-linux-gnu/14/include",
+          "-I/Users/onehrxn/dev/30days/c30/.build/case/ladder-sysroot/usr/include/aarch64-linux-gnu",
+          "-I/Users/onehrxn/dev/30days/c30/.build/case/ladder-sysroot/usr/include"
         ],
         "configure": "",
         "subject": [
@@ -341,26 +348,6 @@
           "-MMD",
           "-MP",
           "-MT",
-          "-Wall",
-          "-Wc++-compat",
-          "-Wcast-align",
-          "-Wcast-qual",
-          "-Wdeclaration-after-statement",
-          "-Wextra",
-          "-Wfloat-equal",
-          "-Wformat=2",
-          "-Winit-self",
-          "-Wmissing-prototypes",
-          "-Wno-c++-compat",
-          "-Wpointer-arith",
-          "-Wredundant-decls",
-          "-Wshadow",
-          "-Wstrict-aliasing=1",
-          "-Wstrict-prototypes",
-          "-Wswitch-enum",
-          "-Wundef",
-          "-Wvla",
-          "-Wwrite-strings",
           "-g",
           "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/benchfn.d",
           "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/benchfn.o",
@@ -453,18 +440,18 @@
         ]
       },
       "status": "PASS",
-      "run": "20260919T233745Z",
-      "evidence": ".evidence/ladder/zstd/20260919T233745Z",
+      "run": "20261025T050559Z",
+      "evidence": ".evidence/ladder/zstd/20261025T050559Z",
       "receipt": "tests/contracts/ladder-zstd-receipt.json",
       "command": [
         "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
         "-u",
         "/Users/onehrxn/dev/30days/c30/tools/ladder/zstd.py",
         "--evocc",
-        "/Users/onehrxn/dev/30days/c30/.build/floating-targeted/evocc-20260920-closure"
+        "/Users/onehrxn/dev/30days/c30/target/frontend/release/evocc"
       ],
       "exitCode": 0,
-      "seconds": 180.9,
+      "seconds": 105.7,
       "previous": {
         "rung": "E2",
         "note": "mixed-link program tests; see recorded source/build adjustments",
@@ -484,16 +471,17 @@
           "stage": "pass",
           "signature": "",
           "regeneratedInputs": [],
-          "command": "mkdir -p /tmp/shim && ln -sf /bin/echo /tmp/shim/file && rm -rf /tmp/zstd-check && cp -a /work/zstd/zstd-1.5.7 /tmp/zstd-check && cd /tmp/zstd-check && PATH=/tmp/shim:$PATH make check"
+          "command": "mkdir -p /tmp/shim && ln -sf /bin/echo /tmp/shim/file && rm -rf /tmp/zstd-check && cp -a /work/zstd/zstd-1.5.7 /tmp/zstd-check && cd /tmp/zstd-check && PATH=/tmp/shim:$PATH make check",
+          "completedTrial": "attempt-1"
         },
         "adjustments": {
           "sysroot": {},
           "portableBuildSymlinks": {},
           "sysrootAdjustmentMeaning": {},
           "includeOrder": [
-            "-I/Users/onehrxn/dev/30days/c30/.build/k7-coverage/case/ladder-sysroot/usr/lib/gcc/aarch64-linux-gnu/14/include",
-            "-I/Users/onehrxn/dev/30days/c30/.build/k7-coverage/case/ladder-sysroot/usr/include/aarch64-linux-gnu",
-            "-I/Users/onehrxn/dev/30days/c30/.build/k7-coverage/case/ladder-sysroot/usr/include"
+            "-I/Users/onehrxn/dev/30days/c30/.build/case/ladder-sysroot/usr/lib/gcc/aarch64-linux-gnu/14/include",
+            "-I/Users/onehrxn/dev/30days/c30/.build/case/ladder-sysroot/usr/include/aarch64-linux-gnu",
+            "-I/Users/onehrxn/dev/30days/c30/.build/case/ladder-sysroot/usr/include"
           ],
           "configure": "",
           "subject": [
@@ -509,26 +497,6 @@
             "-MMD",
             "-MP",
             "-MT",
-            "-Wall",
-            "-Wc++-compat",
-            "-Wcast-align",
-            "-Wcast-qual",
-            "-Wdeclaration-after-statement",
-            "-Wextra",
-            "-Wfloat-equal",
-            "-Wformat=2",
-            "-Winit-self",
-            "-Wmissing-prototypes",
-            "-Wno-c++-compat",
-            "-Wpointer-arith",
-            "-Wredundant-decls",
-            "-Wshadow",
-            "-Wstrict-aliasing=1",
-            "-Wstrict-prototypes",
-            "-Wswitch-enum",
-            "-Wundef",
-            "-Wvla",
-            "-Wwrite-strings",
             "-g",
             "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/benchfn.d",
             "obj/conf_28368e9f9bca6d6555d75c418f1c1d28/benchfn.o",
@@ -621,13 +589,13 @@
           ]
         },
         "status": "PASS",
-        "run": "20260919T212644Z",
-        "evidence": ".evidence/ladder/zstd/20260919T212644Z"
+        "run": "20261024T185917Z",
+        "evidence": ".evidence/ladder/zstd/20261024T185917Z"
       },
       "measurement": {
-        "run": "20260919T222250.259791Z",
-        "subject": "9f571cac0e6be6d27915aa82b4c8866ae84eaf9a",
-        "driverSha256": "ff5f51e540abf40d9f660ade9193a5930ce2f9a274e18fe43d77b4f74c691882"
+        "run": "20261025T050551.348276Z",
+        "subject": "91348ade70307c9d3694b2965c48ec4b8ba2b628",
+        "driverSha256": "dc02c797ef4d8a3f2d3d71c1b28f7b81d544b7ba9593811afcee53652bd0c1b9"
       }
     },
     "cjson": {
@@ -682,9 +650,9 @@
         "portableBuildSymlinks": {},
         "sysrootAdjustmentMeaning": {},
         "includeOrder": [
-          "-I/Users/onehrxn/dev/30days/c30/.build/k7-coverage/case/ladder-sysroot/usr/lib/gcc/aarch64-linux-gnu/14/include",
-          "-I/Users/onehrxn/dev/30days/c30/.build/k7-coverage/case/ladder-sysroot/usr/include/aarch64-linux-gnu",
-          "-I/Users/onehrxn/dev/30days/c30/.build/k7-coverage/case/ladder-sysroot/usr/include"
+          "-I/Users/onehrxn/dev/30days/c30/.build/case/ladder-sysroot/usr/lib/gcc/aarch64-linux-gnu/14/include",
+          "-I/Users/onehrxn/dev/30days/c30/.build/case/ladder-sysroot/usr/include/aarch64-linux-gnu",
+          "-I/Users/onehrxn/dev/30days/c30/.build/case/ladder-sysroot/usr/include"
         ],
         "configure": "",
         "subject": [
@@ -696,39 +664,21 @@
         ],
         "buildCommand": "(set -e\nmake\n(\nset -e\nmkdir -p tests/evocc-full\nprintf '%s\\n' \"${CC:-gcc-14} -std=c89 -O2 -c tests/unity/src/unity.c -o tests/evocc-full/unity.o\"\n\"${CC:-gcc-14}\" -std=c89 -O2 -c tests/unity/src/unity.c -o tests/evocc-full/unity.o\nfor test in parse_examples parse_number parse_hex4 parse_string parse_array parse_object parse_value print_string print_number print_array print_object print_value misc_tests parse_with_opts compare_tests cjson_add readme_examples minify_tests json_patch_tests old_utils_tests misc_utils_tests; do\n  printf '%s\\n' \"${CC:-gcc-14} -std=c89 -O2 -c tests/$test.c -o tests/evocc-full/$test.o\"\n  \"${CC:-gcc-14}\" -std=c89 -O2 -c tests/$test.c -o tests/evocc-full/$test.o\ndone\n)\n(\nset -e\n# Rebuild archives even when restored objects have equal/coarse timestamps.\n# The independently audited object bytes, not a previous trial's archive, must\n# reach every public/private test executable.\nrm -f cJSON_test libcjson.a libcjson_utils.a\nmake 'CJSON_TEST_SRC=test.c cJSON.o' static tests\nfor test in cjson_add compare_tests minify_tests old_utils_tests misc_utils_tests; do\n  \"${CC:-gcc-14}\" -DCJSON_TESTS_COMMON_H -include ./cJSON.h -include stdbool.h -include string.h tests/$test.c tests/unity/src/unity.c cJSON.o cJSON_Utils.o -lm -o tests/$test\ndone\nfor test in parse_examples parse_number parse_hex4 parse_string parse_array parse_object parse_value print_string print_number print_array print_object print_value misc_tests parse_with_opts compare_tests cjson_add readme_examples minify_tests json_patch_tests old_utils_tests misc_utils_tests; do\n  \"${CC:-gcc-14}\" tests/evocc-full/$test.o tests/evocc-full/unity.o libcjson_utils.a libcjson.a -lm -o tests/evocc-full/$test\ndone\n)\n)",
         "optionsTheDriverRejects": [],
-        "omittedFlags": [
-          "-Wall",
-          "-Wc++-compat",
-          "-Wcast-align",
-          "-Wcast-qual",
-          "-Wconversion",
-          "-Werror",
-          "-Wformat=2",
-          "-Winit-self",
-          "-Wmissing-prototypes",
-          "-Wshadow",
-          "-Wstrict-overflow=2",
-          "-Wstrict-prototypes",
-          "-Wswitch-default",
-          "-Wundef",
-          "-Wwrite-strings",
-          "-fstack-protector",
-          "-pedantic"
-        ]
+        "omittedFlags": []
       },
       "status": "PASS",
-      "run": "20260927T092953Z",
-      "evidence": ".evidence/ladder/cjson/20260927T092953Z",
+      "run": "20261025T050745Z",
+      "evidence": ".evidence/ladder/cjson/20261025T050745Z",
       "receipt": "tests/contracts/ladder-cjson-receipt.json",
       "command": [
         "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
         "-u",
         "/Users/onehrxn/dev/30days/c30/tools/ladder/cjson.py",
         "--evocc",
-        "/Users/onehrxn/dev/30days/c30/target/frontend/debug/evocc"
+        "/Users/onehrxn/dev/30days/c30/target/frontend/release/evocc"
       ],
       "exitCode": 0,
-      "seconds": 31.1,
+      "seconds": 17.2,
       "previous": {
         "rung": "E3",
         "note": "installed libraries plus all 21 upstream Unity test translation units",
@@ -781,9 +731,9 @@
           "portableBuildSymlinks": {},
           "sysrootAdjustmentMeaning": {},
           "includeOrder": [
-            "-I/Users/onehrxn/dev/30days/c30/.build/k7-coverage/case/ladder-sysroot/usr/lib/gcc/aarch64-linux-gnu/14/include",
-            "-I/Users/onehrxn/dev/30days/c30/.build/k7-coverage/case/ladder-sysroot/usr/include/aarch64-linux-gnu",
-            "-I/Users/onehrxn/dev/30days/c30/.build/k7-coverage/case/ladder-sysroot/usr/include"
+            "-I/Users/onehrxn/dev/30days/c30/.build/case/ladder-sysroot/usr/lib/gcc/aarch64-linux-gnu/14/include",
+            "-I/Users/onehrxn/dev/30days/c30/.build/case/ladder-sysroot/usr/include/aarch64-linux-gnu",
+            "-I/Users/onehrxn/dev/30days/c30/.build/case/ladder-sysroot/usr/include"
           ],
           "configure": "",
           "subject": [
@@ -793,36 +743,18 @@
             "the full Unity selection uses explicit -std=c89 -O2 commands beside the release Makefile build, not a claim to reproduce CMake's optional sanitizer/Valgrind configurations; tests run from the original tests directory so the original inputs and json-patch-tests are consumed",
             "The release Makefile explicitly selects -std=c89. The subject receives that option unchanged; a language-mode refusal is distinct from an observed floating-point or header-type refusal. Current first errors are recorded in refusals, not inferred from cJSON's use of double or historical adjusted-header runs."
           ],
-          "buildCommand": "(set -e\nmake\n(\nset -e\nmkdir -p tests/evocc-full\nprintf '%s\\n' \"${CC:-gcc-14} -std=c89 -O2 -c tests/unity/src/unity.c -o tests/evocc-full/unity.o\"\n\"${CC:-gcc-14}\" -std=c89 -O2 -c tests/unity/src/unity.c -o tests/evocc-full/unity.o\nfor test in parse_examples parse_number parse_hex4 parse_string parse_array parse_object parse_value print_string print_number print_array print_object print_value misc_tests parse_with_opts compare_tests cjson_add readme_examples minify_tests json_patch_tests old_utils_tests misc_utils_tests; do\n  printf '%s\\n' \"${CC:-gcc-14} -std=c89 -O2 -c tests/$test.c -o tests/evocc-full/$test.o\"\n  \"${CC:-gcc-14}\" -std=c89 -O2 -c tests/$test.c -o tests/evocc-full/$test.o\ndone\n)\n(\nset -e\nrm -f cJSON_test\nmake 'CJSON_TEST_SRC=test.c cJSON.o' static tests\nfor test in cjson_add compare_tests minify_tests old_utils_tests misc_utils_tests; do\n  \"${CC:-gcc-14}\" -DCJSON_TESTS_COMMON_H -include ./cJSON.h -include stdbool.h -include string.h tests/$test.c tests/unity/src/unity.c cJSON.o cJSON_Utils.o -lm -o tests/$test\ndone\nfor test in parse_examples parse_number parse_hex4 parse_string parse_array parse_object parse_value print_string print_number print_array print_object print_value misc_tests parse_with_opts compare_tests cjson_add readme_examples minify_tests json_patch_tests old_utils_tests misc_utils_tests; do\n  \"${CC:-gcc-14}\" tests/evocc-full/$test.o tests/evocc-full/unity.o libcjson_utils.a libcjson.a -lm -o tests/evocc-full/$test\ndone\n)\n)",
+          "buildCommand": "(set -e\nmake\n(\nset -e\nmkdir -p tests/evocc-full\nprintf '%s\\n' \"${CC:-gcc-14} -std=c89 -O2 -c tests/unity/src/unity.c -o tests/evocc-full/unity.o\"\n\"${CC:-gcc-14}\" -std=c89 -O2 -c tests/unity/src/unity.c -o tests/evocc-full/unity.o\nfor test in parse_examples parse_number parse_hex4 parse_string parse_array parse_object parse_value print_string print_number print_array print_object print_value misc_tests parse_with_opts compare_tests cjson_add readme_examples minify_tests json_patch_tests old_utils_tests misc_utils_tests; do\n  printf '%s\\n' \"${CC:-gcc-14} -std=c89 -O2 -c tests/$test.c -o tests/evocc-full/$test.o\"\n  \"${CC:-gcc-14}\" -std=c89 -O2 -c tests/$test.c -o tests/evocc-full/$test.o\ndone\n)\n(\nset -e\n# Rebuild archives even when restored objects have equal/coarse timestamps.\n# The independently audited object bytes, not a previous trial's archive, must\n# reach every public/private test executable.\nrm -f cJSON_test libcjson.a libcjson_utils.a\nmake 'CJSON_TEST_SRC=test.c cJSON.o' static tests\nfor test in cjson_add compare_tests minify_tests old_utils_tests misc_utils_tests; do\n  \"${CC:-gcc-14}\" -DCJSON_TESTS_COMMON_H -include ./cJSON.h -include stdbool.h -include string.h tests/$test.c tests/unity/src/unity.c cJSON.o cJSON_Utils.o -lm -o tests/$test\ndone\nfor test in parse_examples parse_number parse_hex4 parse_string parse_array parse_object parse_value print_string print_number print_array print_object print_value misc_tests parse_with_opts compare_tests cjson_add readme_examples minify_tests json_patch_tests old_utils_tests misc_utils_tests; do\n  \"${CC:-gcc-14}\" tests/evocc-full/$test.o tests/evocc-full/unity.o libcjson_utils.a libcjson.a -lm -o tests/evocc-full/$test\ndone\n)\n)",
           "optionsTheDriverRejects": [],
-          "omittedFlags": [
-            "-Wall",
-            "-Wc++-compat",
-            "-Wcast-align",
-            "-Wcast-qual",
-            "-Wconversion",
-            "-Werror",
-            "-Wformat=2",
-            "-Winit-self",
-            "-Wmissing-prototypes",
-            "-Wshadow",
-            "-Wstrict-overflow=2",
-            "-Wstrict-prototypes",
-            "-Wswitch-default",
-            "-Wundef",
-            "-Wwrite-strings",
-            "-fstack-protector",
-            "-pedantic"
-          ]
+          "omittedFlags": []
         },
         "status": "PASS",
-        "run": "20260923T073554Z",
-        "evidence": ".evidence/ladder/cjson/20260923T073554Z"
+        "run": "20261025T042440Z",
+        "evidence": ".evidence/ladder/cjson/20261025T042440Z"
       },
       "measurement": {
-        "run": "20260927T092953.274772Z",
-        "subject": "3343220b0aeb35a5860b97f19558cb076be459fd",
-        "driverSha256": "f21a796f169aa3c0f88b97d6cdccd31210af987f2c9c7b5c9de61bb8e6522c68"
+        "run": "20261025T050551.348276Z",
+        "subject": "91348ade70307c9d3694b2965c48ec4b8ba2b628",
+        "driverSha256": "dc02c797ef4d8a3f2d3d71c1b28f7b81d544b7ba9593811afcee53652bd0c1b9"
       }
     },
     "tinycc": {
@@ -4768,10 +4700,10 @@
       "refusals": {},
       "baselineFailures": 0,
       "failingUnits": [],
-      "total": 69,
-      "passed": 69,
+      "total": 70,
+      "passed": 70,
       "kind": "units",
-      "compiled": 69,
+      "compiled": 70,
       "excluded": 0,
       "testVerdict": {
         "passed": true,
@@ -4788,28 +4720,24 @@
         "portableBuildSymlinks": {},
         "sysrootAdjustmentMeaning": {},
         "includeOrder": [
-          "-I/Users/onehrxn/dev/30days/c30/.build/k7-coverage/case/ladder-sysroot/usr/lib/gcc/aarch64-linux-gnu/14/include",
-          "-I/Users/onehrxn/dev/30days/c30/.build/k7-coverage/case/ladder-sysroot/usr/include/aarch64-linux-gnu",
-          "-I/Users/onehrxn/dev/30days/c30/.build/k7-coverage/case/ladder-sysroot/usr/include"
+          "-I/Users/onehrxn/dev/30days/c30/.build/case/ladder-sysroot/usr/lib/gcc/aarch64-linux-gnu/14/include",
+          "-I/Users/onehrxn/dev/30days/c30/.build/case/ladder-sysroot/usr/include/aarch64-linux-gnu",
+          "-I/Users/onehrxn/dev/30days/c30/.build/case/ladder-sysroot/usr/include"
         ],
         "configure": "./configure CC=gcc-14 --disable-shared --disable-docs --with-oniguruma=builtin LDFLAGS=-no-pie",
         "subject": [
           "Official release, static libjq and bundled Oniguruma; original nine make-check scripts.",
-          "Mixed-object coverage includes Oniguruma; FP sources are attempted, not prefiltered."
+          "Mixed-object coverage includes Oniguruma; FP sources are attempted, not prefiltered.",
+          "The build creates the missing .remake-version-h stamp with an old time. Otherwise every later make regenerates src/version.h and recompiles src/main.c with GCC, which would replace the substituted object before make check."
         ],
-        "buildCommand": "make -j2 V=1",
+        "buildCommand": "make -j2 V=1 && touch -d @0 .remake-version-h",
         "optionsTheDriverRejects": [],
         "omittedFlags": [
+          "$depbase.Tpo",
           "-MD",
           "-MF",
           "-MP",
           "-MT",
-          "-Wall",
-          "-Wextra",
-          "-Wno-unused-function",
-          "-Wno-unused-parameter",
-          "-Woverlength-strings",
-          "-Wstrict-prototypes",
           "-g",
           ".deps/ascii.Tpo",
           ".deps/big5.Tpo",
@@ -4932,6 +4860,7 @@
           "src/lexer.lo",
           "src/linker.lo",
           "src/locfile.lo",
+          "src/main.o",
           "src/parser.lo",
           "src/util.lo",
           "st.lo",
@@ -4952,18 +4881,18 @@
         ]
       },
       "status": "PASS",
-      "run": "20260927T082205Z",
-      "evidence": ".evidence/ladder/jq/20260927T082205Z",
+      "run": "20261025T045819Z",
+      "evidence": ".evidence/ladder/jq/20261025T045819Z",
       "receipt": "tests/contracts/ladder-jq-receipt.json",
       "command": [
         "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
         "-u",
         "/Users/onehrxn/dev/30days/c30/tools/ladder/jq.py",
         "--evocc",
-        "/Users/onehrxn/dev/30days/c30/.build/floating-targeted/strict-20260927/evocc-pthread-subject"
+        "/Users/onehrxn/dev/30days/c30/target/frontend/release/evocc"
       ],
       "exitCode": 0,
-      "seconds": 169.2,
+      "seconds": 198.0,
       "previous": {
         "rung": "E10",
         "note": "original make check with bundled Oniguruma; mixed-object ramp",
@@ -4971,7 +4900,7 @@
         "refusals": {},
         "baselineFailures": 0,
         "failingUnits": [],
-        "total": 69,
+        "total": 70,
         "passed": 69,
         "kind": "units",
         "compiled": 69,
@@ -4991,30 +4920,25 @@
           "portableBuildSymlinks": {},
           "sysrootAdjustmentMeaning": {},
           "includeOrder": [
-            "-I/Users/onehrxn/dev/30days/c30/.build/k7-coverage/case/ladder-sysroot/usr/lib/gcc/aarch64-linux-gnu/14/include",
-            "-I/Users/onehrxn/dev/30days/c30/.build/k7-coverage/case/ladder-sysroot/usr/include/aarch64-linux-gnu",
-            "-I/Users/onehrxn/dev/30days/c30/.build/k7-coverage/case/ladder-sysroot/usr/include"
+            "-I/Users/onehrxn/dev/30days/c30/.build/case/ladder-sysroot/usr/lib/gcc/aarch64-linux-gnu/14/include",
+            "-I/Users/onehrxn/dev/30days/c30/.build/case/ladder-sysroot/usr/include/aarch64-linux-gnu",
+            "-I/Users/onehrxn/dev/30days/c30/.build/case/ladder-sysroot/usr/include"
           ],
           "configure": "./configure CC=gcc-14 --disable-shared --disable-docs --with-oniguruma=builtin LDFLAGS=-no-pie",
           "subject": [
             "Official release, static libjq and bundled Oniguruma; original nine make-check scripts.",
-            "Mixed-object coverage includes Oniguruma; FP sources are attempted, not prefiltered."
+            "Mixed-object coverage includes Oniguruma; FP sources are attempted, not prefiltered.",
+            "The build creates the missing .remake-version-h stamp with an old time. Otherwise every later make regenerates src/version.h and recompiles src/main.c with GCC, which would replace the substituted object before make check."
           ],
-          "buildCommand": "make -j2 V=1",
+          "buildCommand": "make -j2 V=1 && touch -d @0 .remake-version-h",
           "optionsTheDriverRejects": [],
           "omittedFlags": [
+            "$depbase.Tpo",
             "-MD",
             "-MF",
             "-MP",
             "-MT",
-            "-Wall",
-            "-Wextra",
-            "-Wno-unused-function",
-            "-Wno-unused-parameter",
-            "-Woverlength-strings",
-            "-Wstrict-prototypes",
             "-g",
-            "-pthread",
             ".deps/ascii.Tpo",
             ".deps/big5.Tpo",
             ".deps/cp1251.Tpo",
@@ -5136,6 +5060,7 @@
             "src/lexer.lo",
             "src/linker.lo",
             "src/locfile.lo",
+            "src/main.o",
             "src/parser.lo",
             "src/util.lo",
             "st.lo",
@@ -5155,14 +5080,14 @@
             "vendor/decNumber/decNumber.lo"
           ]
         },
-        "status": "PASS",
-        "run": "20260927T080457Z",
-        "evidence": ".evidence/ladder/jq/20260927T080457Z"
+        "status": "INCOMPLETE",
+        "run": "20261025T044808Z",
+        "evidence": ".evidence/ladder/jq/20261025T044808Z"
       },
       "measurement": {
-        "run": "20260927T082205.797623Z",
-        "subject": "6624d98c9b9ac6af55584a7ebb278548b8ffedb2",
-        "driverSha256": "523a698237c9ab72f868fdd69b7d1a1f6e0fd3285694d986b3bf007dee691eaa"
+        "run": "20261025T045819.097689Z",
+        "subject": "91348ade70307c9d3694b2965c48ec4b8ba2b628",
+        "driverSha256": "dc02c797ef4d8a3f2d3d71c1b28f7b81d544b7ba9593811afcee53652bd0c1b9"
       }
     },
     "lua": {

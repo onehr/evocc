@@ -2,13 +2,13 @@
  "schemaVersion": 1,
  "rung": "E3",
  "subject": "cjson",
- "authority": "docs/roadmap.md, milestone ladder",
- "run": "20260927T092953Z",
+ "authority": "docs/archive/roadmap.md, milestone ladder",
+ "run": "20261025T050745Z",
  "pin": "v1.7.19 (2025-09-09, github.com/DaveGamble/cJSON)",
  "url": "https://github.com/DaveGamble/cJSON/archive/refs/tags/v1.7.19.tar.gz",
  "tarballSha256": "7fa616e3046edfa7a28a32d5f9eacfd23f92900fe1f8ccd988c1662f30454562",
  "tarball": "v1.7.19.tar.gz",
- "driverSha256": "f21a796f169aa3c0f88b97d6cdccd31210af987f2c9c7b5c9de61bb8e6522c68",
+ "driverSha256": "dc02c797ef4d8a3f2d3d71c1b28f7b81d544b7ba9593811afcee53652bd0c1b9",
  "target": "aarch64-unknown-linux-gnu",
  "unitsTotal": 23,
  "unmeasuredBuildUnits": [
@@ -119,9 +119,9 @@
   "portableBuildSymlinks": {},
   "sysrootAdjustmentMeaning": {},
   "includeOrder": [
-   "-I/Users/onehrxn/dev/30days/c30/.build/k7-coverage/case/ladder-sysroot/usr/lib/gcc/aarch64-linux-gnu/14/include",
-   "-I/Users/onehrxn/dev/30days/c30/.build/k7-coverage/case/ladder-sysroot/usr/include/aarch64-linux-gnu",
-   "-I/Users/onehrxn/dev/30days/c30/.build/k7-coverage/case/ladder-sysroot/usr/include"
+   "-I/Users/onehrxn/dev/30days/c30/.build/case/ladder-sysroot/usr/lib/gcc/aarch64-linux-gnu/14/include",
+   "-I/Users/onehrxn/dev/30days/c30/.build/case/ladder-sysroot/usr/include/aarch64-linux-gnu",
+   "-I/Users/onehrxn/dev/30days/c30/.build/case/ladder-sysroot/usr/include"
   ],
   "configure": "",
   "subject": [
@@ -133,28 +133,10 @@
   ],
   "buildCommand": "(set -e\nmake\n(\nset -e\nmkdir -p tests/evocc-full\nprintf '%s\\n' \"${CC:-gcc-14} -std=c89 -O2 -c tests/unity/src/unity.c -o tests/evocc-full/unity.o\"\n\"${CC:-gcc-14}\" -std=c89 -O2 -c tests/unity/src/unity.c -o tests/evocc-full/unity.o\nfor test in parse_examples parse_number parse_hex4 parse_string parse_array parse_object parse_value print_string print_number print_array print_object print_value misc_tests parse_with_opts compare_tests cjson_add readme_examples minify_tests json_patch_tests old_utils_tests misc_utils_tests; do\n  printf '%s\\n' \"${CC:-gcc-14} -std=c89 -O2 -c tests/$test.c -o tests/evocc-full/$test.o\"\n  \"${CC:-gcc-14}\" -std=c89 -O2 -c tests/$test.c -o tests/evocc-full/$test.o\ndone\n)\n(\nset -e\n# Rebuild archives even when restored objects have equal/coarse timestamps.\n# The independently audited object bytes, not a previous trial's archive, must\n# reach every public/private test executable.\nrm -f cJSON_test libcjson.a libcjson_utils.a\nmake 'CJSON_TEST_SRC=test.c cJSON.o' static tests\nfor test in cjson_add compare_tests minify_tests old_utils_tests misc_utils_tests; do\n  \"${CC:-gcc-14}\" -DCJSON_TESTS_COMMON_H -include ./cJSON.h -include stdbool.h -include string.h tests/$test.c tests/unity/src/unity.c cJSON.o cJSON_Utils.o -lm -o tests/$test\ndone\nfor test in parse_examples parse_number parse_hex4 parse_string parse_array parse_object parse_value print_string print_number print_array print_object print_value misc_tests parse_with_opts compare_tests cjson_add readme_examples minify_tests json_patch_tests old_utils_tests misc_utils_tests; do\n  \"${CC:-gcc-14}\" tests/evocc-full/$test.o tests/evocc-full/unity.o libcjson_utils.a libcjson.a -lm -o tests/evocc-full/$test\ndone\n)\n)",
   "optionsTheDriverRejects": [],
-  "omittedFlags": [
-   "-Wall",
-   "-Wc++-compat",
-   "-Wcast-align",
-   "-Wcast-qual",
-   "-Wconversion",
-   "-Werror",
-   "-Wformat=2",
-   "-Winit-self",
-   "-Wmissing-prototypes",
-   "-Wshadow",
-   "-Wstrict-overflow=2",
-   "-Wstrict-prototypes",
-   "-Wswitch-default",
-   "-Wundef",
-   "-Wwrite-strings",
-   "-fstack-protector",
-   "-pedantic"
-  ]
+  "omittedFlags": []
  },
  "frontEndGaps": [],
  "defects": [],
- "evidence": ".evidence/ladder/cjson/20260927T092953Z",
+ "evidence": ".evidence/ladder/cjson/20261025T050745Z",
  "summaryLine": "cjson: 23 of 23 units by EvoCC in a passing build; refused by code {}"
 }

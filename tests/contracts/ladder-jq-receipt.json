@@ -3,12 +3,12 @@
  "rung": "E10",
  "subject": "jq",
  "authority": "docs/archive/roadmap.md, milestone ladder",
- "run": "20261010T094547Z",
+ "run": "20261025T045819Z",
  "pin": "jq-1.8.2",
  "url": "https://github.com/jqlang/jq/releases/download/jq-1.8.2/jq-1.8.2.tar.gz",
  "tarballSha256": "71b8d6e8f5fe81f6c6d0d110e3892251f6ce76ed095abd315e26e6e1193af3af",
  "tarball": "jq-1.8.2.tar.gz",
- "driverSha256": "e4c658668f503ba23b80a1ec7c398c0b12f24d806f1642276358fe38f1448130",
+ "driverSha256": "dc02c797ef4d8a3f2d3d71c1b28f7b81d544b7ba9593811afcee53652bd0c1b9",
  "target": "aarch64-unknown-linux-gnu",
  "unitsTotal": 70,
  "unmeasuredBuildUnits": [],
@@ -16,8 +16,8 @@
  "unitsSubstituted": 70,
  "unitsRebuiltByMake": [],
  "substitutedUnits": [
-  "vendor/oniguruma/src/regparse.o",
   "vendor/oniguruma/src/regcomp.o",
+  "vendor/oniguruma/src/regparse.o",
   "vendor/oniguruma/src/regexec.o",
   "vendor/oniguruma/src/regenc.o",
   "vendor/oniguruma/src/regerror.o",
@@ -288,6 +288,6 @@
  },
  "frontEndGaps": [],
  "defects": [],
- "evidence": ".evidence/ladder/jq/20261010T094547Z",
+ "evidence": ".evidence/ladder/jq/20261025T045819Z",
  "summaryLine": "jq: 70 of 70 units by EvoCC in a passing build; refused by code {}"
 }
