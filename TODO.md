@@ -6731,6 +6731,30 @@ plan, RED, flag, gates, one-page note, TODO update in the same commit.
   Every measured TU shrinks, but these six TUs do not establish whole-ladder
   size non-growth. [Default receipt](tests/contracts/application-size-default-20261025-receipt.json),
   [EqSat receipt](tests/contracts/application-size-eqsat-20261025-receipt.json).
+  October 26: the two measured production regressions are repaired, not merely
+  reclassified. Inlined result cells remove only their outer qualifiers;
+  pointee and member qualifiers remain. A single final nonmodifiable record
+  return uses the existing statement-expression value copy. Csmith run
+  `20261025T162452Z` restores all 16 lost cases: 932 checksum agreements,
+  the same 68 oracle-unusable cases, zero refusals and zero mismatches. All
+  916 previously agreeing cases keep their checksum. The 1,000 sources and
+  both runtime-header sets are byte-identical to the preceding run.
+  System-header warning provenance now follows the include search, and the
+  ladder preserves implicit system paths as `-isystem`. Compiler-created VLA
+  extent captures count as used through their array type; real unused source
+  objects still warn. Mbed TLS run `20261025T171209Z` retains all 382/382 EvoCC
+  objects, with no refusal, exclusion, unmeasured unit or make replacement.
+  Its original selftest and 148/148 CTest pass under unchanged `-Werror`.
+  The final production sources (`e7a3408c`) pass 515 workspace suites:
+  3,875 PASS, zero FAIL, 51 existing ignores, Clippy and formatting; all six
+  Lean steps pass and the Lean receipt is unchanged. The return-value probes
+  also pass 60 native reference/candidate executions on Darwin and Linux.
+  This does not close N09: the other historical source-profile refusals and
+  unusable reference remain recorded, and whole-ladder size non-growth has
+  not been measured. Six-TU sizes are not that exit. The completed Csmith
+  runtimes remain in verified lossless archives; only their expanded copies
+  were retired. [Csmith receipt](tests/contracts/ladder-csmith-receipt.json),
+  [Mbed TLS receipt](tests/contracts/ladder-mbedtls-receipt.json).
 
 - [x] **N10 — Keep one-word records and small arrays in registers** — `DONE`, P1, 2026-10-19.
   `pte_t` and `pmd_t` values live in memory: zero-filled, copied from slot to

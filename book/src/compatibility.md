@@ -21,13 +21,13 @@ from recorded UTC run identifiers; they are not source-release or regeneration d
 | Receipt / lane | Input version / ref / commit | EvoCC checkout | Retained result | Passing / total | Run date |
 |---|---|---|---|---|---|
 | [cjson](https://github.com/onehr/evocc/blob/main/tests/contracts/ladder-cjson-receipt.json) | v1.7.19 (2025-09-09, github.com/DaveGamble/cJSON) | not recorded | PASS | 23/23 units | 2026-10-25 10:32:37 UTC |
-| [csmith](https://github.com/onehr/evocc/blob/main/tests/contracts/ladder-csmith-receipt.json) | commit 0cdc710315cfee9035e22ef4363ca479270d1934 | b2aae0da | INCOMPLETE | 916/1000 programs | 2026-10-25 09:56:15 UTC |
+| [csmith](https://github.com/onehr/evocc/blob/main/tests/contracts/ladder-csmith-receipt.json) | commit 0cdc710315cfee9035e22ef4363ca479270d1934 | e7a3408c | INCOMPLETE | 932/1000 programs | 2026-10-25 16:24:52 UTC |
 | [doom](https://github.com/onehr/evocc/blob/main/tests/contracts/ladder-doom-receipt.json) | commit dcb7a8dbc7a16ce3dda29382ac9aae9d77d21284 | not recorded | PASS | 81/81 units | 2026-10-25 12:01:37 UTC |
 | [torture](https://github.com/onehr/evocc/blob/main/tests/contracts/ladder-e0-receipt.json) | releases/gcc-16.2.0 | b2aae0da | INCOMPLETE | 1538/1692 programs | 2026-10-25 09:52:26 UTC |
 | [jq](https://github.com/onehr/evocc/blob/main/tests/contracts/ladder-jq-receipt.json) | jq-1.8.2 | not recorded | PASS | 70/70 units | 2026-10-25 11:50:50 UTC |
 | [llvm-test-suite](https://github.com/onehr/evocc/blob/main/tests/contracts/ladder-llvm-test-suite-receipt.json) | llvmorg-23.1.0 (2919e55176a572ee085cb46b291c47b7092c363e) | not recorded | INCOMPLETE | 1054/1735 programs | 2026-10-25 11:40:52 UTC |
 | [lua](https://github.com/onehr/evocc/blob/main/tests/contracts/ladder-lua-receipt.json) | 5.5.1 | not recorded | PASS | 34/34 units | 2026-10-25 11:54:09 UTC |
-| [mbedtls](https://github.com/onehr/evocc/blob/main/tests/contracts/ladder-mbedtls-receipt.json) | 4.2.0 (2026-07-07, github.com/Mbed-TLS/mbedtls) | not recorded | INCOMPLETE | 91/382 units | 2026-10-25 11:30:31 UTC |
+| [mbedtls](https://github.com/onehr/evocc/blob/main/tests/contracts/ladder-mbedtls-receipt.json) | 4.2.0 (2026-07-07, github.com/Mbed-TLS/mbedtls) | not recorded | PASS | 382/382 units | 2026-10-25 17:12:09 UTC |
 | [musl](https://github.com/onehr/evocc/blob/main/tests/contracts/ladder-musl-receipt.json) | musl 1.2.6 (2026-03-20, musl.libc.org/releases.html) | not recorded | INCOMPLETE | 1339/1339 units | 2026-10-25 11:29:04 UTC |
 | [polybench](https://github.com/onehr/evocc/blob/main/tests/contracts/ladder-polybench-receipt.json) | 4.2.1-beta (2016-05-20) | not recorded | PASS | 30/30 programs | 2026-10-25 11:40:35 UTC |
 | [sqlite](https://github.com/onehr/evocc/blob/main/tests/contracts/ladder-sqlite-receipt.json) | 3.53.4 public source + testfixture | not recorded | PASS | 86/86 units | 2026-10-25 11:58:38 UTC |
@@ -49,11 +49,10 @@ Compiled: 23.
 ### csmith
 
 Input commit: 0cdc710315cfee9035e22ef4363ca479270d1934. Target: aarch64-unknown-linux-gnu.
-Recorded checkout: b2aae0da; run: 20261025T095615Z.
-Compiler SHA-256: 978a3771912d7b2eafe89228ff2cb3d3c0c996826b2b2875c4cb74932a655ce4.
+Recorded checkout: e7a3408c; run: 20261025T162452Z.
+Compiler SHA-256: a97453ed756d3e19d2f1d790b35a6f4b2a5ef8004edea3b9be435fdd3c59623d.
 Scope: original seeds; unavailable oracles are not passes.
-Raw outcomes: agree=916, oracle-unusable=68, refused=16.
-Refusals: E3101=16.
+Raw outcomes: agree=932, oracle-unusable=68.
 
 ### doom
 
@@ -104,11 +103,10 @@ Compiled: 34.
 ### mbedtls
 
 Input commit: unknown. Target: aarch64-unknown-linux-gnu.
-Recorded checkout: not recorded; run: 20261025T113031Z.
-Compiler SHA-256: 978a3771912d7b2eafe89228ff2cb3d3c0c996826b2b2875c4cb74932a655ce4.
+Recorded checkout: not recorded; run: 20261025T171209Z.
+Compiler SHA-256: 9f486dd69fc138128113205330fd58758ffe8e8f09fb5b0caa59f97643c1b29a.
 Scope: default release selftest and CTest against installed objects; mixed-link ramp.
-Compiled: 91.
-Refusals: W0001=1, W0002=290.
+Compiled: 382.
 
 ### musl
 

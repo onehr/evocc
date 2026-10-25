@@ -3,19 +3,25 @@
  "rung": "E4",
  "subject": "mbedtls",
  "authority": "docs/archive/roadmap.md, milestone ladder",
- "run": "20261025T113031Z",
+ "run": "20261025T171209Z",
  "pin": "4.2.0 (2026-07-07, github.com/Mbed-TLS/mbedtls)",
  "url": "https://github.com/Mbed-TLS/mbedtls/releases/download/mbedtls-4.2.0/mbedtls-4.2.0.tar.bz2",
  "tarballSha256": "2bed9d713b4668f76553b097e72b8aa30bc8f112a940d7ae228d524bbde6ffea",
  "tarball": "mbedtls-4.2.0.tar.bz2",
- "driverSha256": "978a3771912d7b2eafe89228ff2cb3d3c0c996826b2b2875c4cb74932a655ce4",
+ "driverSha256": "9f486dd69fc138128113205330fd58758ffe8e8f09fb5b0caa59f97643c1b29a",
  "target": "aarch64-unknown-linux-gnu",
  "unitsTotal": 382,
  "unmeasuredBuildUnits": [],
- "unitsEvoccCompiled": 91,
- "unitsSubstituted": 91,
+ "unitsEvoccCompiled": 382,
+ "unitsSubstituted": 382,
  "unitsRebuiltByMake": [],
  "substitutedUnits": [
+  "build/CMakeFiles/mbedtls_test_helpers.dir/tests/src/certs.c.o",
+  "build/CMakeFiles/mbedtls_test.dir/framework/tests/src/asn1_helpers.c.o",
+  "build/CMakeFiles/mbedtls_test.dir/framework/tests/src/bignum_codepath_check.c.o",
+  "build/CMakeFiles/mbedtls_test_helpers.dir/tests/src/ssl_context_reset_verifier.c.o",
+  "build/CMakeFiles/mbedtls_test.dir/framework/tests/src/bignum_helpers.c.o",
+  "build/CMakeFiles/mbedtls_test_helpers.dir/tests/src/test_helpers/ssl_helpers.c.o",
   "build/CMakeFiles/mbedtls_test.dir/framework/tests/src/drivers/hash.c.o",
   "build/CMakeFiles/mbedtls_test.dir/framework/tests/src/drivers/platform_builtin_keys.c.o",
   "build/CMakeFiles/mbedtls_test.dir/framework/tests/src/drivers/test_driver_aead.c.o",
@@ -24,30 +30,134 @@
   "build/CMakeFiles/mbedtls_test.dir/framework/tests/src/drivers/test_driver_key_agreement.c.o",
   "build/CMakeFiles/mbedtls_test.dir/framework/tests/src/drivers/test_driver_key_management.c.o",
   "build/CMakeFiles/mbedtls_test.dir/framework/tests/src/drivers/test_driver_mac.c.o",
+  "build/tf-psa-crypto/CMakeFiles/tf_psa_crypto_test.dir/framework/tests/src/asn1_helpers.c.o",
   "build/CMakeFiles/mbedtls_test.dir/framework/tests/src/drivers/test_driver_pake.c.o",
-  "build/tf-psa-crypto/CMakeFiles/tf_psa_crypto_test.dir/framework/tests/src/drivers/hash.c.o",
   "build/CMakeFiles/mbedtls_test.dir/framework/tests/src/drivers/test_driver_signature.c.o",
-  "build/tf-psa-crypto/CMakeFiles/tf_psa_crypto_test.dir/framework/tests/src/drivers/platform_builtin_keys.c.o",
   "build/CMakeFiles/mbedtls_test.dir/framework/tests/src/drivers/xof.c.o",
+  "build/CMakeFiles/mbedtls_test.dir/framework/tests/src/fake_external_rng_for_test.c.o",
+  "build/tf-psa-crypto/CMakeFiles/tf_psa_crypto_test.dir/framework/tests/src/bignum_codepath_check.c.o",
+  "build/CMakeFiles/mbedtls_test.dir/framework/tests/src/fork_helpers.c.o",
+  "build/tf-psa-crypto/CMakeFiles/tf_psa_crypto_test.dir/framework/tests/src/bignum_helpers.c.o",
+  "build/CMakeFiles/mbedtls_test.dir/framework/tests/src/helpers.c.o",
+  "build/tf-psa-crypto/CMakeFiles/tf_psa_crypto_test.dir/framework/tests/src/drivers/hash.c.o",
+  "build/tf-psa-crypto/CMakeFiles/tf_psa_crypto_test.dir/framework/tests/src/drivers/platform_builtin_keys.c.o",
   "build/tf-psa-crypto/CMakeFiles/tf_psa_crypto_test.dir/framework/tests/src/drivers/test_driver_aead.c.o",
   "build/tf-psa-crypto/CMakeFiles/tf_psa_crypto_test.dir/framework/tests/src/drivers/test_driver_asymmetric_encryption.c.o",
   "build/tf-psa-crypto/CMakeFiles/tf_psa_crypto_test.dir/framework/tests/src/drivers/test_driver_cipher.c.o",
+  "build/CMakeFiles/mbedtls_test.dir/framework/tests/src/pk_helpers.c.o",
   "build/tf-psa-crypto/CMakeFiles/tf_psa_crypto_test.dir/framework/tests/src/drivers/test_driver_key_agreement.c.o",
   "build/tf-psa-crypto/CMakeFiles/tf_psa_crypto_test.dir/framework/tests/src/drivers/test_driver_key_management.c.o",
   "build/tf-psa-crypto/CMakeFiles/tf_psa_crypto_test.dir/framework/tests/src/drivers/test_driver_mac.c.o",
   "build/tf-psa-crypto/CMakeFiles/tf_psa_crypto_test.dir/framework/tests/src/drivers/test_driver_pake.c.o",
   "build/tf-psa-crypto/CMakeFiles/tf_psa_crypto_test.dir/framework/tests/src/drivers/test_driver_signature.c.o",
+  "build/CMakeFiles/mbedtls_test.dir/framework/tests/src/psa_crypto_helpers.c.o",
   "build/tf-psa-crypto/CMakeFiles/tf_psa_crypto_test.dir/framework/tests/src/drivers/xof.c.o",
+  "build/tf-psa-crypto/CMakeFiles/tf_psa_crypto_test.dir/framework/tests/src/fake_external_rng_for_test.c.o",
+  "build/CMakeFiles/mbedtls_test.dir/framework/tests/src/psa_crypto_stubs.c.o",
+  "build/tf-psa-crypto/CMakeFiles/tf_psa_crypto_test.dir/framework/tests/src/fork_helpers.c.o",
+  "build/CMakeFiles/mbedtls_test.dir/framework/tests/src/psa_exercise_key.c.o",
+  "build/tf-psa-crypto/CMakeFiles/tf_psa_crypto_test.dir/framework/tests/src/helpers.c.o",
+  "build/tf-psa-crypto/CMakeFiles/tf_psa_crypto_test.dir/framework/tests/src/pk_helpers.c.o",
+  "build/CMakeFiles/mbedtls_test.dir/framework/tests/src/psa_memory_poisoning_wrappers.c.o",
+  "build/tf-psa-crypto/CMakeFiles/tf_psa_crypto_test.dir/framework/tests/src/psa_crypto_helpers.c.o",
+  "build/CMakeFiles/mbedtls_test.dir/framework/tests/src/random.c.o",
+  "build/tf-psa-crypto/CMakeFiles/tf_psa_crypto_test.dir/framework/tests/src/psa_crypto_stubs.c.o",
+  "build/CMakeFiles/mbedtls_test.dir/framework/tests/src/test_memory.c.o",
+  "build/tf-psa-crypto/CMakeFiles/tf_psa_crypto_test.dir/framework/tests/src/psa_exercise_key.c.o",
+  "build/CMakeFiles/mbedtls_test.dir/framework/tests/src/threading_helpers.c.o",
+  "build/tf-psa-crypto/drivers/everest/CMakeFiles/everest.dir/library/x25519.c.o",
+  "build/tf-psa-crypto/drivers/everest/CMakeFiles/everest.dir/library/Hacl_Curve25519_joined.c.o",
+  "build/tf-psa-crypto/CMakeFiles/tf_psa_crypto_test.dir/framework/tests/src/psa_memory_poisoning_wrappers.c.o",
   "build/tf-psa-crypto/drivers/p256-m/CMakeFiles/p256-m.dir/p256-m_driver_entrypoints.c.o",
+  "build/tf-psa-crypto/CMakeFiles/tf_psa_crypto_test.dir/framework/tests/src/random.c.o",
   "build/tf-psa-crypto/drivers/p256-m/CMakeFiles/p256-m.dir/p256-m/p256-m.c.o",
+  "build/tf-psa-crypto/drivers/builtin/CMakeFiles/builtin.dir/src/aes.c.o",
+  "build/tf-psa-crypto/CMakeFiles/tf_psa_crypto_test.dir/framework/tests/src/test_memory.c.o",
+  "build/tf-psa-crypto/drivers/builtin/CMakeFiles/builtin.dir/src/aesce.c.o",
+  "build/tf-psa-crypto/CMakeFiles/tf_psa_crypto_test.dir/framework/tests/src/threading_helpers.c.o",
   "build/tf-psa-crypto/CMakeFiles/tf_psa_crypto_test.dir/tests/src/psa_test_wrappers.c.o",
+  "build/tf-psa-crypto/drivers/builtin/CMakeFiles/builtin.dir/src/aesni.c.o",
+  "build/tf-psa-crypto/drivers/pqcp/CMakeFiles/pqcp.dir/src/psa_crypto_mldsa.c.o",
+  "build/tf-psa-crypto/drivers/builtin/CMakeFiles/builtin.dir/src/aria.c.o",
   "build/tf-psa-crypto/drivers/pqcp/CMakeFiles/pqcp.dir/src/wrap_mldsa_native.c.o",
+  "build/tf-psa-crypto/extras/CMakeFiles/extras.dir/lmots.c.o",
+  "build/tf-psa-crypto/extras/CMakeFiles/extras.dir/lms.c.o",
+  "build/tf-psa-crypto/drivers/builtin/CMakeFiles/builtin.dir/src/bignum.c.o",
+  "build/tf-psa-crypto/extras/CMakeFiles/extras.dir/md.c.o",
+  "build/tf-psa-crypto/drivers/builtin/CMakeFiles/builtin.dir/src/bignum_core.c.o",
+  "build/tf-psa-crypto/extras/CMakeFiles/extras.dir/nist_kw.c.o",
+  "build/tf-psa-crypto/extras/CMakeFiles/extras.dir/pk.c.o",
+  "build/tf-psa-crypto/drivers/builtin/CMakeFiles/builtin.dir/src/bignum_mod.c.o",
+  "build/tf-psa-crypto/drivers/builtin/CMakeFiles/builtin.dir/src/bignum_mod_raw.c.o",
+  "build/tf-psa-crypto/extras/CMakeFiles/extras.dir/pk_ecc.c.o",
+  "build/tf-psa-crypto/drivers/builtin/CMakeFiles/builtin.dir/src/block_cipher.c.o",
+  "build/tf-psa-crypto/extras/CMakeFiles/extras.dir/pk_rsa.c.o",
+  "build/tf-psa-crypto/drivers/builtin/CMakeFiles/builtin.dir/src/camellia.c.o",
+  "build/tf-psa-crypto/extras/CMakeFiles/extras.dir/pk_wrap.c.o",
+  "build/tf-psa-crypto/drivers/builtin/CMakeFiles/builtin.dir/src/ccm.c.o",
+  "build/tf-psa-crypto/extras/CMakeFiles/extras.dir/pkparse.c.o",
+  "build/tf-psa-crypto/drivers/builtin/CMakeFiles/builtin.dir/src/chacha20.c.o",
+  "build/tf-psa-crypto/extras/CMakeFiles/extras.dir/pkwrite.c.o",
+  "build/tf-psa-crypto/drivers/builtin/CMakeFiles/builtin.dir/src/chacha20_neon.c.o",
+  "build/tf-psa-crypto/drivers/builtin/CMakeFiles/builtin.dir/src/chachapoly.c.o",
+  "build/tf-psa-crypto/platform/CMakeFiles/platform.dir/memory_buffer_alloc.c.o",
+  "build/tf-psa-crypto/platform/CMakeFiles/platform.dir/platform.c.o",
+  "build/tf-psa-crypto/drivers/builtin/CMakeFiles/builtin.dir/src/cipher.c.o",
+  "build/tf-psa-crypto/platform/CMakeFiles/platform.dir/platform_util.c.o",
+  "build/tf-psa-crypto/drivers/builtin/CMakeFiles/builtin.dir/src/cipher_wrap.c.o",
+  "build/tf-psa-crypto/platform/CMakeFiles/platform.dir/threading.c.o",
+  "build/tf-psa-crypto/drivers/builtin/CMakeFiles/builtin.dir/src/cmac.c.o",
+  "build/tf-psa-crypto/utilities/CMakeFiles/utilities.dir/asn1parse.c.o",
+  "build/tf-psa-crypto/drivers/builtin/CMakeFiles/builtin.dir/src/ctr_drbg.c.o",
+  "build/tf-psa-crypto/utilities/CMakeFiles/utilities.dir/asn1write.c.o",
+  "build/tf-psa-crypto/drivers/builtin/CMakeFiles/builtin.dir/src/ecdsa.c.o",
+  "build/tf-psa-crypto/utilities/CMakeFiles/utilities.dir/base64.c.o",
+  "build/tf-psa-crypto/drivers/builtin/CMakeFiles/builtin.dir/src/ecjpake.c.o",
+  "build/tf-psa-crypto/utilities/CMakeFiles/utilities.dir/constant_time.c.o",
+  "build/tf-psa-crypto/drivers/builtin/CMakeFiles/builtin.dir/src/ecp.c.o",
+  "build/tf-psa-crypto/utilities/CMakeFiles/utilities.dir/oid.c.o",
+  "build/tf-psa-crypto/utilities/CMakeFiles/utilities.dir/pem.c.o",
+  "build/tf-psa-crypto/drivers/builtin/CMakeFiles/builtin.dir/src/ecp_curves.c.o",
+  "build/tf-psa-crypto/utilities/CMakeFiles/utilities.dir/pkcs5.c.o",
+  "build/tf-psa-crypto/drivers/builtin/CMakeFiles/builtin.dir/src/entropy.c.o",
+  "build/tf-psa-crypto/drivers/builtin/CMakeFiles/builtin.dir/src/entropy_poll.c.o",
+  "build/tf-psa-crypto/drivers/builtin/CMakeFiles/builtin.dir/src/gcm.c.o",
+  "build/tf-psa-crypto/drivers/builtin/CMakeFiles/builtin.dir/src/hmac_drbg.c.o",
+  "build/tf-psa-crypto/drivers/builtin/CMakeFiles/builtin.dir/src/md5.c.o",
+  "build/tf-psa-crypto/drivers/builtin/CMakeFiles/builtin.dir/src/poly1305.c.o",
+  "build/tf-psa-crypto/drivers/builtin/CMakeFiles/builtin.dir/src/psa_crypto_aead.c.o",
+  "build/tf-psa-crypto/drivers/builtin/CMakeFiles/builtin.dir/src/psa_crypto_cipher.c.o",
+  "build/tf-psa-crypto/drivers/builtin/CMakeFiles/builtin.dir/src/psa_crypto_ecp.c.o",
+  "build/tf-psa-crypto/drivers/builtin/CMakeFiles/builtin.dir/src/psa_crypto_ffdh.c.o",
+  "build/tf-psa-crypto/drivers/builtin/CMakeFiles/builtin.dir/src/psa_crypto_hash.c.o",
+  "build/tf-psa-crypto/drivers/builtin/CMakeFiles/builtin.dir/src/psa_crypto_mac.c.o",
+  "build/tf-psa-crypto/drivers/builtin/CMakeFiles/builtin.dir/src/psa_crypto_pake.c.o",
+  "build/tf-psa-crypto/drivers/builtin/CMakeFiles/builtin.dir/src/psa_crypto_rsa.c.o",
+  "build/tf-psa-crypto/drivers/builtin/CMakeFiles/builtin.dir/src/psa_crypto_xof.c.o",
+  "build/tf-psa-crypto/drivers/builtin/CMakeFiles/builtin.dir/src/psa_util_internal.c.o",
+  "build/tf-psa-crypto/drivers/builtin/CMakeFiles/builtin.dir/src/ripemd160.c.o",
+  "build/tf-psa-crypto/drivers/builtin/CMakeFiles/builtin.dir/src/rsa.c.o",
+  "build/tf-psa-crypto/drivers/builtin/CMakeFiles/builtin.dir/src/rsa_alt_helpers.c.o",
+  "build/tf-psa-crypto/drivers/builtin/CMakeFiles/builtin.dir/src/sha1.c.o",
+  "build/tf-psa-crypto/drivers/builtin/CMakeFiles/builtin.dir/src/sha256.c.o",
+  "build/tf-psa-crypto/drivers/builtin/CMakeFiles/builtin.dir/src/sha3.c.o",
+  "build/tf-psa-crypto/drivers/builtin/CMakeFiles/builtin.dir/src/sha512.c.o",
+  "build/tf-psa-crypto/core/CMakeFiles/tfpsacrypto.dir/psa_crypto.c.o",
+  "build/tf-psa-crypto/core/CMakeFiles/tfpsacrypto.dir/psa_crypto_client.c.o",
+  "build/tf-psa-crypto/core/CMakeFiles/tfpsacrypto.dir/psa_crypto_random.c.o",
+  "build/tf-psa-crypto/core/CMakeFiles/tfpsacrypto.dir/psa_crypto_slot_management.c.o",
+  "build/tf-psa-crypto/core/CMakeFiles/tfpsacrypto.dir/psa_crypto_storage.c.o",
+  "build/tf-psa-crypto/core/CMakeFiles/tfpsacrypto.dir/psa_its_file.c.o",
+  "build/tf-psa-crypto/core/CMakeFiles/tfpsacrypto.dir/psa_util.c.o",
+  "build/tf-psa-crypto/core/CMakeFiles/tfpsacrypto.dir/tf_psa_crypto_config.c.o",
+  "build/tf-psa-crypto/core/CMakeFiles/tfpsacrypto.dir/tf_psa_crypto_version.c.o",
+  "build/tf-psa-crypto/core/CMakeFiles/tfpsacrypto.dir/psa_crypto_driver_wrappers_no_static.c.o",
   "build/tf-psa-crypto/programs/psa/CMakeFiles/crypto_examples.dir/crypto_examples.c.o",
   "build/tf-psa-crypto/programs/psa/CMakeFiles/aead_demo.dir/aead_demo.c.o",
   "build/tf-psa-crypto/programs/psa/CMakeFiles/generate_random_uuid.dir/generate_random_uuid.c.o",
   "build/tf-psa-crypto/programs/psa/CMakeFiles/hmac_demo.dir/hmac_demo.c.o",
-  "build/tf-psa-crypto/programs/psa/CMakeFiles/psa_constant_names.dir/psa_constant_names.c.o",
   "build/tf-psa-crypto/programs/psa/CMakeFiles/key_ladder_demo.dir/key_ladder_demo.c.o",
+  "build/tf-psa-crypto/programs/psa/CMakeFiles/psa_constant_names.dir/psa_constant_names.c.o",
   "build/tf-psa-crypto/programs/psa/CMakeFiles/psa_hash.dir/psa_hash.c.o",
   "build/tf-psa-crypto/programs/test/CMakeFiles/benchmark.dir/benchmark.c.o",
   "build/tf-psa-crypto/programs/test/CMakeFiles/which_aes.dir/which_aes.c.o",
@@ -57,25 +167,187 @@
   "build/tf-psa-crypto/programs/fuzz/CMakeFiles/fuzz_privkey.dir/fuzz_privkey.c.o",
   "build/tf-psa-crypto/programs/fuzz/CMakeFiles/fuzz_privkey.dir/fuzz_onefile.c.o",
   "build/tf-psa-crypto/programs/fuzz/CMakeFiles/fuzz_privkey.dir/fuzz_common.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_aes.cbc.dir/test_suite_aes.cbc.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_aes.cfb.dir/test_suite_aes.cfb.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_aes.ctr.dir/test_suite_aes.ctr.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_aes.ecb.dir/test_suite_aes.ecb.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_aes.ofb.dir/test_suite_aes.ofb.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_aes.rest.dir/test_suite_aes.rest.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_aes.xts.dir/test_suite_aes.xts.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_alignment.dir/test_suite_alignment.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_aria.dir/test_suite_aria.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_asn1parse.dir/test_suite_asn1parse.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_asn1write.dir/test_suite_asn1write.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_base64.dir/test_suite_base64.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_bignum.generated.dir/test_suite_bignum.generated.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_bignum.misc.dir/test_suite_bignum.misc.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_bignum_core.misc.dir/test_suite_bignum_core.misc.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_bignum_core.generated.dir/test_suite_bignum_core.generated.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_bignum_mod.misc.dir/test_suite_bignum_mod.misc.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_bignum_mod.generated.dir/test_suite_bignum_mod.generated.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_bignum_mod_raw.dir/test_suite_bignum_mod_raw.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_bignum_mod_raw.generated.dir/test_suite_bignum_mod_raw.generated.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_bignum_random.dir/test_suite_bignum_random.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_block_cipher.dir/test_suite_block_cipher.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_camellia.dir/test_suite_camellia.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_ccm.dir/test_suite_ccm.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_chacha20.dir/test_suite_chacha20.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_chachapoly.dir/test_suite_chachapoly.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_cipher.aes.dir/test_suite_cipher.aes.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_cipher.aria.dir/test_suite_cipher.aria.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_cipher.camellia.dir/test_suite_cipher.camellia.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_cipher.ccm.dir/test_suite_cipher.ccm.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_cipher.chacha20.dir/test_suite_cipher.chacha20.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_cipher.chachapoly.dir/test_suite_cipher.chachapoly.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_cipher.constant_time.dir/test_suite_cipher.constant_time.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_cipher.gcm.dir/test_suite_cipher.gcm.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_cipher.misc.dir/test_suite_cipher.misc.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_cipher.padding.dir/test_suite_cipher.padding.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_cmac.dir/test_suite_cmac.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_common.dir/test_suite_common.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_config.crypto_combinations.dir/test_suite_config.crypto_combinations.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_config.psa_boolean.dir/test_suite_config.psa_boolean.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_config.psa_combinations.dir/test_suite_config.psa_combinations.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_constant_time.dir/test_suite_constant_time.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_ctr_drbg.dir/test_suite_ctr_drbg.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_dispatch_transparent.dilithium_py.dir/test_suite_dispatch_transparent.dilithium_py.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_dispatch_transparent.key.dir/test_suite_dispatch_transparent.key.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_dispatch_transparent.mldsa_multipart.dir/test_suite_dispatch_transparent.mldsa_multipart.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_dispatch_transparent.sign.dir/test_suite_dispatch_transparent.sign.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_ecdsa.dir/test_suite_ecdsa.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_ecjpake.dir/test_suite_ecjpake.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_ecp.dir/test_suite_ecp.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_ecp.generated.dir/test_suite_ecp.generated.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_entropy.dir/test_suite_entropy.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_gcm.aes128_de.dir/test_suite_gcm.aes128_de.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_gcm.aes128_en.dir/test_suite_gcm.aes128_en.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_gcm.aes192_de.dir/test_suite_gcm.aes192_de.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_gcm.aes192_en.dir/test_suite_gcm.aes192_en.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_gcm.aes256_de.dir/test_suite_gcm.aes256_de.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_gcm.aes256_en.dir/test_suite_gcm.aes256_en.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_gcm.camellia.dir/test_suite_gcm.camellia.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_gcm.misc.dir/test_suite_gcm.misc.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_hmac_drbg.misc.dir/test_suite_hmac_drbg.misc.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_hmac_drbg.no_reseed.dir/test_suite_hmac_drbg.no_reseed.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_hmac_drbg.nopr.dir/test_suite_hmac_drbg.nopr.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_hmac_drbg.pr.dir/test_suite_hmac_drbg.pr.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_lmots.dir/test_suite_lmots.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_lms.dir/test_suite_lms.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_md.dir/test_suite_md.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_mdx.dir/test_suite_mdx.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_memory_buffer_alloc.dir/test_suite_memory_buffer_alloc.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_nist_kw.dir/test_suite_nist_kw.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_oid.dir/test_suite_oid.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_pem.dir/test_suite_pem.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_pk.dir/test_suite_pk.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_pk.pk_can_do_psa.dir/test_suite_pk.pk_can_do_psa.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_pkcs5.dir/test_suite_pkcs5.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_pkparse.dir/test_suite_pkparse.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_pkwrite.dir/test_suite_pkwrite.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_platform.dir/test_suite_platform.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_platform_printf.dir/test_suite_platform_printf.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_platform_threading.dir/test_suite_platform_threading.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_platform_unix.dir/test_suite_platform_unix.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_platform_util.dir/test_suite_platform_util.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_poly1305.dir/test_suite_poly1305.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_pqcp_mldsa.dilithium_py.dir/test_suite_pqcp_mldsa.dilithium_py.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_pqcp_mldsa.misc.dir/test_suite_pqcp_mldsa.misc.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto.concurrent.dir/test_suite_psa_crypto.concurrent.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto.dir/test_suite_psa_crypto.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto.pbkdf2.dir/test_suite_psa_crypto.pbkdf2.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto.persistent.dir/test_suite_psa_crypto.persistent.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto.pkcs1_v15_constant_time.dir/test_suite_psa_crypto.pkcs1_v15_constant_time.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto_attributes.dir/test_suite_psa_crypto_attributes.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto_constant_time.dir/test_suite_psa_crypto_constant_time.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto_driver_wrappers.dir/test_suite_psa_crypto_driver_wrappers.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto_ecp.dir/test_suite_psa_crypto_ecp.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto_entropy.dir/test_suite_psa_crypto_entropy.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto_generate_key.generated.dir/test_suite_psa_crypto_generate_key.generated.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto_hash.dir/test_suite_psa_crypto_hash.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto_init.dir/test_suite_psa_crypto_init.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto_low_hash.generated.dir/test_suite_psa_crypto_low_hash.generated.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto_memory.dir/test_suite_psa_crypto_memory.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto_metadata.dir/test_suite_psa_crypto_metadata.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto_mldsa.dilithium_py.dir/test_suite_psa_crypto_mldsa.dilithium_py.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto_mldsa.misc.dir/test_suite_psa_crypto_mldsa.misc.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto_mldsa.multipart.dir/test_suite_psa_crypto_mldsa.multipart.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto_not_supported.generated.dir/test_suite_psa_crypto_not_supported.generated.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto_not_supported.misc.dir/test_suite_psa_crypto_not_supported.misc.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto_op_fail.generated.dir/test_suite_psa_crypto_op_fail.generated.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto_op_fail.misc.dir/test_suite_psa_crypto_op_fail.misc.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto_pake.dir/test_suite_psa_crypto_pake.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto_persistent_key.dir/test_suite_psa_crypto_persistent_key.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto_slot_management.dir/test_suite_psa_crypto_slot_management.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto_storage_format.current.dir/test_suite_psa_crypto_storage_format.current.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto_storage_format.misc.dir/test_suite_psa_crypto_storage_format.misc.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto_storage_format.v0.dir/test_suite_psa_crypto_storage_format.v0.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto_util.dir/test_suite_psa_crypto_util.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto_xof.dir/test_suite_psa_crypto_xof.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_its.dir/test_suite_psa_its.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_random.dir/test_suite_random.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_rsa.constant_time.dir/test_suite_rsa.constant_time.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_rsa.dir/test_suite_rsa.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_rsa.pkcs1_v15.dir/test_suite_rsa.pkcs1_v15.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_rsa.pkcs1_v21.dir/test_suite_rsa.pkcs1_v21.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_sha1.dir/test_suite_sha1.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_sha256.dir/test_suite_sha256.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_sha3.kat.dir/test_suite_sha3.kat.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_sha3.misc.dir/test_suite_sha3.misc.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_sha3.multi.dir/test_suite_sha3.multi.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_sha3.shake_py.dir/test_suite_sha3.shake_py.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_sha512.dir/test_suite_sha512.c.o",
+  "build/tf-psa-crypto/tests/CMakeFiles/test_suite_tf_psa_crypto_version.dir/test_suite_tf_psa_crypto_version.c.o",
+  "build/library/CMakeFiles/mbedx509.dir/error.c.o",
   "build/library/CMakeFiles/mbedx509.dir/mbedtls_config.c.o",
+  "build/library/CMakeFiles/mbedx509.dir/pkcs7.c.o",
+  "build/library/CMakeFiles/mbedx509.dir/x509.c.o",
+  "build/library/CMakeFiles/mbedx509.dir/x509_create.c.o",
+  "build/library/CMakeFiles/mbedx509.dir/x509_crl.c.o",
+  "build/library/CMakeFiles/mbedx509.dir/x509_crt.c.o",
+  "build/library/CMakeFiles/mbedx509.dir/x509_csr.c.o",
+  "build/library/CMakeFiles/mbedx509.dir/x509_oid.c.o",
+  "build/library/CMakeFiles/mbedx509.dir/x509write.c.o",
+  "build/library/CMakeFiles/mbedx509.dir/x509write_crt.c.o",
+  "build/library/CMakeFiles/mbedx509.dir/x509write_csr.c.o",
+  "build/library/CMakeFiles/mbedtls.dir/debug.c.o",
   "build/programs/util/CMakeFiles/pem2der.dir/pem2der.c.o",
   "build/programs/util/CMakeFiles/strerror.dir/strerror.c.o",
+  "build/library/CMakeFiles/mbedtls.dir/mps_reader.c.o",
   "build/programs/x509/CMakeFiles/cert_req.dir/cert_req.c.o",
   "build/programs/x509/CMakeFiles/cert_write.dir/cert_write.c.o",
+  "build/library/CMakeFiles/mbedtls.dir/mps_trace.c.o",
   "build/programs/x509/CMakeFiles/crl_app.dir/crl_app.c.o",
+  "build/library/CMakeFiles/mbedtls.dir/net_sockets.c.o",
   "build/programs/x509/CMakeFiles/req_app.dir/req_app.c.o",
+  "build/library/CMakeFiles/mbedtls.dir/ssl_cache.c.o",
+  "build/library/CMakeFiles/mbedtls.dir/ssl_ciphersuites.c.o",
+  "build/library/CMakeFiles/mbedtls.dir/ssl_client.c.o",
+  "build/library/CMakeFiles/mbedtls.dir/ssl_cookie.c.o",
+  "build/library/CMakeFiles/mbedtls.dir/ssl_debug_helpers_generated.c.o",
+  "build/library/CMakeFiles/mbedtls.dir/ssl_msg.c.o",
+  "build/library/CMakeFiles/mbedtls.dir/ssl_ticket.c.o",
+  "build/library/CMakeFiles/mbedtls.dir/ssl_tls.c.o",
+  "build/library/CMakeFiles/mbedtls.dir/ssl_tls12_client.c.o",
+  "build/library/CMakeFiles/mbedtls.dir/ssl_tls12_server.c.o",
+  "build/library/CMakeFiles/mbedtls.dir/ssl_tls13_keys.c.o",
+  "build/library/CMakeFiles/mbedtls.dir/ssl_tls13_server.c.o",
+  "build/library/CMakeFiles/mbedtls.dir/ssl_tls13_client.c.o",
+  "build/library/CMakeFiles/mbedtls.dir/ssl_tls13_generic.c.o",
+  "build/library/CMakeFiles/mbedtls.dir/timing.c.o",
+  "build/library/CMakeFiles/mbedtls.dir/version.c.o",
+  "build/library/CMakeFiles/mbedtls.dir/version_features.c.o",
   "build/programs/fuzz/CMakeFiles/fuzz_x509crl.dir/fuzz_x509crl.c.o",
   "build/programs/fuzz/CMakeFiles/fuzz_x509crt.dir/fuzz_x509crt.c.o",
   "build/programs/fuzz/CMakeFiles/fuzz_x509crt.dir/__/__/tf-psa-crypto/programs/fuzz/fuzz_onefile.c.o",
   "build/programs/fuzz/CMakeFiles/fuzz_x509crl.dir/__/__/tf-psa-crypto/programs/fuzz/fuzz_onefile.c.o",
-  "build/programs/fuzz/CMakeFiles/fuzz_pkcs7.dir/fuzz_pkcs7.c.o",
   "build/programs/fuzz/CMakeFiles/fuzz_x509csr.dir/fuzz_x509csr.c.o",
+  "build/programs/fuzz/CMakeFiles/fuzz_pkcs7.dir/fuzz_pkcs7.c.o",
   "build/programs/fuzz/CMakeFiles/fuzz_pkcs7.dir/__/__/tf-psa-crypto/programs/fuzz/fuzz_onefile.c.o",
   "build/programs/fuzz/CMakeFiles/fuzz_x509csr.dir/__/__/tf-psa-crypto/programs/fuzz/fuzz_onefile.c.o",
   "build/programs/fuzz/CMakeFiles/fuzz_client.dir/fuzz_client.c.o",
   "build/programs/fuzz/CMakeFiles/fuzz_dtlsclient.dir/fuzz_dtlsclient.c.o",
-  "build/programs/fuzz/CMakeFiles/fuzz_dtlsclient.dir/__/__/tf-psa-crypto/programs/fuzz/fuzz_onefile.c.o",
   "build/programs/fuzz/CMakeFiles/fuzz_client.dir/__/__/tf-psa-crypto/programs/fuzz/fuzz_onefile.c.o",
+  "build/programs/fuzz/CMakeFiles/fuzz_dtlsclient.dir/__/__/tf-psa-crypto/programs/fuzz/fuzz_onefile.c.o",
   "build/programs/fuzz/CMakeFiles/fuzz_client.dir/__/__/tf-psa-crypto/programs/fuzz/fuzz_common.c.o",
   "build/programs/fuzz/CMakeFiles/fuzz_dtlsclient.dir/__/__/tf-psa-crypto/programs/fuzz/fuzz_common.c.o",
   "build/programs/fuzz/CMakeFiles/fuzz_dtlsserver.dir/fuzz_dtlsserver.c.o",
@@ -84,8 +356,8 @@
   "build/programs/fuzz/CMakeFiles/fuzz_server.dir/__/__/tf-psa-crypto/programs/fuzz/fuzz_onefile.c.o",
   "build/programs/fuzz/CMakeFiles/fuzz_dtlsserver.dir/__/__/tf-psa-crypto/programs/fuzz/fuzz_common.c.o",
   "build/programs/fuzz/CMakeFiles/fuzz_server.dir/__/__/tf-psa-crypto/programs/fuzz/fuzz_common.c.o",
-  "build/programs/ssl/CMakeFiles/dtls_server.dir/dtls_server.c.o",
   "build/programs/ssl/CMakeFiles/dtls_client.dir/dtls_client.c.o",
+  "build/programs/ssl/CMakeFiles/dtls_server.dir/dtls_server.c.o",
   "build/programs/ssl/CMakeFiles/mini_client.dir/mini_client.c.o",
   "build/programs/ssl/CMakeFiles/ssl_client1.dir/ssl_client1.c.o",
   "build/programs/ssl/CMakeFiles/ssl_client2.dir/ssl_client2.c.o",
@@ -97,6 +369,7 @@
   "build/programs/ssl/CMakeFiles/ssl_server.dir/ssl_server.c.o",
   "build/programs/ssl/CMakeFiles/ssl_server2.dir/ssl_server2.c.o",
   "build/programs/ssl/CMakeFiles/ssl_pthread_server.dir/ssl_pthread_server.c.o",
+  "build/programs/test/CMakeFiles/metatest.dir/__/__/framework/tests/programs/metatest.c.o",
   "build/programs/ssl/CMakeFiles/ssl_server2.dir/ssl_test_lib.c.o",
   "build/programs/ssl/CMakeFiles/ssl_server2.dir/__/test/query_config.c.o",
   "build/programs/test/CMakeFiles/query_compile_time_config.dir/__/__/framework/tests/programs/query_compile_time_config.c.o",
@@ -106,1766 +379,33 @@
   "build/programs/test/CMakeFiles/udp_proxy.dir/udp_proxy.c.o",
   "build/programs/test/CMakeFiles/zeroize.dir/__/__/framework/tests/programs/zeroize.c.o",
   "build/programs/x509/CMakeFiles/cert_app.dir/cert_app.c.o",
-  "build/programs/x509/CMakeFiles/load_roots.dir/load_roots.c.o"
+  "build/programs/x509/CMakeFiles/load_roots.dir/load_roots.c.o",
+  "build/tests/CMakeFiles/test_suite_config.mbedtls_boolean.dir/test_suite_config.mbedtls_boolean.c.o",
+  "build/tests/CMakeFiles/test_suite_config.tls_combinations.dir/test_suite_config.tls_combinations.c.o",
+  "build/tests/CMakeFiles/test_suite_constant_time_hmac.dir/test_suite_constant_time_hmac.c.o",
+  "build/tests/CMakeFiles/test_suite_debug.dir/test_suite_debug.c.o",
+  "build/tests/CMakeFiles/test_suite_error.dir/test_suite_error.c.o",
+  "build/tests/CMakeFiles/test_suite_mps.dir/test_suite_mps.c.o",
+  "build/tests/CMakeFiles/test_suite_net.dir/test_suite_net.c.o",
+  "build/tests/CMakeFiles/test_suite_pkcs7.dir/test_suite_pkcs7.c.o",
+  "build/tests/CMakeFiles/test_suite_ssl.dir/test_suite_ssl.c.o",
+  "build/tests/CMakeFiles/test_suite_ssl.records.dir/test_suite_ssl.records.c.o",
+  "build/tests/CMakeFiles/test_suite_ssl.tls-defrag.dir/test_suite_ssl.tls-defrag.c.o",
+  "build/tests/CMakeFiles/test_suite_ssl_decrypt.misc.dir/test_suite_ssl_decrypt.misc.c.o",
+  "build/tests/CMakeFiles/test_suite_test_helpers.dir/test_suite_test_helpers.c.o",
+  "build/tests/CMakeFiles/test_suite_timing.dir/test_suite_timing.c.o",
+  "build/tests/CMakeFiles/test_suite_version.dir/test_suite_version.c.o",
+  "build/tests/CMakeFiles/test_suite_x509_oid.dir/test_suite_x509_oid.c.o",
+  "build/tests/CMakeFiles/test_suite_x509parse.dir/test_suite_x509parse.c.o",
+  "build/tests/CMakeFiles/test_suite_x509write.dir/test_suite_x509write.c.o"
  ],
  "unitsExcluded": 0,
- "unitsInPassingBuild": 91,
+ "unitsInPassingBuild": 382,
  "outcomes": {
-  "refused": 291,
-  "assembled": 91
+  "assembled": 382
  },
- "refusalsByCode": {
-  "W0002": 290,
-  "W0001": 1
- },
- "refusals": [
-  {
-   "unit": "build/CMakeFiles/mbedtls_test.dir/framework/tests/src/asn1_helpers.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/CMakeFiles/mbedtls_test_helpers.dir/tests/src/certs.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/CMakeFiles/mbedtls_test.dir/framework/tests/src/bignum_codepath_check.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/CMakeFiles/mbedtls_test_helpers.dir/tests/src/ssl_context_reset_verifier.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/CMakeFiles/mbedtls_test.dir/framework/tests/src/bignum_helpers.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/CMakeFiles/mbedtls_test_helpers.dir/tests/src/test_helpers/ssl_helpers.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/CMakeFiles/tf_psa_crypto_test.dir/framework/tests/src/asn1_helpers.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/CMakeFiles/tf_psa_crypto_test.dir/framework/tests/src/bignum_codepath_check.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/CMakeFiles/tf_psa_crypto_test.dir/framework/tests/src/bignum_helpers.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/CMakeFiles/mbedtls_test.dir/framework/tests/src/fake_external_rng_for_test.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/CMakeFiles/mbedtls_test.dir/framework/tests/src/fork_helpers.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/CMakeFiles/mbedtls_test.dir/framework/tests/src/helpers.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/CMakeFiles/mbedtls_test.dir/framework/tests/src/pk_helpers.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/CMakeFiles/mbedtls_test.dir/framework/tests/src/psa_crypto_helpers.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/CMakeFiles/tf_psa_crypto_test.dir/framework/tests/src/fake_external_rng_for_test.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/CMakeFiles/mbedtls_test.dir/framework/tests/src/psa_crypto_stubs.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/CMakeFiles/tf_psa_crypto_test.dir/framework/tests/src/fork_helpers.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/CMakeFiles/mbedtls_test.dir/framework/tests/src/psa_exercise_key.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/CMakeFiles/tf_psa_crypto_test.dir/framework/tests/src/helpers.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/CMakeFiles/mbedtls_test.dir/framework/tests/src/psa_memory_poisoning_wrappers.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/CMakeFiles/tf_psa_crypto_test.dir/framework/tests/src/pk_helpers.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/CMakeFiles/mbedtls_test.dir/framework/tests/src/random.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/CMakeFiles/tf_psa_crypto_test.dir/framework/tests/src/psa_crypto_helpers.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/CMakeFiles/mbedtls_test.dir/framework/tests/src/test_memory.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/CMakeFiles/mbedtls_test.dir/framework/tests/src/threading_helpers.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/CMakeFiles/tf_psa_crypto_test.dir/framework/tests/src/psa_crypto_stubs.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/drivers/everest/CMakeFiles/everest.dir/library/x25519.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/CMakeFiles/tf_psa_crypto_test.dir/framework/tests/src/psa_exercise_key.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/drivers/everest/CMakeFiles/everest.dir/library/Hacl_Curve25519_joined.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/CMakeFiles/tf_psa_crypto_test.dir/framework/tests/src/psa_memory_poisoning_wrappers.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/drivers/builtin/CMakeFiles/builtin.dir/src/aes.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/CMakeFiles/tf_psa_crypto_test.dir/framework/tests/src/random.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/drivers/builtin/CMakeFiles/builtin.dir/src/aesce.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/drivers/builtin/CMakeFiles/builtin.dir/src/aesni.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/CMakeFiles/tf_psa_crypto_test.dir/framework/tests/src/test_memory.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/drivers/builtin/CMakeFiles/builtin.dir/src/aria.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/CMakeFiles/tf_psa_crypto_test.dir/framework/tests/src/threading_helpers.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/drivers/builtin/CMakeFiles/builtin.dir/src/bignum.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/drivers/pqcp/CMakeFiles/pqcp.dir/src/psa_crypto_mldsa.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/drivers/builtin/CMakeFiles/builtin.dir/src/bignum_core.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/extras/CMakeFiles/extras.dir/lmots.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/drivers/builtin/CMakeFiles/builtin.dir/src/bignum_mod.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/extras/CMakeFiles/extras.dir/lms.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/drivers/builtin/CMakeFiles/builtin.dir/src/bignum_mod_raw.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/drivers/builtin/CMakeFiles/builtin.dir/src/block_cipher.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/extras/CMakeFiles/extras.dir/md.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/drivers/builtin/CMakeFiles/builtin.dir/src/camellia.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/extras/CMakeFiles/extras.dir/nist_kw.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/drivers/builtin/CMakeFiles/builtin.dir/src/ccm.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/extras/CMakeFiles/extras.dir/pk.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/drivers/builtin/CMakeFiles/builtin.dir/src/chacha20.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/drivers/builtin/CMakeFiles/builtin.dir/src/chacha20_neon.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/extras/CMakeFiles/extras.dir/pk_ecc.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/drivers/builtin/CMakeFiles/builtin.dir/src/chachapoly.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/extras/CMakeFiles/extras.dir/pk_rsa.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/drivers/builtin/CMakeFiles/builtin.dir/src/cipher.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/extras/CMakeFiles/extras.dir/pk_wrap.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/drivers/builtin/CMakeFiles/builtin.dir/src/cipher_wrap.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/extras/CMakeFiles/extras.dir/pkparse.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/drivers/builtin/CMakeFiles/builtin.dir/src/cmac.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/extras/CMakeFiles/extras.dir/pkwrite.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/drivers/builtin/CMakeFiles/builtin.dir/src/ctr_drbg.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/drivers/builtin/CMakeFiles/builtin.dir/src/ecdsa.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/platform/CMakeFiles/platform.dir/memory_buffer_alloc.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/platform/CMakeFiles/platform.dir/platform.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/drivers/builtin/CMakeFiles/builtin.dir/src/ecjpake.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/platform/CMakeFiles/platform.dir/platform_util.c.o",
-   "code": "W0001",
-   "message": "unused variable",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/drivers/builtin/CMakeFiles/builtin.dir/src/ecp.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/platform/CMakeFiles/platform.dir/threading.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/drivers/builtin/CMakeFiles/builtin.dir/src/ecp_curves.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/utilities/CMakeFiles/utilities.dir/asn1parse.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/drivers/builtin/CMakeFiles/builtin.dir/src/entropy.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/utilities/CMakeFiles/utilities.dir/asn1write.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/drivers/builtin/CMakeFiles/builtin.dir/src/entropy_poll.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/utilities/CMakeFiles/utilities.dir/base64.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/drivers/builtin/CMakeFiles/builtin.dir/src/gcm.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/utilities/CMakeFiles/utilities.dir/constant_time.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/drivers/builtin/CMakeFiles/builtin.dir/src/hmac_drbg.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/utilities/CMakeFiles/utilities.dir/oid.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/drivers/builtin/CMakeFiles/builtin.dir/src/md5.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/utilities/CMakeFiles/utilities.dir/pem.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/drivers/builtin/CMakeFiles/builtin.dir/src/poly1305.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/drivers/builtin/CMakeFiles/builtin.dir/src/psa_crypto_aead.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/utilities/CMakeFiles/utilities.dir/pkcs5.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/drivers/builtin/CMakeFiles/builtin.dir/src/psa_crypto_cipher.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/drivers/builtin/CMakeFiles/builtin.dir/src/psa_crypto_ecp.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/drivers/builtin/CMakeFiles/builtin.dir/src/psa_crypto_ffdh.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/drivers/builtin/CMakeFiles/builtin.dir/src/psa_crypto_mac.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/drivers/builtin/CMakeFiles/builtin.dir/src/psa_crypto_hash.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/drivers/builtin/CMakeFiles/builtin.dir/src/psa_crypto_pake.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/drivers/builtin/CMakeFiles/builtin.dir/src/psa_crypto_rsa.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/drivers/builtin/CMakeFiles/builtin.dir/src/psa_crypto_xof.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/drivers/builtin/CMakeFiles/builtin.dir/src/psa_util_internal.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/drivers/builtin/CMakeFiles/builtin.dir/src/ripemd160.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/drivers/builtin/CMakeFiles/builtin.dir/src/rsa.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/drivers/builtin/CMakeFiles/builtin.dir/src/rsa_alt_helpers.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/drivers/builtin/CMakeFiles/builtin.dir/src/sha1.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/drivers/builtin/CMakeFiles/builtin.dir/src/sha256.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/drivers/builtin/CMakeFiles/builtin.dir/src/sha3.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/drivers/builtin/CMakeFiles/builtin.dir/src/sha512.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/core/CMakeFiles/tfpsacrypto.dir/psa_crypto.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/core/CMakeFiles/tfpsacrypto.dir/psa_crypto_client.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/core/CMakeFiles/tfpsacrypto.dir/psa_crypto_random.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/core/CMakeFiles/tfpsacrypto.dir/psa_crypto_slot_management.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/core/CMakeFiles/tfpsacrypto.dir/psa_crypto_storage.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/core/CMakeFiles/tfpsacrypto.dir/psa_util.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/core/CMakeFiles/tfpsacrypto.dir/psa_its_file.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/core/CMakeFiles/tfpsacrypto.dir/tf_psa_crypto_config.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/core/CMakeFiles/tfpsacrypto.dir/tf_psa_crypto_version.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/core/CMakeFiles/tfpsacrypto.dir/psa_crypto_driver_wrappers_no_static.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_aes.cbc.dir/test_suite_aes.cbc.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_aes.cfb.dir/test_suite_aes.cfb.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_aes.ctr.dir/test_suite_aes.ctr.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_aes.ecb.dir/test_suite_aes.ecb.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_aes.ofb.dir/test_suite_aes.ofb.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_aes.rest.dir/test_suite_aes.rest.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_aes.xts.dir/test_suite_aes.xts.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_alignment.dir/test_suite_alignment.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_aria.dir/test_suite_aria.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_asn1parse.dir/test_suite_asn1parse.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_asn1write.dir/test_suite_asn1write.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_base64.dir/test_suite_base64.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_bignum.generated.dir/test_suite_bignum.generated.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_bignum.misc.dir/test_suite_bignum.misc.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_bignum_core.generated.dir/test_suite_bignum_core.generated.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_bignum_core.misc.dir/test_suite_bignum_core.misc.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_bignum_mod.misc.dir/test_suite_bignum_mod.misc.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_bignum_mod.generated.dir/test_suite_bignum_mod.generated.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_bignum_mod_raw.dir/test_suite_bignum_mod_raw.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_bignum_mod_raw.generated.dir/test_suite_bignum_mod_raw.generated.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_bignum_random.dir/test_suite_bignum_random.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_block_cipher.dir/test_suite_block_cipher.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_camellia.dir/test_suite_camellia.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_ccm.dir/test_suite_ccm.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_chacha20.dir/test_suite_chacha20.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_chachapoly.dir/test_suite_chachapoly.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_cipher.aes.dir/test_suite_cipher.aes.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_cipher.aria.dir/test_suite_cipher.aria.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_cipher.camellia.dir/test_suite_cipher.camellia.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_cipher.ccm.dir/test_suite_cipher.ccm.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_cipher.chacha20.dir/test_suite_cipher.chacha20.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_cipher.chachapoly.dir/test_suite_cipher.chachapoly.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_cipher.constant_time.dir/test_suite_cipher.constant_time.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_cipher.gcm.dir/test_suite_cipher.gcm.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_cipher.misc.dir/test_suite_cipher.misc.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_cipher.padding.dir/test_suite_cipher.padding.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_cmac.dir/test_suite_cmac.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_common.dir/test_suite_common.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_config.crypto_combinations.dir/test_suite_config.crypto_combinations.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_config.psa_boolean.dir/test_suite_config.psa_boolean.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_config.psa_combinations.dir/test_suite_config.psa_combinations.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_constant_time.dir/test_suite_constant_time.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_ctr_drbg.dir/test_suite_ctr_drbg.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_dispatch_transparent.dilithium_py.dir/test_suite_dispatch_transparent.dilithium_py.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_dispatch_transparent.key.dir/test_suite_dispatch_transparent.key.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_dispatch_transparent.mldsa_multipart.dir/test_suite_dispatch_transparent.mldsa_multipart.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_dispatch_transparent.sign.dir/test_suite_dispatch_transparent.sign.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_ecdsa.dir/test_suite_ecdsa.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_ecjpake.dir/test_suite_ecjpake.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_ecp.dir/test_suite_ecp.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_ecp.generated.dir/test_suite_ecp.generated.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_entropy.dir/test_suite_entropy.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_gcm.aes128_de.dir/test_suite_gcm.aes128_de.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_gcm.aes128_en.dir/test_suite_gcm.aes128_en.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_gcm.aes192_de.dir/test_suite_gcm.aes192_de.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_gcm.aes192_en.dir/test_suite_gcm.aes192_en.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_gcm.aes256_de.dir/test_suite_gcm.aes256_de.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_gcm.aes256_en.dir/test_suite_gcm.aes256_en.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_gcm.misc.dir/test_suite_gcm.misc.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_gcm.camellia.dir/test_suite_gcm.camellia.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_hmac_drbg.misc.dir/test_suite_hmac_drbg.misc.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_hmac_drbg.no_reseed.dir/test_suite_hmac_drbg.no_reseed.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_hmac_drbg.nopr.dir/test_suite_hmac_drbg.nopr.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_hmac_drbg.pr.dir/test_suite_hmac_drbg.pr.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_lmots.dir/test_suite_lmots.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_lms.dir/test_suite_lms.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_md.dir/test_suite_md.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_mdx.dir/test_suite_mdx.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_memory_buffer_alloc.dir/test_suite_memory_buffer_alloc.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_nist_kw.dir/test_suite_nist_kw.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_oid.dir/test_suite_oid.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_pem.dir/test_suite_pem.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_pk.dir/test_suite_pk.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_pk.pk_can_do_psa.dir/test_suite_pk.pk_can_do_psa.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_pkcs5.dir/test_suite_pkcs5.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_pkparse.dir/test_suite_pkparse.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_pkwrite.dir/test_suite_pkwrite.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_platform.dir/test_suite_platform.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_platform_printf.dir/test_suite_platform_printf.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_platform_threading.dir/test_suite_platform_threading.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_platform_unix.dir/test_suite_platform_unix.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_platform_util.dir/test_suite_platform_util.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_poly1305.dir/test_suite_poly1305.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_pqcp_mldsa.dilithium_py.dir/test_suite_pqcp_mldsa.dilithium_py.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_pqcp_mldsa.misc.dir/test_suite_pqcp_mldsa.misc.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto.concurrent.dir/test_suite_psa_crypto.concurrent.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto.dir/test_suite_psa_crypto.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto.pbkdf2.dir/test_suite_psa_crypto.pbkdf2.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto.persistent.dir/test_suite_psa_crypto.persistent.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto.pkcs1_v15_constant_time.dir/test_suite_psa_crypto.pkcs1_v15_constant_time.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto_attributes.dir/test_suite_psa_crypto_attributes.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto_constant_time.dir/test_suite_psa_crypto_constant_time.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto_driver_wrappers.dir/test_suite_psa_crypto_driver_wrappers.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto_ecp.dir/test_suite_psa_crypto_ecp.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto_entropy.dir/test_suite_psa_crypto_entropy.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto_generate_key.generated.dir/test_suite_psa_crypto_generate_key.generated.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto_hash.dir/test_suite_psa_crypto_hash.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto_init.dir/test_suite_psa_crypto_init.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto_low_hash.generated.dir/test_suite_psa_crypto_low_hash.generated.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto_memory.dir/test_suite_psa_crypto_memory.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto_metadata.dir/test_suite_psa_crypto_metadata.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto_mldsa.dilithium_py.dir/test_suite_psa_crypto_mldsa.dilithium_py.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto_mldsa.misc.dir/test_suite_psa_crypto_mldsa.misc.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto_mldsa.multipart.dir/test_suite_psa_crypto_mldsa.multipart.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto_not_supported.generated.dir/test_suite_psa_crypto_not_supported.generated.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto_not_supported.misc.dir/test_suite_psa_crypto_not_supported.misc.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto_op_fail.generated.dir/test_suite_psa_crypto_op_fail.generated.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto_op_fail.misc.dir/test_suite_psa_crypto_op_fail.misc.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto_pake.dir/test_suite_psa_crypto_pake.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto_persistent_key.dir/test_suite_psa_crypto_persistent_key.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto_slot_management.dir/test_suite_psa_crypto_slot_management.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto_storage_format.current.dir/test_suite_psa_crypto_storage_format.current.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto_storage_format.misc.dir/test_suite_psa_crypto_storage_format.misc.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto_storage_format.v0.dir/test_suite_psa_crypto_storage_format.v0.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto_util.dir/test_suite_psa_crypto_util.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto_xof.dir/test_suite_psa_crypto_xof.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_its.dir/test_suite_psa_its.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_random.dir/test_suite_random.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_rsa.constant_time.dir/test_suite_rsa.constant_time.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_rsa.dir/test_suite_rsa.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_rsa.pkcs1_v15.dir/test_suite_rsa.pkcs1_v15.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_rsa.pkcs1_v21.dir/test_suite_rsa.pkcs1_v21.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_sha1.dir/test_suite_sha1.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_sha256.dir/test_suite_sha256.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_sha3.kat.dir/test_suite_sha3.kat.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_sha3.misc.dir/test_suite_sha3.misc.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_sha3.multi.dir/test_suite_sha3.multi.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_sha3.shake_py.dir/test_suite_sha3.shake_py.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_sha512.dir/test_suite_sha512.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tf-psa-crypto/tests/CMakeFiles/test_suite_tf_psa_crypto_version.dir/test_suite_tf_psa_crypto_version.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/library/CMakeFiles/mbedx509.dir/error.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/library/CMakeFiles/mbedx509.dir/pkcs7.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/library/CMakeFiles/mbedx509.dir/x509.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/library/CMakeFiles/mbedx509.dir/x509_create.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/library/CMakeFiles/mbedx509.dir/x509_crl.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/library/CMakeFiles/mbedx509.dir/x509_crt.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/library/CMakeFiles/mbedx509.dir/x509_csr.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/library/CMakeFiles/mbedx509.dir/x509_oid.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/library/CMakeFiles/mbedx509.dir/x509write.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/library/CMakeFiles/mbedx509.dir/x509write_crt.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/library/CMakeFiles/mbedx509.dir/x509write_csr.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/library/CMakeFiles/mbedtls.dir/debug.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/library/CMakeFiles/mbedtls.dir/mps_reader.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/library/CMakeFiles/mbedtls.dir/mps_trace.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/library/CMakeFiles/mbedtls.dir/net_sockets.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/library/CMakeFiles/mbedtls.dir/ssl_cache.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/library/CMakeFiles/mbedtls.dir/ssl_ciphersuites.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/library/CMakeFiles/mbedtls.dir/ssl_client.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/library/CMakeFiles/mbedtls.dir/ssl_cookie.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/library/CMakeFiles/mbedtls.dir/ssl_debug_helpers_generated.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/library/CMakeFiles/mbedtls.dir/ssl_msg.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/library/CMakeFiles/mbedtls.dir/ssl_ticket.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/library/CMakeFiles/mbedtls.dir/ssl_tls.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/library/CMakeFiles/mbedtls.dir/ssl_tls12_client.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/library/CMakeFiles/mbedtls.dir/ssl_tls12_server.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/library/CMakeFiles/mbedtls.dir/ssl_tls13_keys.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/library/CMakeFiles/mbedtls.dir/ssl_tls13_server.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/library/CMakeFiles/mbedtls.dir/ssl_tls13_client.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/library/CMakeFiles/mbedtls.dir/ssl_tls13_generic.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/library/CMakeFiles/mbedtls.dir/timing.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/library/CMakeFiles/mbedtls.dir/version.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/library/CMakeFiles/mbedtls.dir/version_features.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/programs/test/CMakeFiles/metatest.dir/__/__/framework/tests/programs/metatest.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tests/CMakeFiles/test_suite_config.mbedtls_boolean.dir/test_suite_config.mbedtls_boolean.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tests/CMakeFiles/test_suite_config.tls_combinations.dir/test_suite_config.tls_combinations.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tests/CMakeFiles/test_suite_constant_time_hmac.dir/test_suite_constant_time_hmac.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tests/CMakeFiles/test_suite_debug.dir/test_suite_debug.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tests/CMakeFiles/test_suite_error.dir/test_suite_error.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tests/CMakeFiles/test_suite_mps.dir/test_suite_mps.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tests/CMakeFiles/test_suite_net.dir/test_suite_net.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tests/CMakeFiles/test_suite_pkcs7.dir/test_suite_pkcs7.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tests/CMakeFiles/test_suite_ssl.dir/test_suite_ssl.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tests/CMakeFiles/test_suite_ssl.records.dir/test_suite_ssl.records.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tests/CMakeFiles/test_suite_ssl.tls-defrag.dir/test_suite_ssl.tls-defrag.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tests/CMakeFiles/test_suite_ssl_decrypt.misc.dir/test_suite_ssl_decrypt.misc.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tests/CMakeFiles/test_suite_test_helpers.dir/test_suite_test_helpers.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tests/CMakeFiles/test_suite_timing.dir/test_suite_timing.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tests/CMakeFiles/test_suite_version.dir/test_suite_version.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tests/CMakeFiles/test_suite_x509_oid.dir/test_suite_x509_oid.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tests/CMakeFiles/test_suite_x509parse.dir/test_suite_x509parse.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  },
-  {
-   "unit": "build/tests/CMakeFiles/test_suite_x509write.dir/test_suite_x509write.c.o",
-   "code": "W0002",
-   "message": "unused parameter",
-   "at": ""
-  }
- ],
+ "refusalsByCode": {},
+ "refusals": [],
  "excludedUnits": [],
  "failingUnits": [],
  "baselineTest": {
@@ -1878,7 +418,156 @@
   "relinkStatus": 0,
   "stage": "pass",
   "signature": "",
-  "regeneratedInputs": [],
+  "regeneratedInputs": [
+   "build/tests/CMakeFiles/test_suite_config.mbedtls_boolean.dir/test_suite_config.mbedtls_boolean.c.o",
+   "build/tests/CMakeFiles/test_suite_config.tls_combinations.dir/test_suite_config.tls_combinations.c.o",
+   "build/tests/CMakeFiles/test_suite_constant_time_hmac.dir/test_suite_constant_time_hmac.c.o",
+   "build/tests/CMakeFiles/test_suite_debug.dir/test_suite_debug.c.o",
+   "build/tests/CMakeFiles/test_suite_error.dir/test_suite_error.c.o",
+   "build/tests/CMakeFiles/test_suite_mps.dir/test_suite_mps.c.o",
+   "build/tests/CMakeFiles/test_suite_net.dir/test_suite_net.c.o",
+   "build/tests/CMakeFiles/test_suite_pkcs7.dir/test_suite_pkcs7.c.o",
+   "build/tests/CMakeFiles/test_suite_ssl.dir/test_suite_ssl.c.o",
+   "build/tests/CMakeFiles/test_suite_ssl.records.dir/test_suite_ssl.records.c.o",
+   "build/tests/CMakeFiles/test_suite_ssl.tls-defrag.dir/test_suite_ssl.tls-defrag.c.o",
+   "build/tests/CMakeFiles/test_suite_ssl_decrypt.misc.dir/test_suite_ssl_decrypt.misc.c.o",
+   "build/tests/CMakeFiles/test_suite_test_helpers.dir/test_suite_test_helpers.c.o",
+   "build/tests/CMakeFiles/test_suite_timing.dir/test_suite_timing.c.o",
+   "build/tests/CMakeFiles/test_suite_version.dir/test_suite_version.c.o",
+   "build/tests/CMakeFiles/test_suite_x509_oid.dir/test_suite_x509_oid.c.o",
+   "build/tests/CMakeFiles/test_suite_x509parse.dir/test_suite_x509parse.c.o",
+   "build/tests/CMakeFiles/test_suite_x509write.dir/test_suite_x509write.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_aes.cbc.dir/test_suite_aes.cbc.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_aes.cfb.dir/test_suite_aes.cfb.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_aes.ctr.dir/test_suite_aes.ctr.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_aes.ecb.dir/test_suite_aes.ecb.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_aes.ofb.dir/test_suite_aes.ofb.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_aes.rest.dir/test_suite_aes.rest.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_aes.xts.dir/test_suite_aes.xts.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_alignment.dir/test_suite_alignment.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_aria.dir/test_suite_aria.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_asn1parse.dir/test_suite_asn1parse.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_asn1write.dir/test_suite_asn1write.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_base64.dir/test_suite_base64.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_bignum.generated.dir/test_suite_bignum.generated.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_bignum.misc.dir/test_suite_bignum.misc.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_bignum_core.generated.dir/test_suite_bignum_core.generated.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_bignum_core.misc.dir/test_suite_bignum_core.misc.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_bignum_mod.generated.dir/test_suite_bignum_mod.generated.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_bignum_mod.misc.dir/test_suite_bignum_mod.misc.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_bignum_mod_raw.dir/test_suite_bignum_mod_raw.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_bignum_mod_raw.generated.dir/test_suite_bignum_mod_raw.generated.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_bignum_random.dir/test_suite_bignum_random.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_block_cipher.dir/test_suite_block_cipher.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_camellia.dir/test_suite_camellia.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_ccm.dir/test_suite_ccm.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_chacha20.dir/test_suite_chacha20.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_chachapoly.dir/test_suite_chachapoly.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_cipher.aes.dir/test_suite_cipher.aes.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_cipher.aria.dir/test_suite_cipher.aria.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_cipher.camellia.dir/test_suite_cipher.camellia.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_cipher.ccm.dir/test_suite_cipher.ccm.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_cipher.chacha20.dir/test_suite_cipher.chacha20.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_cipher.chachapoly.dir/test_suite_cipher.chachapoly.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_cipher.constant_time.dir/test_suite_cipher.constant_time.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_cipher.gcm.dir/test_suite_cipher.gcm.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_cipher.misc.dir/test_suite_cipher.misc.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_cipher.padding.dir/test_suite_cipher.padding.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_cmac.dir/test_suite_cmac.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_common.dir/test_suite_common.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_config.crypto_combinations.dir/test_suite_config.crypto_combinations.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_config.psa_boolean.dir/test_suite_config.psa_boolean.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_config.psa_combinations.dir/test_suite_config.psa_combinations.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_constant_time.dir/test_suite_constant_time.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_ctr_drbg.dir/test_suite_ctr_drbg.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_dispatch_transparent.dilithium_py.dir/test_suite_dispatch_transparent.dilithium_py.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_dispatch_transparent.key.dir/test_suite_dispatch_transparent.key.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_dispatch_transparent.mldsa_multipart.dir/test_suite_dispatch_transparent.mldsa_multipart.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_dispatch_transparent.sign.dir/test_suite_dispatch_transparent.sign.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_ecdsa.dir/test_suite_ecdsa.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_ecjpake.dir/test_suite_ecjpake.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_ecp.dir/test_suite_ecp.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_ecp.generated.dir/test_suite_ecp.generated.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_entropy.dir/test_suite_entropy.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_gcm.aes128_de.dir/test_suite_gcm.aes128_de.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_gcm.aes128_en.dir/test_suite_gcm.aes128_en.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_gcm.aes192_de.dir/test_suite_gcm.aes192_de.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_gcm.aes192_en.dir/test_suite_gcm.aes192_en.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_gcm.aes256_de.dir/test_suite_gcm.aes256_de.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_gcm.aes256_en.dir/test_suite_gcm.aes256_en.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_gcm.camellia.dir/test_suite_gcm.camellia.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_gcm.misc.dir/test_suite_gcm.misc.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_hmac_drbg.misc.dir/test_suite_hmac_drbg.misc.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_hmac_drbg.no_reseed.dir/test_suite_hmac_drbg.no_reseed.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_hmac_drbg.nopr.dir/test_suite_hmac_drbg.nopr.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_hmac_drbg.pr.dir/test_suite_hmac_drbg.pr.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_lmots.dir/test_suite_lmots.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_lms.dir/test_suite_lms.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_md.dir/test_suite_md.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_mdx.dir/test_suite_mdx.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_memory_buffer_alloc.dir/test_suite_memory_buffer_alloc.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_nist_kw.dir/test_suite_nist_kw.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_oid.dir/test_suite_oid.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_pem.dir/test_suite_pem.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_pk.dir/test_suite_pk.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_pk.pk_can_do_psa.dir/test_suite_pk.pk_can_do_psa.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_pkcs5.dir/test_suite_pkcs5.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_pkparse.dir/test_suite_pkparse.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_pkwrite.dir/test_suite_pkwrite.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_platform.dir/test_suite_platform.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_platform_printf.dir/test_suite_platform_printf.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_platform_threading.dir/test_suite_platform_threading.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_platform_unix.dir/test_suite_platform_unix.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_platform_util.dir/test_suite_platform_util.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_poly1305.dir/test_suite_poly1305.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_pqcp_mldsa.dilithium_py.dir/test_suite_pqcp_mldsa.dilithium_py.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_pqcp_mldsa.misc.dir/test_suite_pqcp_mldsa.misc.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto.concurrent.dir/test_suite_psa_crypto.concurrent.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto.dir/test_suite_psa_crypto.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto.pbkdf2.dir/test_suite_psa_crypto.pbkdf2.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto.persistent.dir/test_suite_psa_crypto.persistent.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto.pkcs1_v15_constant_time.dir/test_suite_psa_crypto.pkcs1_v15_constant_time.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto_attributes.dir/test_suite_psa_crypto_attributes.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto_constant_time.dir/test_suite_psa_crypto_constant_time.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto_driver_wrappers.dir/test_suite_psa_crypto_driver_wrappers.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto_ecp.dir/test_suite_psa_crypto_ecp.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto_entropy.dir/test_suite_psa_crypto_entropy.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto_generate_key.generated.dir/test_suite_psa_crypto_generate_key.generated.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto_hash.dir/test_suite_psa_crypto_hash.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto_init.dir/test_suite_psa_crypto_init.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto_low_hash.generated.dir/test_suite_psa_crypto_low_hash.generated.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto_memory.dir/test_suite_psa_crypto_memory.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto_metadata.dir/test_suite_psa_crypto_metadata.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto_mldsa.dilithium_py.dir/test_suite_psa_crypto_mldsa.dilithium_py.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto_mldsa.misc.dir/test_suite_psa_crypto_mldsa.misc.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto_mldsa.multipart.dir/test_suite_psa_crypto_mldsa.multipart.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto_not_supported.generated.dir/test_suite_psa_crypto_not_supported.generated.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto_not_supported.misc.dir/test_suite_psa_crypto_not_supported.misc.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto_op_fail.generated.dir/test_suite_psa_crypto_op_fail.generated.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto_op_fail.misc.dir/test_suite_psa_crypto_op_fail.misc.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto_pake.dir/test_suite_psa_crypto_pake.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto_persistent_key.dir/test_suite_psa_crypto_persistent_key.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto_slot_management.dir/test_suite_psa_crypto_slot_management.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto_storage_format.current.dir/test_suite_psa_crypto_storage_format.current.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto_storage_format.misc.dir/test_suite_psa_crypto_storage_format.misc.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto_storage_format.v0.dir/test_suite_psa_crypto_storage_format.v0.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto_util.dir/test_suite_psa_crypto_util.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto_xof.dir/test_suite_psa_crypto_xof.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_its.dir/test_suite_psa_its.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_random.dir/test_suite_random.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_rsa.constant_time.dir/test_suite_rsa.constant_time.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_rsa.dir/test_suite_rsa.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_rsa.pkcs1_v15.dir/test_suite_rsa.pkcs1_v15.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_rsa.pkcs1_v21.dir/test_suite_rsa.pkcs1_v21.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_sha1.dir/test_suite_sha1.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_sha256.dir/test_suite_sha256.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_sha3.kat.dir/test_suite_sha3.kat.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_sha3.misc.dir/test_suite_sha3.misc.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_sha3.multi.dir/test_suite_sha3.multi.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_sha3.shake_py.dir/test_suite_sha3.shake_py.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_sha512.dir/test_suite_sha512.c.o",
+   "build/tf-psa-crypto/tests/CMakeFiles/test_suite_tf_psa_crypto_version.dir/test_suite_tf_psa_crypto_version.c.o"
+  ],
   "command": "(build/programs/test/selftest && /work/mbedtls/cmake-3.31.8-linux-aarch64/bin/ctest --test-dir build --output-on-failure --no-tests=error)",
   "completedTrial": "attempt-1"
  },
@@ -1889,8 +578,157 @@
    "signature": "",
    "status": 0,
    "relinkStatus": 0,
-   "regeneratedInputs": [],
-   "unitCount": 91
+   "regeneratedInputs": [
+    "build/tests/CMakeFiles/test_suite_config.mbedtls_boolean.dir/test_suite_config.mbedtls_boolean.c.o",
+    "build/tests/CMakeFiles/test_suite_config.tls_combinations.dir/test_suite_config.tls_combinations.c.o",
+    "build/tests/CMakeFiles/test_suite_constant_time_hmac.dir/test_suite_constant_time_hmac.c.o",
+    "build/tests/CMakeFiles/test_suite_debug.dir/test_suite_debug.c.o",
+    "build/tests/CMakeFiles/test_suite_error.dir/test_suite_error.c.o",
+    "build/tests/CMakeFiles/test_suite_mps.dir/test_suite_mps.c.o",
+    "build/tests/CMakeFiles/test_suite_net.dir/test_suite_net.c.o",
+    "build/tests/CMakeFiles/test_suite_pkcs7.dir/test_suite_pkcs7.c.o",
+    "build/tests/CMakeFiles/test_suite_ssl.dir/test_suite_ssl.c.o",
+    "build/tests/CMakeFiles/test_suite_ssl.records.dir/test_suite_ssl.records.c.o",
+    "build/tests/CMakeFiles/test_suite_ssl.tls-defrag.dir/test_suite_ssl.tls-defrag.c.o",
+    "build/tests/CMakeFiles/test_suite_ssl_decrypt.misc.dir/test_suite_ssl_decrypt.misc.c.o",
+    "build/tests/CMakeFiles/test_suite_test_helpers.dir/test_suite_test_helpers.c.o",
+    "build/tests/CMakeFiles/test_suite_timing.dir/test_suite_timing.c.o",
+    "build/tests/CMakeFiles/test_suite_version.dir/test_suite_version.c.o",
+    "build/tests/CMakeFiles/test_suite_x509_oid.dir/test_suite_x509_oid.c.o",
+    "build/tests/CMakeFiles/test_suite_x509parse.dir/test_suite_x509parse.c.o",
+    "build/tests/CMakeFiles/test_suite_x509write.dir/test_suite_x509write.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_aes.cbc.dir/test_suite_aes.cbc.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_aes.cfb.dir/test_suite_aes.cfb.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_aes.ctr.dir/test_suite_aes.ctr.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_aes.ecb.dir/test_suite_aes.ecb.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_aes.ofb.dir/test_suite_aes.ofb.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_aes.rest.dir/test_suite_aes.rest.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_aes.xts.dir/test_suite_aes.xts.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_alignment.dir/test_suite_alignment.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_aria.dir/test_suite_aria.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_asn1parse.dir/test_suite_asn1parse.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_asn1write.dir/test_suite_asn1write.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_base64.dir/test_suite_base64.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_bignum.generated.dir/test_suite_bignum.generated.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_bignum.misc.dir/test_suite_bignum.misc.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_bignum_core.generated.dir/test_suite_bignum_core.generated.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_bignum_core.misc.dir/test_suite_bignum_core.misc.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_bignum_mod.generated.dir/test_suite_bignum_mod.generated.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_bignum_mod.misc.dir/test_suite_bignum_mod.misc.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_bignum_mod_raw.dir/test_suite_bignum_mod_raw.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_bignum_mod_raw.generated.dir/test_suite_bignum_mod_raw.generated.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_bignum_random.dir/test_suite_bignum_random.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_block_cipher.dir/test_suite_block_cipher.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_camellia.dir/test_suite_camellia.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_ccm.dir/test_suite_ccm.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_chacha20.dir/test_suite_chacha20.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_chachapoly.dir/test_suite_chachapoly.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_cipher.aes.dir/test_suite_cipher.aes.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_cipher.aria.dir/test_suite_cipher.aria.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_cipher.camellia.dir/test_suite_cipher.camellia.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_cipher.ccm.dir/test_suite_cipher.ccm.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_cipher.chacha20.dir/test_suite_cipher.chacha20.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_cipher.chachapoly.dir/test_suite_cipher.chachapoly.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_cipher.constant_time.dir/test_suite_cipher.constant_time.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_cipher.gcm.dir/test_suite_cipher.gcm.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_cipher.misc.dir/test_suite_cipher.misc.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_cipher.padding.dir/test_suite_cipher.padding.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_cmac.dir/test_suite_cmac.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_common.dir/test_suite_common.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_config.crypto_combinations.dir/test_suite_config.crypto_combinations.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_config.psa_boolean.dir/test_suite_config.psa_boolean.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_config.psa_combinations.dir/test_suite_config.psa_combinations.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_constant_time.dir/test_suite_constant_time.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_ctr_drbg.dir/test_suite_ctr_drbg.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_dispatch_transparent.dilithium_py.dir/test_suite_dispatch_transparent.dilithium_py.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_dispatch_transparent.key.dir/test_suite_dispatch_transparent.key.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_dispatch_transparent.mldsa_multipart.dir/test_suite_dispatch_transparent.mldsa_multipart.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_dispatch_transparent.sign.dir/test_suite_dispatch_transparent.sign.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_ecdsa.dir/test_suite_ecdsa.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_ecjpake.dir/test_suite_ecjpake.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_ecp.dir/test_suite_ecp.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_ecp.generated.dir/test_suite_ecp.generated.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_entropy.dir/test_suite_entropy.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_gcm.aes128_de.dir/test_suite_gcm.aes128_de.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_gcm.aes128_en.dir/test_suite_gcm.aes128_en.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_gcm.aes192_de.dir/test_suite_gcm.aes192_de.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_gcm.aes192_en.dir/test_suite_gcm.aes192_en.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_gcm.aes256_de.dir/test_suite_gcm.aes256_de.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_gcm.aes256_en.dir/test_suite_gcm.aes256_en.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_gcm.camellia.dir/test_suite_gcm.camellia.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_gcm.misc.dir/test_suite_gcm.misc.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_hmac_drbg.misc.dir/test_suite_hmac_drbg.misc.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_hmac_drbg.no_reseed.dir/test_suite_hmac_drbg.no_reseed.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_hmac_drbg.nopr.dir/test_suite_hmac_drbg.nopr.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_hmac_drbg.pr.dir/test_suite_hmac_drbg.pr.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_lmots.dir/test_suite_lmots.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_lms.dir/test_suite_lms.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_md.dir/test_suite_md.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_mdx.dir/test_suite_mdx.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_memory_buffer_alloc.dir/test_suite_memory_buffer_alloc.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_nist_kw.dir/test_suite_nist_kw.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_oid.dir/test_suite_oid.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_pem.dir/test_suite_pem.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_pk.dir/test_suite_pk.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_pk.pk_can_do_psa.dir/test_suite_pk.pk_can_do_psa.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_pkcs5.dir/test_suite_pkcs5.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_pkparse.dir/test_suite_pkparse.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_pkwrite.dir/test_suite_pkwrite.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_platform.dir/test_suite_platform.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_platform_printf.dir/test_suite_platform_printf.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_platform_threading.dir/test_suite_platform_threading.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_platform_unix.dir/test_suite_platform_unix.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_platform_util.dir/test_suite_platform_util.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_poly1305.dir/test_suite_poly1305.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_pqcp_mldsa.dilithium_py.dir/test_suite_pqcp_mldsa.dilithium_py.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_pqcp_mldsa.misc.dir/test_suite_pqcp_mldsa.misc.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto.concurrent.dir/test_suite_psa_crypto.concurrent.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto.dir/test_suite_psa_crypto.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto.pbkdf2.dir/test_suite_psa_crypto.pbkdf2.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto.persistent.dir/test_suite_psa_crypto.persistent.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto.pkcs1_v15_constant_time.dir/test_suite_psa_crypto.pkcs1_v15_constant_time.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto_attributes.dir/test_suite_psa_crypto_attributes.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto_constant_time.dir/test_suite_psa_crypto_constant_time.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto_driver_wrappers.dir/test_suite_psa_crypto_driver_wrappers.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto_ecp.dir/test_suite_psa_crypto_ecp.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto_entropy.dir/test_suite_psa_crypto_entropy.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto_generate_key.generated.dir/test_suite_psa_crypto_generate_key.generated.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto_hash.dir/test_suite_psa_crypto_hash.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto_init.dir/test_suite_psa_crypto_init.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto_low_hash.generated.dir/test_suite_psa_crypto_low_hash.generated.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto_memory.dir/test_suite_psa_crypto_memory.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto_metadata.dir/test_suite_psa_crypto_metadata.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto_mldsa.dilithium_py.dir/test_suite_psa_crypto_mldsa.dilithium_py.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto_mldsa.misc.dir/test_suite_psa_crypto_mldsa.misc.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto_mldsa.multipart.dir/test_suite_psa_crypto_mldsa.multipart.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto_not_supported.generated.dir/test_suite_psa_crypto_not_supported.generated.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto_not_supported.misc.dir/test_suite_psa_crypto_not_supported.misc.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto_op_fail.generated.dir/test_suite_psa_crypto_op_fail.generated.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto_op_fail.misc.dir/test_suite_psa_crypto_op_fail.misc.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto_pake.dir/test_suite_psa_crypto_pake.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto_persistent_key.dir/test_suite_psa_crypto_persistent_key.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto_slot_management.dir/test_suite_psa_crypto_slot_management.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto_storage_format.current.dir/test_suite_psa_crypto_storage_format.current.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto_storage_format.misc.dir/test_suite_psa_crypto_storage_format.misc.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto_storage_format.v0.dir/test_suite_psa_crypto_storage_format.v0.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto_util.dir/test_suite_psa_crypto_util.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_crypto_xof.dir/test_suite_psa_crypto_xof.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_psa_its.dir/test_suite_psa_its.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_random.dir/test_suite_random.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_rsa.constant_time.dir/test_suite_rsa.constant_time.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_rsa.dir/test_suite_rsa.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_rsa.pkcs1_v15.dir/test_suite_rsa.pkcs1_v15.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_rsa.pkcs1_v21.dir/test_suite_rsa.pkcs1_v21.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_sha1.dir/test_suite_sha1.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_sha256.dir/test_suite_sha256.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_sha3.kat.dir/test_suite_sha3.kat.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_sha3.misc.dir/test_suite_sha3.misc.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_sha3.multi.dir/test_suite_sha3.multi.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_sha3.shake_py.dir/test_suite_sha3.shake_py.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_sha512.dir/test_suite_sha512.c.o",
+    "build/tf-psa-crypto/tests/CMakeFiles/test_suite_tf_psa_crypto_version.dir/test_suite_tf_psa_crypto_version.c.o"
+   ],
+   "unitCount": 382
   }
  ],
  "adjustments": {
@@ -1926,9 +764,9 @@
   },
   "sysrootAdjustmentMeaning": {},
   "includeOrder": [
-   "-I/Users/onehrxn/dev/30days/c30/.build/case/ladder-sysroot/usr/lib/gcc/aarch64-linux-gnu/14/include",
-   "-I/Users/onehrxn/dev/30days/c30/.build/case/ladder-sysroot/usr/include/aarch64-linux-gnu",
-   "-I/Users/onehrxn/dev/30days/c30/.build/case/ladder-sysroot/usr/include"
+   "-isystem/Users/onehrxn/dev/30days/c30/.build/case/ladder-sysroot/usr/lib/gcc/aarch64-linux-gnu/14/include",
+   "-isystem/Users/onehrxn/dev/30days/c30/.build/case/ladder-sysroot/usr/include/aarch64-linux-gnu",
+   "-isystem/Users/onehrxn/dev/30days/c30/.build/case/ladder-sysroot/usr/include"
   ],
   "configure": "/work/mbedtls/cmake-3.31.8-linux-aarch64/bin/cmake -S . -B build -DCMAKE_C_COMPILER=gcc-14 -DCMAKE_BUILD_TYPE=Release -DENABLE_TESTING=ON -DENABLE_PROGRAMS=ON -DUSE_SHARED_MBEDTLS_LIBRARY=OFF -DCMAKE_EXE_LINKER_FLAGS=-no-pie",
   "subject": [
@@ -2712,6 +1550,6 @@
  },
  "frontEndGaps": [],
  "defects": [],
- "evidence": ".evidence/ladder/mbedtls/20261025T113031Z",
- "summaryLine": "mbedtls: 91 of 382 units by EvoCC in a passing build; refused by code {'W0002': 290, 'W0001': 1}"
+ "evidence": ".evidence/ladder/mbedtls/20261025T171209Z",
+ "summaryLine": "mbedtls: 382 of 382 units by EvoCC in a passing build; refused by code {}"
 }
