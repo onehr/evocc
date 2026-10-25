@@ -16,6 +16,14 @@ spec.loader.exec_module(e0)
 
 
 class SourceIdentityTest(unittest.TestCase):
+    def test_exported_system_headers_keep_the_reference_search_class(self):
+        root = Path('/exported-sysroot')
+        self.assertEqual(e0.include_flags(root), [
+            '-isystem/exported-sysroot/usr/lib/gcc/aarch64-linux-gnu/14/include',
+            '-isystem/exported-sysroot/usr/include/aarch64-linux-gnu',
+            '-isystem/exported-sysroot/usr/include',
+        ])
+
     def test_conservative_codegen_options_preserve_written_order(self):
         flags = ['-fomit-frame-pointer', '-fno-omit-frame-pointer',
                  '-fno-optimize-sibling-calls', '-fno-align-functions',
