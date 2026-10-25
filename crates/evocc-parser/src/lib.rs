@@ -9145,6 +9145,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 attributes: Vec::new(),
                 span: *span,
             })));
+            // The array type consumes this captured extent through its symbol,
+            // not through a parsed identifier. It is not an unused source local.
+            self.lint_uses.insert(symbol);
             *bound = ArrayBound::Captured(symbol.raw());
         }
         Some(captures)

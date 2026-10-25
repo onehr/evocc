@@ -143,6 +143,32 @@ fn explicit_use_and_nonreturning_calls_do_not_warn() {
 }
 
 #[test]
+fn variable_array_extents_do_not_report_synthetic_objects_as_unused() {
+    for source in [
+        "void f(void *buf, unsigned long len) {
+             asm volatile (\"\" : : \"m\" (*(char (*)[len]) buf) :);
+         }",
+        "unsigned long f(int n) { return sizeof(int[n]); }",
+        "unsigned long f(int n) { int a[n]; return sizeof(a); }",
+        "void f(int n) { typedef int Array[n]; }",
+    ] {
+        for target in ["aarch64-unknown-linux-gnu", "aarch64-apple-darwin"] {
+            expect(
+                run(&["--target", target, "-Wall", "-Wextra", "-Werror"], source),
+                "W0001",
+                "allow",
+            );
+        }
+    }
+    // Only the captured extent is implicit. The source's array is still unused.
+    expect(
+        run(&["-Wall", "-Werror"], "void f(int n) { int unused[n]; }"),
+        "W0001",
+        "error",
+    );
+}
+
+#[test]
 fn symbol_attributes_after_a_pointer_star_mark_the_declared_variable() {
     // Linux writes `static void * __used __section(...) name = &sym;`. As in
     // GCC 14, `used` there marks the declaration, and `unused` on the pointer
