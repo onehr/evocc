@@ -6,7 +6,7 @@
 //! source value. A reload transports equations; it never invents a source value.
 //! This is an ordinary Rust check, not an extension of the Lean proof profile.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 use super::abi::ArgumentCursor;
 use super::allocation::{
@@ -15,6 +15,10 @@ use super::allocation::{
 };
 use super::machine::MachineBlock;
 use super::register::VirtualReg;
+
+#[cfg(test)]
+#[path = "../../tests/support/allocation_relation_state.rs"]
+mod tests;
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 enum Place {
@@ -54,7 +58,105 @@ impl<C> From<VirtualReg<C>> for Value<C> {
     }
 }
 
-type State<C> = BTreeSet<(Place, Value<C>)>;
+/// Keep the same equation set, with an index for source renames and deaths.
+/// Large functions can have many live aliases of one value. A rename must
+/// visit that identity's equations, not every other value at every copy.
+#[derive(Clone, PartialEq, Eq)]
+struct State<C> {
+    equations: BTreeSet<(Place, Value<C>)>,
+    identities: BTreeMap<Identity, BTreeSet<(Place, C)>>,
+}
+
+impl<C: Copy + Ord> State<C> {
+    fn new() -> Self {
+        Self {
+            equations: BTreeSet::new(),
+            identities: BTreeMap::new(),
+        }
+    }
+
+    fn insert(&mut self, (place, value): (Place, Value<C>)) {
+        if self.equations.insert((place, value)) {
+            self.identities
+                .entry(value.id)
+                .or_default()
+                .insert((place, value.class));
+        }
+    }
+
+    fn iter(&self) -> impl Iterator<Item = &(Place, Value<C>)> {
+        self.equations.iter()
+    }
+
+    fn for_identity(&self, id: Identity) -> impl Iterator<Item = (Place, C)> + '_ {
+        self.identities
+            .get(&id)
+            .into_iter()
+            .flat_map(|values| values.iter().copied())
+    }
+
+    fn project(&self, live: &BTreeSet<Identity>) -> Self {
+        live.iter()
+            .flat_map(|&id| {
+                self.for_identity(id).map(move |(place, class)| {
+                    #[cfg(test)]
+                    tests::observe_projection_probe();
+                    (place, Value { id, class })
+                })
+            })
+            .collect()
+    }
+
+    fn forget_identity(&mut self, id: Identity) {
+        if let Some(values) = self.identities.remove(&id) {
+            for (place, class) in values {
+                self.equations.remove(&(place, Value { id, class }));
+            }
+        }
+    }
+
+    fn retain(&mut self, mut keep: impl FnMut(&(Place, Value<C>)) -> bool) {
+        self.equations.retain(|equation @ (place, value)| {
+            if keep(equation) {
+                true
+            } else {
+                let values = self.identities.get_mut(&value.id).unwrap();
+                values.remove(&(*place, value.class));
+                if values.is_empty() {
+                    self.identities.remove(&value.id);
+                }
+                false
+            }
+        });
+    }
+
+    fn intersection<'a>(&'a self, other: &'a Self) -> impl Iterator<Item = &'a (Place, Value<C>)> {
+        self.equations.intersection(&other.equations)
+    }
+
+    #[cfg(test)]
+    fn len(&self) -> usize {
+        self.equations.len()
+    }
+}
+
+impl<C: Copy + Ord> Extend<(Place, Value<C>)> for State<C> {
+    fn extend<T: IntoIterator<Item = (Place, Value<C>)>>(&mut self, iter: T) {
+        for equation in iter {
+            self.insert(equation);
+        }
+    }
+}
+
+impl<C: Copy + Ord> FromIterator<(Place, Value<C>)> for State<C> {
+    fn from_iter<T: IntoIterator<Item = (Place, Value<C>)>>(iter: T) -> Self {
+        let mut state = Self::new();
+        state.extend(iter);
+        state
+    }
+}
+type LiveIdentities = BTreeMap<u32, BTreeSet<Identity>>;
+type Expirations = BTreeMap<u32, Vec<Vec<Identity>>>;
 /// Section 9.2: spill places that hold a source value live across a
 /// returns-twice call. A second return reads such a place again, and any point
 /// that the call reaches can jump back. No other value may write the place at
@@ -91,7 +193,7 @@ fn overlaps<C: AllocClass>(left: Location<C>, right: Location<C>) -> bool {
 }
 
 fn forget<C: AllocClass>(state: &mut State<C>, reg: VirtualReg<C>) {
-    state.retain(|(_, value)| value.id != Identity::Register(reg.id));
+    state.forget_identity(Identity::Register(reg.id));
 }
 
 fn kill<C: AllocClass>(state: &mut State<C>, loc: Location<C>) {
@@ -130,14 +232,15 @@ fn copy<C: AllocClass>(state: &mut State<C>, dst: Location<C>, src: Location<C>)
 fn rename<C: AllocClass>(state: &mut State<C>, dst: Value<C>, src: Value<C>) {
     // Capture before forgetting: a self-copy must preserve its equations.
     let values: Vec<_> = state
-        .iter()
-        .filter(|(_, value)| value.id == src.id)
-        .map(|(place, value)| {
+        .for_identity(src.id)
+        .map(|(place, class)| {
+            #[cfg(test)]
+            tests::observe_identity_probe();
             (
-                *place,
+                place,
                 Value {
                     id: dst.id,
-                    class: *[value.class, src.class, dst.class]
+                    class: *[class, src.class, dst.class]
                         .iter()
                         .min_by_key(|c| c.value_bits())
                         .unwrap(),
@@ -147,7 +250,7 @@ fn rename<C: AllocClass>(state: &mut State<C>, dst: Value<C>, src: Value<C>) {
         .collect();
     // Source spill slots are distinct logical identities. Only allocated slots
     // use physical word offsets and can overlap another slot's second word.
-    state.retain(|(_, value)| value.id != dst.id);
+    state.forget_identity(dst.id);
     state.extend(values);
 }
 
@@ -222,6 +325,9 @@ struct Relation<'a, I, T, C, A> {
     /// Spill words that the allocated program reads after the exit of each
     /// of its blocks before it writes them; empty like `live_out`.
     slots_out: BTreeMap<u32, BTreeSet<u32>>,
+    /// Identities whose last source use or unused definition is at an
+    /// instruction. Empty for returns-twice functions, like ordinary pruning.
+    dead_after: Expirations,
 }
 
 impl<I, T, C, A> Relation<'_, I, T, C, A>
@@ -231,6 +337,14 @@ where
     T: AllocTerm<Reg = VirtualReg<C>, Body = I::Body> + PartialEq,
     A: AllocationTarget<C>,
 {
+    fn forget_expired(&self, state: &mut State<C>, block: u32, index: usize) {
+        if let Some(dead) = self.dead_after.get(&block).map(|steps| &steps[index]) {
+            for id in dead {
+                state.forget_identity(*id);
+            }
+        }
+    }
+
     fn location(&self, reg: VirtualReg<C>) -> Result<Location<C>, String> {
         let place = if reg.class.is_flags() {
             Place::Flags
@@ -375,7 +489,7 @@ where
             }
         }
         for inst in block.insts[index + 1..].iter().rev() {
-            step_backward(&mut live, inst);
+            step_backward(&mut live, inst, false);
         }
         live
     }
@@ -597,6 +711,9 @@ where
                 .get(i)
                 .is_some_and(|source| rename_source(state, source))
             {
+                self.forget_expired(state, original.id, i);
+                #[cfg(test)]
+                tests::observe_step(state.len());
                 i += 1;
                 continue;
             }
@@ -658,6 +775,9 @@ where
                 }
                 _ => return Err("allocated instructions do not match their input".into()),
             }
+            self.forget_expired(state, original.id, i);
+            #[cfg(test)]
+            tests::observe_step(state.len());
             i += 1;
             j += 1;
         }
@@ -687,24 +807,6 @@ where
     A: AllocationTarget<C>,
 {
     let input = &allocated.input;
-    let returns_twice = input
-        .blocks
-        .iter()
-        .any(|block| block.insts.iter().any(|inst| inst.returns_twice()));
-    let relation = Relation {
-        target,
-        allocated,
-        live_out: if returns_twice {
-            input_live_out(input)
-        } else {
-            BTreeMap::new()
-        },
-        slots_out: if returns_twice {
-            slot_live_out(&allocated.blocks)
-        } else {
-            BTreeMap::new()
-        },
-    };
     let source: BTreeMap<_, _> = input.blocks.iter().map(|b| (b.id, b)).collect();
     let output: BTreeMap<_, _> = allocated.blocks.iter().map(|b| (b.id, b)).collect();
     if source.len() != input.blocks.len()
@@ -793,6 +895,34 @@ where
     if allocated.parameters != first.args.len() || allocated.indirect_result != indirect {
         return Err("allocation changed function signature".into());
     }
+    // Validate block identities and edges before running either dataflow.
+    // Duplicate block IDs do not define a monotone liveness equation system.
+    let returns_twice = input
+        .blocks
+        .iter()
+        .any(|block| block.insts.iter().any(|inst| inst.returns_twice()));
+    let (live_in, live_out) = input_liveness(input, !returns_twice);
+    let dead_after = if returns_twice {
+        BTreeMap::new()
+    } else {
+        input_expirations(input, &live_out)
+    };
+    let relation = Relation {
+        target,
+        allocated,
+        live_out: if returns_twice {
+            live_out
+        } else {
+            drop(live_out);
+            BTreeMap::new()
+        },
+        slots_out: if returns_twice {
+            slot_live_out(&allocated.blocks)
+        } else {
+            BTreeMap::new()
+        },
+        dead_after,
+    };
     let mut entry = State::new();
     let mut cursor = ArgumentCursor::new(target.abi().argument_banks);
     for (index, value) in first.args.iter().enumerate() {
@@ -806,38 +936,53 @@ where
         };
         entry.insert((place, (*value).into()));
     }
+    // Ordinary reads only need identities live at the source block's entry.
+    // Derive that demand from the unchanged input, not allocator intervals.
+    // Keep the full relation for returns-twice functions: a propagated spill
+    // guard can need an identity after its last ordinary source use.
+    if !returns_twice {
+        entry.retain(|(_, value)| live_in[&first.id].contains(&value.id));
+    }
     let mut incoming = BTreeMap::from([(first.id, entry)]);
+    let mut pending = VecDeque::from([first.id]);
+    let mut queued = BTreeSet::from([first.id]);
     // States only lose equations after first discovery. The finite equation
     // domain guarantees convergence; no iteration cap may turn a partial
-    // solution into an accepted allocation.
-    loop {
-        let mut changed = false;
-        for before in &input.blocks {
-            let Some(mut state) = incoming.get(&before.id).cloned() else {
-                continue;
+    // solution into an accepted allocation. A changed input schedules all
+    // successors, but an unchanged input cannot affect a block's transfer.
+    while let Some(id) = pending.pop_front() {
+        queued.remove(&id);
+        let before = source[&id];
+        let mut state = incoming[&id].clone();
+        #[cfg(test)]
+        tests::observe_incoming(state.len());
+        relation.walk(before, output[&id], &mut state, &mut Mode::Explore)?;
+        for (index, (successor, _)) in before.term.edges().iter().enumerate() {
+            let mut exit = if returns_twice {
+                state.clone()
+            } else {
+                state.project(&live_in[successor])
             };
-            relation.walk(before, output[&before.id], &mut state, &mut Mode::Explore)?;
-            for (index, (successor, _)) in before.term.edges().iter().enumerate() {
-                let mut exit = state.clone();
-                for bridge in &paths[&(before.id, index)] {
-                    for inst in &output[bridge].insts {
-                        if !relation.transport(&mut exit, inst)? {
-                            return Err("operation in allocation bridge".into());
-                        }
+            for bridge in &paths[&(id, index)] {
+                for inst in &output[bridge].insts {
+                    if !relation.transport(&mut exit, inst)? {
+                        return Err("operation in allocation bridge".into());
                     }
                 }
-                let merged = incoming.get(successor).map_or_else(
-                    || exit.clone(),
-                    |old| old.intersection(&exit).copied().collect(),
-                );
-                if incoming.get(successor) != Some(&merged) {
-                    incoming.insert(*successor, merged);
-                    changed = true;
+            }
+            // Bridge transports preserve source identities. Projection
+            // therefore commutes with every bridge copy and physical kill;
+            // all bridge shapes and slot bounds are still checked above.
+            let merged = incoming.get(successor).map_or_else(
+                || exit.clone(),
+                |old| old.intersection(&exit).copied().collect(),
+            );
+            if incoming.get(successor) != Some(&merged) {
+                incoming.insert(*successor, merged);
+                if queued.insert(*successor) {
+                    pending.push_back(*successor);
                 }
             }
-        }
-        if !changed {
-            break;
         }
     }
     // Section 9.2: a guard holds at every point that its returns-twice call
@@ -948,11 +1093,24 @@ where
 
 /// One backward step of source liveness over an input instruction. Logical
 /// spill slots of a machine-level input are source identities too.
-fn step_backward<I, C>(live: &mut BTreeSet<Identity>, inst: &I)
+fn step_backward<I, C>(live: &mut BTreeSet<Identity>, inst: &I, checked_reads: bool)
 where
     C: AllocClass,
     I: AllocInst<Reg = VirtualReg<C>>,
 {
+    // A same-class source copy is a renaming, not a checked operation in
+    // `walk`. It propagates demand only when its result is needed. Otherwise
+    // dead phi-copy cycles would keep their own operands artificially live.
+    // Non-copy operations still demand every input even if their result is
+    // dead. Stack-guard liveness retains the original conservative rule.
+    if checked_reads {
+        if let Some((dst, src)) = inst.copy_operands().filter(|(d, s)| d.class == s.class) {
+            if live.remove(&Identity::Register(dst.id)) {
+                live.insert(Identity::Register(src.id));
+            }
+            return;
+        }
+    }
     if let Some(access) = inst.spill() {
         match access.kind {
             SpillKind::Store => {
@@ -967,7 +1125,7 @@ where
         live.remove(&Identity::Register(reg.id));
     }
     for reg in inst.uses() {
-        if !reg.class.is_flags() {
+        if checked_reads || !reg.class.is_flags() {
             live.insert(Identity::Register(reg.id));
         }
     }
@@ -1030,9 +1188,12 @@ where
 }
 
 /// Source liveness of the unchanged input, independent of the allocation.
-fn input_live_out<I, T, C>(
+/// Ordinary demand includes flags and starts at checked reads; source copies
+/// propagate it. Stack guards keep all transport reads and exclude flags.
+fn input_liveness<I, T, C>(
     input: &super::machine::MachineFunction<I, T, C>,
-) -> BTreeMap<u32, BTreeSet<Identity>>
+    checked_reads: bool,
+) -> (LiveIdentities, LiveIdentities)
 where
     C: AllocClass,
     I: AllocInst<Reg = VirtualReg<C>>,
@@ -1056,12 +1217,12 @@ where
                 live.remove(&Identity::Register(reg.id));
             }
             for reg in block.term.uses() {
-                if !reg.class.is_flags() {
+                if checked_reads || !reg.class.is_flags() {
                     live.insert(Identity::Register(reg.id));
                 }
             }
             for inst in block.insts.iter().rev() {
-                step_backward(&mut live, inst);
+                step_backward(&mut live, inst, checked_reads);
             }
             if live_in.get(&block.id) != Some(&live) {
                 live_in.insert(block.id, live);
@@ -1070,7 +1231,54 @@ where
             live_out.insert(block.id, out);
         }
         if !changed {
-            return live_out;
+            return (live_in, live_out);
         }
     }
+}
+
+/// Compute last-use removals in one backward pass per source block. Store
+/// only the expiring operands, not a full live set at every instruction.
+/// Remove them after checking/renaming the instruction, never before its reads.
+fn input_expirations<I, T, C>(
+    input: &super::machine::MachineFunction<I, T, C>,
+    live_out: &LiveIdentities,
+) -> Expirations
+where
+    C: AllocClass,
+    I: AllocInst<Reg = VirtualReg<C>>,
+    T: AllocTerm<Reg = VirtualReg<C>, Body = I::Body>,
+{
+    let mut result = BTreeMap::new();
+    for block in &input.blocks {
+        let mut live = live_out[&block.id].clone();
+        for reg in block.term.defs() {
+            live.remove(&Identity::Register(reg.id));
+        }
+        live.extend(
+            block
+                .term
+                .uses()
+                .iter()
+                .map(|reg| Identity::Register(reg.id)),
+        );
+        let mut steps = vec![Vec::new(); block.insts.len()];
+        for (index, inst) in block.insts.iter().enumerate().rev() {
+            let mut dead: Vec<_> = inst
+                .defs()
+                .into_iter()
+                .chain(inst.uses())
+                .map(|reg| Identity::Register(reg.id))
+                .collect();
+            if let Some(access) = inst.spill() {
+                dead.push(Identity::Slot(access.slot));
+            }
+            dead.sort_unstable();
+            dead.dedup();
+            dead.retain(|id| !live.contains(id));
+            steps[index] = dead;
+            step_backward(&mut live, inst, true);
+        }
+        result.insert(block.id, steps);
+    }
+    result
 }

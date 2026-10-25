@@ -3,6 +3,10 @@
 use std::cmp::Reverse;
 use std::collections::{BTreeMap, BTreeSet};
 
+#[cfg(test)]
+#[path = "../../tests/support/allocation_overlap.rs"]
+mod overlap_tests;
+
 use super::abi::{AbiFacts, ArgumentCursor};
 use super::machine::{MachInst, MachineBlock, MachineFunction};
 use super::register::{RegisterBank, RegisterClass, VirtualReg};
@@ -1766,12 +1770,54 @@ fn overlaps<C>(left: &Interval<C>, right: &Interval<C>) -> bool {
     if left.start > right.end || right.start > left.end {
         return false;
     }
+    let (left, right) = if left.segments.len() <= right.segments.len() {
+        (left, right)
+    } else {
+        (right, left)
+    };
+    if left.segments.is_empty() {
+        return false;
+    }
+    // Sparse queries must not rescan a long interval's holes from its start.
+    // Ends are increasing. The first end >= start is the only candidate whose
+    // start we need to test. Keep the linear merge for similarly sized lists,
+    // so a dense disjoint query does not acquire a logarithmic cost factor.
+    let search_bound = right.segments.len().ilog2() as usize + 1;
+    if left.segments.len() <= right.segments.len() / search_bound {
+        for &(start, end) in &left.segments {
+            #[cfg(test)]
+            overlap_tests::observe_probe();
+            let position = right.segments.partition_point(|(_, last)| {
+                #[cfg(test)]
+                overlap_tests::observe_probe();
+                *last < start
+            });
+            if right.segments.get(position).is_some_and(|(first, _)| {
+                #[cfg(test)]
+                overlap_tests::observe_probe();
+                *first <= end
+            }) {
+                return true;
+            }
+        }
+        return false;
+    }
     let mut right_parts = right.segments.iter().peekable();
     for &(start, end) in &left.segments {
-        while right_parts.peek().is_some_and(|(_, last)| *last < start) {
+        #[cfg(test)]
+        overlap_tests::observe_probe();
+        while right_parts.peek().is_some_and(|(_, last)| {
+            #[cfg(test)]
+            overlap_tests::observe_probe();
+            *last < start
+        }) {
             right_parts.next();
         }
-        if right_parts.peek().is_some_and(|(first, _)| *first <= end) {
+        if right_parts.peek().is_some_and(|(first, _)| {
+            #[cfg(test)]
+            overlap_tests::observe_probe();
+            *first <= end
+        }) {
             return true;
         }
     }
