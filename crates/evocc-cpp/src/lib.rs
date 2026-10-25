@@ -746,7 +746,9 @@ pub struct Preprocessor {
     include_guard_seen: bool,
     pragma_once_files: HashSet<String>,
     include_paths: Vec<SearchDirectory>,
+    system_include_paths: HashSet<usize>,
     current_include_path: Option<usize>,
+    current_system_header: bool,
     /// The files whose include directives are open, outermost first. The
     /// current file is not in the list. A subframework search reads them.
     includers: Vec<String>,
@@ -766,6 +768,8 @@ pub struct Preprocessor {
     conditional_depth: usize,
     source_ids: HashMap<String, FileId>,
     source_paths: HashMap<FileId, String>,
+    system_source_files: HashSet<FileId>,
+    user_source_files: HashSet<FileId>,
     source_contents: HashMap<String, Vec<u8>>,
     line_controls: HashMap<FileId, Vec<LineControl>>,
     reserved_file_ids: HashSet<FileId>,
@@ -808,7 +812,9 @@ impl Preprocessor {
             include_guard_seen: false,
             pragma_once_files: HashSet::new(),
             include_paths: Vec::new(),
+            system_include_paths: HashSet::new(),
             current_include_path: None,
+            current_system_header: false,
             includers: Vec::new(),
             include_depth: 0,
             forced_includes: Vec::new(),
@@ -825,6 +831,8 @@ impl Preprocessor {
             conditional_depth: 0,
             source_ids: HashMap::new(),
             source_paths: HashMap::new(),
+            system_source_files: HashSet::new(),
+            user_source_files: HashSet::new(),
             source_contents: HashMap::new(),
             line_controls: HashMap::new(),
             reserved_file_ids: HashSet::new(),
@@ -950,6 +958,12 @@ impl Preprocessor {
         });
     }
 
+    /// Keep the search origin of a system directory for source diagnostics.
+    pub fn add_system_include_path(&mut self, path: String) {
+        self.system_include_paths.insert(self.include_paths.len());
+        self.add_include_path(path);
+    }
+
     /// Add a framework directory, as Clang's `-F` and `-iframework` do: it
     /// serves `<Name/Header.h>` from `Name.framework` (EvoIR 10.5).
     pub fn add_framework_path(&mut self, path: String) {
@@ -957,6 +971,11 @@ impl Preprocessor {
             path,
             framework: true,
         });
+    }
+
+    pub fn add_system_framework_path(&mut self, path: String) {
+        self.system_include_paths.insert(self.include_paths.len());
+        self.add_framework_path(path);
     }
 
     /// The search directories in order, normal and framework ones alike.
@@ -1037,6 +1056,12 @@ impl Preprocessor {
         self.source_paths.get(&file).map(String::as_str)
     }
 
+    /// A shared FileId is system-only only if no user inclusion used it.
+    /// Keep user diagnostics when one physical header has mixed origins.
+    pub fn source_is_system_header(&self, file: FileId) -> bool {
+        self.system_source_files.contains(&file)
+    }
+
     /// Bytes read in this preprocessing run, not a later read of the file.
     pub fn source_contents(&self, path: &str) -> Option<&[u8]> {
         self.source_contents.get(path).map(Vec::as_slice)
@@ -1094,6 +1119,7 @@ impl Preprocessor {
 
     pub fn process_bytes(&mut self, tokens: TokenStream, source: &[u8]) -> TokenStream {
         self.reset_source_table();
+        self.current_system_header = false;
         self.line_controls.clear();
         self.cond_stack.clear();
         self.errors.clear();
@@ -1133,7 +1159,7 @@ impl Preprocessor {
             if self.pragma_once_files.contains(&resolved) {
                 continue;
             }
-            match self.process_resolved_source(&resolved, &mut expanding) {
+            match self.process_resolved_source(&resolved, &mut expanding, false) {
                 Ok(processed) => output.extend(processed.into_vec()),
                 Err(_) => self.errors.push(PreprocessError {
                     code: "E0105",
@@ -1201,11 +1227,18 @@ impl Preprocessor {
         &mut self,
         resolved: &str,
         expanding: &mut HashSet<String>,
+        system: bool,
     ) -> Result<TokenStream, std::io::Error> {
         let content = std::fs::read(resolved)?;
         self.source_contents
             .insert(resolved.to_owned(), content.clone());
         let file = self.intern_source(resolved);
+        if !system {
+            self.user_source_files.insert(file);
+            self.system_source_files.remove(&file);
+        } else if !self.user_source_files.contains(&file) {
+            self.system_source_files.insert(file);
+        }
         let mut lexer = evocc_lex::Lexer::from_bytes(file, &content);
         lexer.set_legacy_literal_prefixes(self.macros.legacy_literal_prefixes);
         let mut tokens = Vec::new();
@@ -1223,6 +1256,7 @@ impl Preprocessor {
             }
         }
         let previous_file = std::mem::replace(&mut self.current_file, resolved.to_owned());
+        let previous_system = std::mem::replace(&mut self.current_system_header, system);
         self.includers.push(previous_file);
         let conditional_floor = self.cond_stack.len();
         self.include_depth += 1;
@@ -1235,6 +1269,7 @@ impl Preprocessor {
         );
         self.include_depth -= 1;
         self.current_file = self.includers.pop().expect("the includer was pushed above");
+        self.current_system_header = previous_system;
         Ok(processed)
     }
 
@@ -1261,6 +1296,8 @@ impl Preprocessor {
     fn reset_source_table(&mut self) {
         self.source_ids.clear();
         self.source_paths.clear();
+        self.system_source_files.clear();
+        self.user_source_files.clear();
         self.source_contents.clear();
         self.reserved_file_ids.clear();
         self.next_file_id = 1;
@@ -1289,6 +1326,8 @@ impl Preprocessor {
             .filter(|file| *file != FileId::DUMMY)
             .max_by_key(|file| file.raw())
             .expect("entry source has a non-dummy FileId");
+        self.user_source_files
+            .extend(self.reserved_file_ids.iter().copied());
         self.next_file_id = max_file.raw().checked_add(1).unwrap_or(1);
         if !self.current_file.is_empty() {
             self.register_source_with_id(file, self.current_file.clone());
@@ -1664,8 +1703,28 @@ impl Preprocessor {
                                             IncludeOrigin::Beside => previous_origin,
                                             IncludeOrigin::Unpositioned => None,
                                         };
-                                        let processed =
-                                            self.process_resolved_source(&resolved, expanding);
+                                        // Absolute includes did not use a search directory.
+                                        // Quoted neighbours and subframeworks inherit the
+                                        // active includer; an explicit -I search does not.
+                                        let system =
+                                            if std::path::Path::new(&include_text).is_absolute() {
+                                                self.current_system_header
+                                            } else {
+                                                match origin {
+                                                    IncludeOrigin::Directory(index) => {
+                                                        index >= self.include_paths.len()
+                                                            || self
+                                                                .system_include_paths
+                                                                .contains(&index)
+                                                    }
+                                                    IncludeOrigin::Beside
+                                                    | IncludeOrigin::Unpositioned => {
+                                                        self.current_system_header
+                                                    }
+                                                }
+                                            };
+                                        let processed = self
+                                            .process_resolved_source(&resolved, expanding, system);
                                         self.current_include_path = previous_origin;
                                         match processed {
                                             Ok(processed) => output.extend(processed.into_vec()),

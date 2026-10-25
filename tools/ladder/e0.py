@@ -255,9 +255,9 @@ def sysroot() -> Path:
 
 def include_flags(root: Path) -> list[str]:
     return [
-        f"-I{root}/usr/lib/gcc/aarch64-linux-gnu/14/include",
-        f"-I{root}/usr/include/aarch64-linux-gnu",
-        f"-I{root}/usr/include",
+        f"-isystem{root}/usr/lib/gcc/aarch64-linux-gnu/14/include",
+        f"-isystem{root}/usr/include/aarch64-linux-gnu",
+        f"-isystem{root}/usr/include",
     ]
 
 

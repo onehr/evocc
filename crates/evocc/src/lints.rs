@@ -15,6 +15,7 @@ pub struct Levels {
     pedantic: bool,
     errors: bool,
     quiet: bool,
+    system_headers: bool,
     cap: Level,
 }
 
@@ -27,12 +28,16 @@ impl Default for Levels {
             pedantic: false,
             errors: false,
             quiet: false,
+            system_headers: false,
             cap: Level::Deny,
         }
     }
 }
 
 impl Levels {
+    pub fn system_header_warnings(&self) -> bool {
+        self.system_headers
+    }
     /// Driver warnings have no source-level lint name. They still obey the
     /// global warning policy used by compiler capability probes.
     pub fn driver_warning(&self) -> Level {
@@ -56,6 +61,8 @@ impl Levels {
             "-Werror" => self.errors = true,
             "-Wno-error" => self.errors = false,
             "-w" => self.quiet = true,
+            "-Wsystem-headers" => self.system_headers = true,
+            "-Wno-system-headers" => self.system_headers = false,
             _ if flag.starts_with("--cap-lints=") => {
                 self.cap = match &flag[12..] {
                     "allow" => Level::Allow,

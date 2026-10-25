@@ -1604,8 +1604,12 @@ fn configured_preprocessor(options: &DriverOptions) -> Result<Preprocessor, Stri
             directory.framework,
         )
     };
-    let add = |pp: &mut Preprocessor, directory: &SearchPath| {
-        if directory.framework {
+    let add = |pp: &mut Preprocessor, directory: &SearchPath, system: bool| {
+        if system && directory.framework {
+            pp.add_system_framework_path(directory.path.clone());
+        } else if system {
+            pp.add_system_include_path(directory.path.clone());
+        } else if directory.framework {
             pp.add_framework_path(directory.path.clone());
         } else {
             pp.add_include_path(directory.path.clone());
@@ -1615,29 +1619,39 @@ fn configured_preprocessor(options: &DriverOptions) -> Result<Preprocessor, Stri
     let system_directories = options
         .system_include_paths
         .iter()
+        .chain(target_directories.iter().flat_map(|target| &target.user))
+        .chain(target_directories.iter().flat_map(|target| &target.system))
         .map(directory_identity)
         .collect::<std::collections::BTreeSet<_>>();
     // Apple clang searches the user directories of the target, such as
     // `/usr/local/include`, after the command line's -I and -F directories
     // and before its -isystem and -iframework directories.
-    for directory in options
-        .include_paths
-        .iter()
-        .chain(target_directories.iter().flat_map(|target| &target.user))
-    {
+    for directory in &options.include_paths {
         if !system_directories.contains(&directory_identity(directory)) {
-            add(&mut pp, directory);
+            add(&mut pp, directory, false);
+        }
+    }
+    let explicit_system_directories = options
+        .system_include_paths
+        .iter()
+        .map(directory_identity)
+        .collect::<std::collections::BTreeSet<_>>();
+    for directory in target_directories.iter().flat_map(|target| &target.user) {
+        if !explicit_system_directories.contains(&directory_identity(directory)) {
+            add(&mut pp, directory, true);
         }
     }
     for directory in &options.system_include_paths {
-        add(&mut pp, directory);
+        add(&mut pp, directory, true);
     }
     // The target's own system directories follow every directory that the
     // command line names, as the platform compilers search them.
     if let Some(target) = &target_directories {
         pp.set_standard_includes_enabled(false);
         for directory in &target.system {
-            add(&mut pp, directory);
+            if !explicit_system_directories.contains(&directory_identity(directory)) {
+                add(&mut pp, directory, true);
+            }
         }
     }
     for forced_include in &options.forced_includes {
@@ -1999,6 +2013,14 @@ fn run_parsed(options: &DriverOptions, action: ParsedAction) -> ExitCode {
     let mut denied = false;
     let mut repair_diagnostics = Vec::new();
     for finding in parser.lint_findings() {
+        // System search paths suppress ordinary source warnings, not parser
+        // errors, #warning, or the modern-C undeclared-function constraint.
+        if pp.source_is_system_header(finding.span.file)
+            && !options.lints.system_header_warnings()
+            && (finding.lint != 2 || options.language.legacy_declarations())
+        {
+            continue;
+        }
         let level = options
             .lints
             .level(finding.lint, options.language.legacy_declarations());
