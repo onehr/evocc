@@ -1573,6 +1573,8 @@ struct Context<'a> {
     return_bounds_slots: Option<object_size::ReturnBounds>,
     return_count: usize,
     return_value: Option<&'a CHirExpr<'a>>,
+    direct_return_type: Option<TypeId>,
+    direct_return_value: Option<&'a CHirExpr<'a>>,
     end: Option<SpannedName>,
     /// The objects that hold the anonymous arguments of a substituted
     /// variadic call, in order, with their promoted types.
@@ -1607,6 +1609,8 @@ impl Context<'_> {
             return_bounds_slots: None,
             return_count: 0,
             return_value: None,
+            direct_return_type: None,
+            direct_return_value: None,
             end: None,
             anonymous: None,
         }
@@ -3604,6 +3608,12 @@ impl<'a> Substitution<'a, '_> {
                     c.memo.clear();
                 }
             }
+            CHirStmt::Return(Some(e), span) if c.direct_return_type.is_some() => {
+                let value = self.expr(e, c)?;
+                let value = self.converted_value(c.direct_return_type.unwrap(), value, *span);
+                c.direct_return_value = Some(value);
+                return Ok(self.alloc(CHirStmt::Expr(value, *span)));
+            }
             CHirStmt::Return(e, span) if c.end.is_some() => {
                 c.return_count += 1;
                 let mut items = Vec::new();
@@ -3988,6 +3998,12 @@ impl<'a> Substitution<'a, '_> {
             .create_scope(scope, ScopeKind::Block, Some(span))
             .map_err(|e| self.error(span, e))?;
         let mut c = Context::new(inline_scope);
+        if single_final_return
+            && self.complete_object_value(return_type)
+            && !is_modifiable_object_type(&self.unit.types, return_type)
+        {
+            c.direct_return_type = Some(return_type);
+        }
         c.memory = memory.clone();
         c.single_mutations = uses.single_mutations();
         c.mutable = uses.mutable;
@@ -4041,11 +4057,22 @@ impl<'a> Substitution<'a, '_> {
             items.extend(self.bind_return_bounds(slots, None, span)?);
             c.return_bounds_slots = Some(slots);
         }
-        if !matches!(
-            self.unit.types.get(return_type).unwrap().kind,
-            TypeKind::Void
-        ) {
-            let s = self.fresh(scope, return_type, StorageClass::None, span)?;
+        if c.direct_return_type.is_none()
+            && !matches!(
+                self.unit.types.get(return_type).unwrap().kind,
+                TypeKind::Void
+            )
+        {
+            // A call produces a value, not a const/volatile result object.
+            // Return statements assign into our private transport cell, so
+            // only its outer qualification must be removed. Keep the kind
+            // unchanged: pointer targets and aggregate members retain theirs.
+            let result_kind = self.unit.types.get(return_type).unwrap().kind.clone();
+            let storage_type = self.unit.types.intern(evocc_types::CanonicalType {
+                kind: result_kind,
+                qualifiers: evocc_types::Qualifiers::default(),
+            });
+            let s = self.fresh(scope, storage_type, StorageClass::None, span)?;
             c.result = Some(s);
             let object = self.object(s, None, span);
             if self.complete_object_value(return_type)
@@ -4113,6 +4140,30 @@ impl<'a> Substitution<'a, '_> {
         self.active.push(f.symbol);
         let body = self.stmt(body, &mut c)?;
         self.active.pop();
+        if let Some(value) = c.direct_return_value {
+            // A single final aggregate return needs no assignable result
+            // object. The existing statement-expression value copy preserves
+            // its bytes before the callee's objects end. Keep that scope
+            // nested so argument evaluation retains the caller's fenv.
+            let returned = self.alloc(CHirExpr::StatementExpr {
+                body,
+                value: Some(value),
+                facts: ExprFacts::value(return_type),
+                span,
+            });
+            items.push(CHirBlockItem::Statement(
+                self.alloc(CHirStmt::Expr(returned, span)),
+            ));
+            let body = self.alloc(CHirStmt::Compound(items, span, None));
+            c.memory.retain_objects_from(memory);
+            *memory = c.memory;
+            return Ok(self.alloc(CHirExpr::StatementExpr {
+                body,
+                value: Some(returned),
+                facts: ExprFacts::value(return_type),
+                span,
+            }));
+        }
         // Preserve a direct proof for a single final return. Multiple returns
         // use explicit path-selected captures, including unknown-arm flags;
         // the last visited source return is never a function-wide promise.
@@ -4133,7 +4184,14 @@ impl<'a> Substitution<'a, '_> {
             end,
             span,
         ))));
-        let value = c.result.map(|s| self.ident(s, span));
+        let value = c.result.map(|s| {
+            let value = self.ident(s, span);
+            if self.unit.symbols.symbol(s).unwrap().ty() == return_type {
+                value
+            } else {
+                self.converted_value(return_type, value, span)
+            }
+        });
         if let Some(value) = value {
             items.push(CHirBlockItem::Statement(
                 self.alloc(CHirStmt::Expr(value, span)),
