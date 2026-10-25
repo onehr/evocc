@@ -69,7 +69,7 @@ fn assembly(source: &str, target: &str) -> Output {
     output
 }
 
-const REFUSED: [(&str, &str); 14] = [
+const REFUSED: [(&str, &str); 12] = [
     (
         "ext_vector_type",
         "typedef float f4 __attribute__((ext_vector_type(4)));\nfloat f(f4 v) { return v.x; }\n",
@@ -93,14 +93,6 @@ const REFUSED: [(&str, &str); 14] = [
     (
         "ms_struct",
         "struct __attribute__((ms_struct)) s { char a; int b : 4; char c; };\n",
-    ),
-    (
-        "neon_vector_type",
-        "typedef float v4 __attribute__((neon_vector_type(4)));\nfloat f(v4 v) { return v[0]; }\n",
-    ),
-    (
-        "neon_polyvector_type",
-        "typedef unsigned char p8 __attribute__((neon_polyvector_type(16)));\nunsigned char f(p8 v) { return v[0]; }\n",
     ),
     (
         "counted_by",
@@ -345,7 +337,7 @@ fn linux_keeps_clang_attributes_ignored_like_gcc() {
 
 #[test]
 fn darwin_has_attribute_answers_zero_for_refused_names() {
-    let source = "#if __has_attribute(ext_vector_type) || __has_attribute(matrix_type) || __has_attribute(address_space) || __has_attribute(pass_object_size) || __has_attribute(noderef) || __has_attribute(ms_struct) || __has_attribute(neon_vector_type) || __has_attribute(neon_polyvector_type) || __has_attribute(counted_by) || __has_attribute(counted_by_or_null) || __has_attribute(sized_by) || __has_attribute(sized_by_or_null) || __has_attribute(ended_by) || __has_attribute(internal_linkage)\n#error refused attribute claims support\n#endif\nint main(void) { return 0; }\n";
+    let source = "#if __has_attribute(ext_vector_type) || __has_attribute(matrix_type) || __has_attribute(address_space) || __has_attribute(pass_object_size) || __has_attribute(noderef) || __has_attribute(ms_struct) || __has_attribute(counted_by) || __has_attribute(counted_by_or_null) || __has_attribute(sized_by) || __has_attribute(sized_by_or_null) || __has_attribute(ended_by) || __has_attribute(internal_linkage)\n#error refused attribute claims support\n#endif\nint main(void) { return 0; }\n";
     let output = run(source, DARWIN, "-E");
     assert!(output.status.success(), "{}", text(&output));
     assert!(!String::from_utf8_lossy(&output.stdout).contains("#error"));

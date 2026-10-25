@@ -422,6 +422,8 @@ pub enum TargetBuiltinType {
     ArmPoly16,
     ArmPoly64,
     ArmPoly128,
+    /// Apple's opaque eight-bit floating storage type. It has no arithmetic.
+    ArmMfp8,
     SvFloat32,
     SvFloat64,
     SvBool,
@@ -452,7 +454,7 @@ impl TargetBuiltinType {
         }
     }
 
-    const SPELLINGS: [(Self, &'static str); 15] = [
+    const SPELLINGS: [(Self, &'static str); 16] = [
         (Self::GnuFloat16, "_Float16"),
         (Self::GnuFloat32, "_Float32"),
         (Self::GnuFloat64, "_Float64"),
@@ -465,6 +467,7 @@ impl TargetBuiltinType {
         (Self::ArmPoly16, "__Poly16_t"),
         (Self::ArmPoly64, "__Poly64_t"),
         (Self::ArmPoly128, "__Poly128_t"),
+        (Self::ArmMfp8, "__mfp8"),
         (Self::SvFloat32, "__SVFloat32_t"),
         (Self::SvFloat64, "__SVFloat64_t"),
         (Self::SvBool, "__SVBool_t"),
@@ -488,7 +491,7 @@ impl TargetBuiltinType {
     #[must_use]
     pub const fn layout(self) -> Option<TypeLayout> {
         let bytes = match self {
-            Self::ArmPoly8 => 1,
+            Self::ArmPoly8 | Self::ArmMfp8 => 1,
             Self::GnuFloat16 | Self::ArmFp16 | Self::ArmBf16 | Self::ArmPoly16 => 2,
             Self::GnuFloat32 => 4,
             Self::GnuFloat64 | Self::GnuFloat32x | Self::ArmPoly64 => 8,

@@ -1352,6 +1352,8 @@ int main(void) {
 A call names a `__builtin_`, `__atomic_` or `__sync_` function that EvoCC does not implement.
 On Darwin, whose `<stdatomic.h>` is Clang's, a `__c11_atomic_` name is such a builtin too.
 An implicit declaration cannot supply a compiler builtin, with or without `-w`.
+Darwin NEON builtin declarations can pass a syntax check without an executable
+implementation. A retained call then reports this error during lowering.
 
 The diagnostic names the builtin where it is spelled.
 When a macro supplies the name, the location is the macro use.
@@ -1425,6 +1427,11 @@ Three attributes keep ordinary uses. A callee marked `aarch64_vector_pcs`,
 `preserve_all` or `preserve_most` preserves more registers than its caller
 relies on, so a call of it is an ordinary call. `returns_twice` is never this
 error on a function: EvoCC gives its calls the rule of GCC 14.
+
+On Darwin, `target` accepts only the feature names used by Apple's NEON headers,
+without effect. Other names, a leading `+`, an architecture, CPU or tuning
+selection, or `-mgeneral-regs-only` keep this refusal. Linux keeps the refusal
+of `target`.
 
 A naked assembly function must not get an ordinary compiler frame. Keep such
 a function in a separate assembly file, or use ordinary C if no special
@@ -1750,11 +1757,13 @@ The source uses a Clang attribute that EvoCC does not implement on `aarch64-appl
 The attribute changes a type, a value, the layout, the linkage or the ABI. EvoCC refuses it
 instead of compiling a silently different type. The refused group is `ext_vector_type`,
 `matrix_type`, `address_space`, `pass_object_size`, `pass_dynamic_object_size`, `noderef`,
-`ms_struct`, `neon_vector_type`, `neon_polyvector_type`, `counted_by`, `counted_by_or_null`,
+`ms_struct`, `counted_by`, `counted_by_or_null`,
 `sized_by`, `sized_by_or_null`, `ended_by`, `internal_linkage`, `unsafe_indexable`, `indexable`,
 `bidi_indexable`, `terminated_by` and `decay_discards_count_in_parameters`. `#pragma ms_struct on`
 is refused in the same way; `off` and `reset` are accepted. `internal_linkage` is accepted when
 the declaration is already `static`.
+
+The 64- and 128-bit `neon_vector_type` and `neon_polyvector_type` forms are supported.
 
 Flags: --target=aarch64-apple-darwin
 

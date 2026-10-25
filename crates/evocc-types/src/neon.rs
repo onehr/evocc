@@ -25,6 +25,25 @@ pub fn signature(name: &str) -> Option<&'static [&'static str]> {
         .map(Vec::as_slice)
 }
 
+/// Apple clang 21's builtin interfaces, measured from its unmodified NEON
+/// and ACLE headers with AST dumps. These types let unused header bodies
+/// type-check; they do not admit execution of the builtins.
+pub fn apple_signature(name: &str) -> Option<&'static [&'static str]> {
+    static SIGNATURES: OnceLock<HashMap<&'static str, Vec<&'static str>>> = OnceLock::new();
+    SIGNATURES
+        .get_or_init(|| {
+            include_str!("neon-apple-signatures.tsv")
+                .lines()
+                .map(|line| {
+                    let mut fields = line.split('\t');
+                    (fields.next().expect("signature name"), fields.collect())
+                })
+                .collect()
+        })
+        .get(name)
+        .map(Vec::as_slice)
+}
+
 /// Every name that [`signature`] knows, in table order.
 pub fn names() -> impl Iterator<Item = &'static str> {
     include_str!("neon-signatures.tsv")

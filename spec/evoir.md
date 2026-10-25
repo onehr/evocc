@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 2.31.4** | **Pinned ground truth** | One meaning for E3007 on 2026-10-24
+**Revision 2.32.0** | **Pinned ground truth** | Darwin NEON header subset on 2026-10-24
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract of the parser, the C lowering, equality saturation,
@@ -5130,7 +5130,7 @@ that change a type, a value, the layout, the linkage or the ABI are `E2967`
 (`unsupported-darwin-attribute`) at the attribute rather than being ignored.
 The group is `ext_vector_type`, `matrix_type`, `address_space`,
 `pass_object_size`, `pass_dynamic_object_size`, `noderef`, `ms_struct`,
-`neon_vector_type`, `neon_polyvector_type`, `counted_by`,
+`counted_by`,
 `counted_by_or_null`, `sized_by`, `sized_by_or_null`, `ended_by`,
 `internal_linkage`, `unsafe_indexable`, `indexable`, `bidi_indexable`,
 `terminated_by` and `decay_discards_count_in_parameters`. `internal_linkage`
@@ -5280,6 +5280,19 @@ GCC 14's dialect, which has none of them.
   only when the unit keeps the function, as a use in a body is: Clang's
   resource headers define their intrinsics as `static __inline__` functions
   with `target`, and a unit that does not call one compiles.
+- On Darwin, a function's `target` attribute is accepted without effect when
+  its single string argument is a comma-separated list whose items, after
+  removal of surrounding ASCII whitespace, are each in this exact list:
+  `aes`, `bf16`, `dotprod`, `faminmax`, `fp16fml`, `fp8`, `fp8dot2`,
+  `fp8dot4`, `fp8fma`, `fullfp16`, `i8mm`, `neon`, `sha2`, `sha3`, `sm4`,
+  `v8.1a`, `v8.3a`, `v8.5a`. These are the feature names in Apple's NEON
+  headers. Empty items and all other names keep `E2952`, including a leading
+  `+`, `sve`, `sme`, a `no` form, and architecture, CPU or tuning selections
+  (`arch=`, `cpu=`, `tune=`). This permission does not admit an unsupported
+  operation or builtin in the function body. Under `-mgeneral-regs-only` the
+  attribute keeps `E2952`:
+  EvoCC cannot re-enable SIMD registers for one function, whereas Apple clang
+  accepts `target("neon")` in that mode. Linux keeps the original refusal.
 
 **Scalar storage order.** `scalar_storage_order`, with or without surrounding
 underscores, is `E2940` (`unsupported-scalar-storage-order`); it is never
@@ -5539,7 +5552,7 @@ compound literals, and a front end must not emit it.
 | `E2945` | a jump into the scope of a variably modified declaration |
 | `E2946` | a nonliteral `__builtin_strcmp` with a visible same-named `static` function, or lowering a library symbol that collides with a linked object |
 | `E2947` | a constant memory order that an atomic builtin does not admit (10.1.14, 10.1.21) |
-| `E2949` | a call of an undeclared identifier that begins with `__builtin_`, `__atomic_` or `__sync_`, or with `__c11_atomic_` on Darwin (10.1.14) |
+| `E2949` | a call of an undeclared identifier that begins with `__builtin_`, `__atomic_` or `__sync_`, or with `__c11_atomic_` on Darwin; a retained Darwin NEON builtin call without an implemented operation (10.1.14) |
 | `E2950` | `__builtin_va_arg_pack ()` other than as the last anonymous argument of a call to a variadic function, either pack builtin outside a variadic function, or a lowered body that keeps one (10.1.14) |
 | `E2951` | a floating comparison or classification builtin with an operand of the wrong type, a class argument of `__builtin_fpclassify` that is not an integer constant expression (3.13.1), or a `__builtin_tgmath` function list or argument that GCC 14 rejects (10.1.14) |
 | `E2952` | an execution or calling-convention attribute where 10.1.9 does not accept it, or a definition or use of a function that it marks (10.1.9) |
@@ -6482,6 +6495,52 @@ declarations included, and declaration-only floating bodies are type-checked.
 Polynomial scalars keep their own type identity but use ordinary scalar storage
 and unsigned bit representation; polynomial and ordinary integer types are never
 compatible.
+
+**Darwin NEON header types.** On Darwin, `neon_vector_type(N)` and
+`neon_polyvector_type(N)` count lanes. The total size must be 8 or 16 bytes,
+and alignment equals that size. The ordinary form accepts the supported
+integer and floating element types, including the declarable half and opaque
+types. The polynomial form accepts unsigned 8-, 16- and 64-bit elements.
+Integer and `float`/`double` vectors with the same element type and lane count
+are compatible with the corresponding GNU `vector_size` type. Lanes follow
+the target's little-endian order; the existing short-vector and HVA ABI applies.
+Both attributes report `__has_attribute == 1` on Darwin. The nominal half
+and opaque vector value restrictions remain in force.
+
+Darwin's `__mfp8` is a nominal opaque type with size and alignment 1. It
+admits typedefs, pointers, size/alignment queries and one-byte storage copies,
+loads and stores. It is not an integer or arithmetic type. Numeric casts are
+`E2102`; arithmetic and comparison keep the existing `E2202` refusal, and a
+truth operand is `E2103`. Its by-value call interface, including a vector or
+composite that contains it, is `E3049`; a pointer to it is admitted. Linux
+does not admit this spelling (`E1007`).
+
+The measured Apple clang builtin declaration table is
+`crates/evocc-types/src/neon-apple-signatures.tsv`. Its prototypes let unused
+header bodies type-check. A prototype does not admit execution: a retained
+call without an implemented operation is `E2949`, and a builtin absent from
+the declaration table remains a named unknown-builtin refusal (`E2949`).
+Darwin defines `__ARM_FEATURE_DIRECTED_ROUNDING=1` so that Apple's header
+declares its rounding functions with their vector return types. This does not
+admit their builtin execution.
+The same declaration-only rule applies to `__builtin_roundeven` and
+`__builtin_roundevenf`, which Apple's unused ACLE rounding wrappers call.
+
+Darwin's `__builtin_bit_cast(T, value)` preserves the complete image when the
+source and destination have the same size. This subset accepts scalar
+integer, floating and target-storage types and short vectors. Pointer,
+record and union operands are refused (`E2102`), and the existing restrictions
+on executable formats still apply. It adds no initialization or provenance.
+
+The generic forms `__builtin_neon_vld1q_v`, `__builtin_neon_vst1q_v`,
+`__builtin_neon_vzipq_v` and `__builtin_neon_vuzpq_v` admit the source-constant
+selectors 32, 33 and 34 (signed 8-, 16- and 32-bit lanes). Other selectors keep
+`E2949`. Loads and stores transfer 16 bytes with byte alignment, ordinary
+bounds and initializedness checks. Zip stores the lower and upper interleaved
+halves of the two vectors; unzip stores their even and odd lanes, respectively.
+The two results occupy byte offsets 0 and 16 of the destination object. Each
+value operand is evaluated once in source order. These forms lower through
+existing vector and memory instructions and never become external calls.
 
 **Target intrinsics.** A registered integer or polynomial intrinsic evaluates
 each operand once after its declared-parameter conversion and lowers to
@@ -8929,6 +8988,14 @@ to the signature spelling.
 ---
 
 ## Revision
+
+**Revision 2.32.0, 2026-10-24.** Admit the Darwin NEON header subset: opaque
+FP8 storage with a refused by-value interface; 64/128-bit NEON vector
+attributes; typed declarations for unused Apple header bodies; equal-image
+bit casts and four generic integer load/store/zip/unzip forms. State the
+bounded Darwin target-feature attribute rule and its general-registers-only
+exception. Other builtin operations and nominal half-vector execution remain
+outside this subset.
 
 **Revision 2.31.4, 2026-10-24.** The diagnostic authority gives `E3007` one
 meaning, `unsupported-interpreter-input`: an interpreter or the execution entry

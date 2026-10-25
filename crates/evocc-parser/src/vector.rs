@@ -2,6 +2,63 @@ use super::*;
 use evocc_chir::vector::{VectorExpr, VectorOp};
 
 impl<'src, 'arena> Parser<'src, 'arena> {
+    /// Clang's NEON attribute counts lanes. Only 64- and 128-bit vectors are
+    /// valid. Polynomial vectors use unsigned 8-, 16- or 64-bit elements.
+    pub(super) fn apply_neon_vector(
+        &mut self,
+        ty: TypeId,
+        lanes: u64,
+        polynomial: bool,
+        already_applied: bool,
+    ) -> Option<TypeId> {
+        let canonical = self.types.get(ty)?.clone();
+        if already_applied
+            && matches!(canonical.kind, TypeKind::Vector { lanes: n, .. } if u64::from(n) == lanes)
+        {
+            return Some(ty);
+        }
+        let valid = if polynomial {
+            matches!(
+                canonical.kind,
+                TypeKind::Int(
+                    IntRank::UChar | IntRank::UShort | IntRank::ULong | IntRank::ULongLong
+                )
+            )
+        } else {
+            matches!(canonical.kind, TypeKind::Int(rank) if rank != IntRank::Bool)
+                || matches!(
+                    canonical.kind,
+                    TypeKind::Float(FloatKind::F32 | FloatKind::F64)
+                )
+                || matches!(canonical.kind, TypeKind::TargetBuiltin(kind) if kind.half_format().is_some() || kind == TargetBuiltinType::ArmMfp8)
+        };
+        let bytes = self
+            .target_layout
+            .layout_of(&self.types, ty)
+            .ok()?
+            .size_bytes;
+        if !valid || !matches!(bytes.checked_mul(lanes), Some(8 | 16)) {
+            return None;
+        }
+        let element = self.intern(canonical.kind, Qualifiers::default());
+        // Clang makes ordinary NEON and GNU vectors of the same element
+        // compatible. Half and opaque target vectors keep their existing
+        // declaration-only family.
+        let family = if matches!(self.types.get(element)?.kind, TypeKind::TargetBuiltin(_)) {
+            evocc_types::VectorFamily::ArmNeon
+        } else {
+            evocc_types::VectorFamily::Gnu
+        };
+        Some(self.intern(
+            TypeKind::Vector {
+                element,
+                lanes: u16::try_from(lanes).ok()?,
+                family,
+            },
+            canonical.qualifiers,
+        ))
+    }
+
     /// A vector-size attribute changes the scalar base, not the surrounding
     /// array, pointer or function declarator. Reapplying the same inventory
     /// entry to a freshly built declarator must not skip that transformation.
@@ -421,11 +478,14 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 return None;
             };
             let output_lanes = u16::try_from(indices.len()).ok()?;
+            let TypeKind::Vector { family, .. } = self.types.get(ty)?.kind else {
+                return None;
+            };
             let result = self.intern(
                 TypeKind::Vector {
                     element,
                     lanes: output_lanes,
-                    family: evocc_types::VectorFamily::Gnu,
+                    family,
                 },
                 Qualifiers::default(),
             );

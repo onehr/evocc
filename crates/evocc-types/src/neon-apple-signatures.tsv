@@ -1,0 +1,717 @@
+__builtin_neon_vabd_f16	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vabd_v	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vabdd_f64	double	double	double
+__builtin_neon_vabdq_f16	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vabdq_v	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vabds_f32	float	float	float
+__builtin_neon_vabs_f16	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vabs_v	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vabsd_s64	long long	long long
+__builtin_neon_vabsq_f16	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vabsq_v	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vadd_v	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vaddd_s64	long long	long long	long long
+__builtin_neon_vaddd_u64	unsigned long long	unsigned long long	unsigned long long
+__builtin_neon_vaddhn_v	vec(8,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vaddlv_s16	int	vec(4,short)
+__builtin_neon_vaddlv_s32	long long	vec(2,int)
+__builtin_neon_vaddlv_s8	short	vec(8,signed char)
+__builtin_neon_vaddlv_u16	unsigned int	vec(4,unsigned short)
+__builtin_neon_vaddlv_u32	unsigned long long	vec(2,unsigned int)
+__builtin_neon_vaddlv_u8	unsigned short	vec(8,unsigned char)
+__builtin_neon_vaddlvq_s16	int	vec(8,short)
+__builtin_neon_vaddlvq_s32	long long	vec(4,int)
+__builtin_neon_vaddlvq_s8	short	vec(16,signed char)
+__builtin_neon_vaddlvq_u16	unsigned int	vec(8,unsigned short)
+__builtin_neon_vaddlvq_u32	unsigned long long	vec(4,unsigned int)
+__builtin_neon_vaddlvq_u8	unsigned short	vec(16,unsigned char)
+__builtin_neon_vaddq_p128	unsigned __int128	unsigned __int128	unsigned __int128
+__builtin_neon_vaddq_v	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vaddv_f32	float	vec(2,float)
+__builtin_neon_vaddv_s16	short	vec(4,short)
+__builtin_neon_vaddv_s32	int	vec(2,int)
+__builtin_neon_vaddv_s8	signed char	vec(8,signed char)
+__builtin_neon_vaddv_u16	unsigned short	vec(4,unsigned short)
+__builtin_neon_vaddv_u32	unsigned int	vec(2,unsigned int)
+__builtin_neon_vaddv_u8	unsigned char	vec(8,unsigned char)
+__builtin_neon_vaddvq_f32	float	vec(4,float)
+__builtin_neon_vaddvq_f64	double	vec(2,double)
+__builtin_neon_vaddvq_s16	short	vec(8,short)
+__builtin_neon_vaddvq_s32	int	vec(4,int)
+__builtin_neon_vaddvq_s64	long long	vec(2,long long)
+__builtin_neon_vaddvq_s8	signed char	vec(16,signed char)
+__builtin_neon_vaddvq_u16	unsigned short	vec(8,unsigned short)
+__builtin_neon_vaddvq_u32	unsigned int	vec(4,unsigned int)
+__builtin_neon_vaddvq_u64	unsigned long long	vec(2,unsigned long long)
+__builtin_neon_vaddvq_u8	unsigned char	vec(16,unsigned char)
+__builtin_neon_vaesdq_u8	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vaeseq_u8	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vaesimcq_u8	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vaesmcq_u8	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vamax_f16	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vamax_f32	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vamaxq_f16	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vamaxq_f32	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vamaxq_f64	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vamin_f16	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vamin_f32	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vaminq_f16	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vaminq_f32	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vaminq_f64	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vbcaxq_s16	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vbcaxq_s32	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vbcaxq_s64	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vbcaxq_s8	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vbcaxq_u16	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vbcaxq_u32	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vbcaxq_u64	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vbcaxq_u8	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vbfdot_f32	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vbfdotq_f32	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vbfmlalbq_f32	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vbfmlaltq_f32	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vbfmmlaq_f32	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vbsl_v	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vbslq_v	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vcadd_rot270_f16	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vcadd_rot270_f32	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vcadd_rot90_f16	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vcadd_rot90_f32	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vcaddq_rot270_f16	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vcaddq_rot270_f32	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vcaddq_rot270_f64	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vcaddq_rot90_f16	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vcaddq_rot90_f32	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vcaddq_rot90_f64	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vcage_f16	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vcage_v	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vcaged_f64	unsigned long long	double	double
+__builtin_neon_vcageq_f16	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vcageq_v	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vcages_f32	unsigned int	float	float
+__builtin_neon_vcagt_f16	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vcagt_v	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vcagtd_f64	unsigned long long	double	double
+__builtin_neon_vcagtq_f16	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vcagtq_v	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vcagts_f32	unsigned int	float	float
+__builtin_neon_vcale_f16	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vcale_v	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vcaled_f64	unsigned long long	double	double
+__builtin_neon_vcaleq_f16	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vcaleq_v	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vcales_f32	unsigned int	float	float
+__builtin_neon_vcalt_f16	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vcalt_v	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vcaltd_f64	unsigned long long	double	double
+__builtin_neon_vcaltq_f16	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vcaltq_v	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vcalts_f32	unsigned int	float	float
+__builtin_neon_vceqd_f64	unsigned long long	double	double
+__builtin_neon_vceqd_s64	unsigned long long	long long	long long
+__builtin_neon_vceqd_u64	unsigned long long	unsigned long long	unsigned long long
+__builtin_neon_vceqs_f32	unsigned int	float	float
+__builtin_neon_vceqz_f16	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vceqz_v	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vceqzd_f64	unsigned long long	double
+__builtin_neon_vceqzd_s64	unsigned long long	long long
+__builtin_neon_vceqzd_u64	unsigned long long	unsigned long long
+__builtin_neon_vceqzq_f16	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vceqzq_v	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vceqzs_f32	unsigned int	float
+__builtin_neon_vcged_f64	unsigned long long	double	double
+__builtin_neon_vcged_s64	unsigned long long	long long	long long
+__builtin_neon_vcged_u64	unsigned long long	unsigned long long	unsigned long long
+__builtin_neon_vcges_f32	unsigned int	float	float
+__builtin_neon_vcgez_f16	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vcgez_v	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vcgezd_f64	unsigned long long	double
+__builtin_neon_vcgezd_s64	unsigned long long	long long
+__builtin_neon_vcgezq_f16	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vcgezq_v	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vcgezs_f32	unsigned int	float
+__builtin_neon_vcgtd_f64	unsigned long long	double	double
+__builtin_neon_vcgtd_s64	unsigned long long	long long	long long
+__builtin_neon_vcgtd_u64	unsigned long long	unsigned long long	unsigned long long
+__builtin_neon_vcgts_f32	unsigned int	float	float
+__builtin_neon_vcgtz_f16	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vcgtz_v	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vcgtzd_f64	unsigned long long	double
+__builtin_neon_vcgtzd_s64	unsigned long long	long long
+__builtin_neon_vcgtzq_f16	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vcgtzq_v	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vcgtzs_f32	unsigned int	float
+__builtin_neon_vcled_f64	unsigned long long	double	double
+__builtin_neon_vcled_s64	unsigned long long	long long	long long
+__builtin_neon_vcled_u64	unsigned long long	unsigned long long	unsigned long long
+__builtin_neon_vcles_f32	unsigned int	float	float
+__builtin_neon_vclez_f16	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vclez_v	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vclezd_f64	unsigned long long	double
+__builtin_neon_vclezd_s64	unsigned long long	long long
+__builtin_neon_vclezq_f16	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vclezq_v	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vclezs_f32	unsigned int	float
+__builtin_neon_vcls_v	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vclsq_v	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vcltd_f64	unsigned long long	double	double
+__builtin_neon_vcltd_s64	unsigned long long	long long	long long
+__builtin_neon_vcltd_u64	unsigned long long	unsigned long long	unsigned long long
+__builtin_neon_vclts_f32	unsigned int	float	float
+__builtin_neon_vcltz_f16	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vcltz_v	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vcltzd_f64	unsigned long long	double
+__builtin_neon_vcltzd_s64	unsigned long long	long long
+__builtin_neon_vcltzq_f16	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vcltzq_v	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vcltzs_f32	unsigned int	float
+__builtin_neon_vclz_v	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vclzq_v	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vcmla_f16	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vcmla_f32	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vcmla_rot180_f16	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vcmla_rot180_f32	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vcmla_rot270_f16	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vcmla_rot270_f32	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vcmla_rot90_f16	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vcmla_rot90_f32	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vcmlaq_f16	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vcmlaq_f32	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vcmlaq_f64	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vcmlaq_rot180_f16	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vcmlaq_rot180_f32	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vcmlaq_rot180_f64	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vcmlaq_rot270_f16	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vcmlaq_rot270_f32	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vcmlaq_rot270_f64	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vcmlaq_rot90_f16	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vcmlaq_rot90_f32	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vcmlaq_rot90_f64	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vcnt_v	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vcntq_v	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vcvt1_bf16_mf8_fpm	vec(8,__bf16)	vec(8,__mfp8)	unsigned long long
+__builtin_neon_vcvt1_f16_mf8_fpm	vec(8,__fp16)	vec(8,__mfp8)	unsigned long long
+__builtin_neon_vcvt1_high_bf16_mf8_fpm	vec(8,__bf16)	vec(16,__mfp8)	unsigned long long
+__builtin_neon_vcvt1_high_f16_mf8_fpm	vec(8,__fp16)	vec(16,__mfp8)	unsigned long long
+__builtin_neon_vcvt1_low_bf16_mf8_fpm	vec(8,__bf16)	vec(16,__mfp8)	unsigned long long
+__builtin_neon_vcvt1_low_f16_mf8_fpm	vec(8,__fp16)	vec(16,__mfp8)	unsigned long long
+__builtin_neon_vcvt2_bf16_mf8_fpm	vec(8,__bf16)	vec(8,__mfp8)	unsigned long long
+__builtin_neon_vcvt2_f16_mf8_fpm	vec(8,__fp16)	vec(8,__mfp8)	unsigned long long
+__builtin_neon_vcvt2_high_bf16_mf8_fpm	vec(8,__bf16)	vec(16,__mfp8)	unsigned long long
+__builtin_neon_vcvt2_high_f16_mf8_fpm	vec(8,__fp16)	vec(16,__mfp8)	unsigned long long
+__builtin_neon_vcvt2_low_bf16_mf8_fpm	vec(8,__bf16)	vec(16,__mfp8)	unsigned long long
+__builtin_neon_vcvt2_low_f16_mf8_fpm	vec(8,__fp16)	vec(16,__mfp8)	unsigned long long
+__builtin_neon_vcvt_bf16_f32	vec(8,signed char)	vec(16,signed char)	int
+__builtin_neon_vcvt_f16_f32	vec(8,signed char)	vec(16,signed char)	int
+__builtin_neon_vcvt_f16_s16	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vcvt_f16_u16	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vcvt_f32_f16	vec(16,signed char)	vec(8,signed char)	int
+__builtin_neon_vcvt_f32_f64	vec(8,signed char)	vec(16,signed char)	int
+__builtin_neon_vcvt_f32_v	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vcvt_f64_f32	vec(16,signed char)	vec(8,signed char)	int
+__builtin_neon_vcvt_f64_v	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vcvt_high_mf8_f32_fpm	vec(16,__mfp8)	vec(8,__mfp8)	vec(4,float)	vec(4,float)	unsigned long long
+__builtin_neon_vcvt_mf8_f16_fpm	vec(8,__mfp8)	vec(8,signed char)	vec(8,signed char)	unsigned long long
+__builtin_neon_vcvt_mf8_f32_fpm	vec(8,__mfp8)	vec(4,float)	vec(4,float)	unsigned long long
+__builtin_neon_vcvt_s16_f16	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vcvt_s32_v	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vcvt_s64_v	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vcvt_u16_f16	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vcvt_u32_v	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vcvt_u64_v	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vcvta_s16_f16	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vcvta_s32_v	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vcvta_s64_v	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vcvta_u16_f16	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vcvta_u32_v	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vcvta_u64_v	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vcvtad_s64_f64	long long	double
+__builtin_neon_vcvtad_u64_f64	unsigned long long	double
+__builtin_neon_vcvtaq_s16_f16	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vcvtaq_s32_v	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vcvtaq_s64_v	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vcvtaq_u16_f16	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vcvtaq_u32_v	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vcvtaq_u64_v	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vcvtas_s32_f32	int	float
+__builtin_neon_vcvtas_u32_f32	unsigned int	float
+__builtin_neon_vcvtd_f64_s64	double	long long
+__builtin_neon_vcvtd_f64_u64	double	unsigned long long
+__builtin_neon_vcvtd_s64_f64	long long	double
+__builtin_neon_vcvtd_u64_f64	unsigned long long	double
+__builtin_neon_vcvth_bf16_f32	__bf16	float
+__builtin_neon_vcvtm_s16_f16	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vcvtm_s32_v	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vcvtm_s64_v	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vcvtm_u16_f16	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vcvtm_u32_v	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vcvtm_u64_v	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vcvtmd_s64_f64	long long	double
+__builtin_neon_vcvtmd_u64_f64	unsigned long long	double
+__builtin_neon_vcvtmq_s16_f16	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vcvtmq_s32_v	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vcvtmq_s64_v	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vcvtmq_u16_f16	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vcvtmq_u32_v	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vcvtmq_u64_v	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vcvtms_s32_f32	int	float
+__builtin_neon_vcvtms_u32_f32	unsigned int	float
+__builtin_neon_vcvtn_s16_f16	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vcvtn_s32_v	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vcvtn_s64_v	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vcvtn_u16_f16	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vcvtn_u32_v	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vcvtn_u64_v	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vcvtnd_s64_f64	long long	double
+__builtin_neon_vcvtnd_u64_f64	unsigned long long	double
+__builtin_neon_vcvtnq_s16_f16	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vcvtnq_s32_v	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vcvtnq_s64_v	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vcvtnq_u16_f16	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vcvtnq_u32_v	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vcvtnq_u64_v	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vcvtns_s32_f32	int	float
+__builtin_neon_vcvtns_u32_f32	unsigned int	float
+__builtin_neon_vcvtp_s16_f16	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vcvtp_s32_v	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vcvtp_s64_v	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vcvtp_u16_f16	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vcvtp_u32_v	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vcvtp_u64_v	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vcvtpd_s64_f64	long long	double
+__builtin_neon_vcvtpd_u64_f64	unsigned long long	double
+__builtin_neon_vcvtpq_s16_f16	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vcvtpq_s32_v	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vcvtpq_s64_v	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vcvtpq_u16_f16	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vcvtpq_u32_v	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vcvtpq_u64_v	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vcvtps_s32_f32	int	float
+__builtin_neon_vcvtps_u32_f32	unsigned int	float
+__builtin_neon_vcvtq_f16_s16	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vcvtq_f16_u16	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vcvtq_f32_v	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vcvtq_f64_v	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vcvtq_high_bf16_f32	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vcvtq_low_bf16_f32	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vcvtq_mf8_f16_fpm	vec(16,__mfp8)	vec(16,signed char)	vec(16,signed char)	unsigned long long
+__builtin_neon_vcvtq_s16_f16	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vcvtq_s32_v	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vcvtq_s64_v	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vcvtq_u16_f16	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vcvtq_u32_v	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vcvtq_u64_v	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vcvts_f32_s32	float	int
+__builtin_neon_vcvts_f32_u32	float	unsigned int
+__builtin_neon_vcvts_s32_f32	int	float
+__builtin_neon_vcvts_u32_f32	unsigned int	float
+__builtin_neon_vcvtx_f32_v	vec(8,signed char)	vec(16,signed char)	int
+__builtin_neon_vcvtxd_f32_f64	float	double
+__builtin_neon_vdot_f16_mf8_fpm	vec(4,__fp16)	vec(8,signed char)	vec(8,__mfp8)	vec(8,__mfp8)	unsigned long long
+__builtin_neon_vdot_f32_mf8_fpm	vec(2,float)	vec(2,float)	vec(8,__mfp8)	vec(8,__mfp8)	unsigned long long
+__builtin_neon_vdot_s32	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vdot_u32	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vdotq_f16_mf8_fpm	vec(8,__fp16)	vec(16,signed char)	vec(16,__mfp8)	vec(16,__mfp8)	unsigned long long
+__builtin_neon_vdotq_f32_mf8_fpm	vec(4,float)	vec(4,float)	vec(16,__mfp8)	vec(16,__mfp8)	unsigned long long
+__builtin_neon_vdotq_s32	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vdotq_u32	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_veor3q_s16	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_veor3q_s32	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_veor3q_s64	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_veor3q_s8	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_veor3q_u16	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_veor3q_u32	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_veor3q_u64	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_veor3q_u8	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vfma_f16	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vfma_v	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vfmaq_f16	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vfmaq_v	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vfmlal_high_f16	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vfmlal_low_f16	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vfmlalq_high_f16	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vfmlalq_low_f16	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vfmlsl_high_f16	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vfmlsl_low_f16	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vfmlslq_high_f16	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vfmlslq_low_f16	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vhadd_v	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vhaddq_v	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vhsub_v	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vhsubq_v	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vmax_f16	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vmax_v	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vmaxnm_f16	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vmaxnm_v	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vmaxnmq_f16	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vmaxnmq_v	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vmaxnmv_f32	float	vec(2,float)
+__builtin_neon_vmaxnmvq_f32	float	vec(4,float)
+__builtin_neon_vmaxnmvq_f64	double	vec(2,double)
+__builtin_neon_vmaxq_f16	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vmaxq_v	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vmaxv_f32	float	vec(2,float)
+__builtin_neon_vmaxv_s16	short	vec(4,short)
+__builtin_neon_vmaxv_s32	int	vec(2,int)
+__builtin_neon_vmaxv_s8	signed char	vec(8,signed char)
+__builtin_neon_vmaxv_u16	unsigned short	vec(4,unsigned short)
+__builtin_neon_vmaxv_u32	unsigned int	vec(2,unsigned int)
+__builtin_neon_vmaxv_u8	unsigned char	vec(8,unsigned char)
+__builtin_neon_vmaxvq_f32	float	vec(4,float)
+__builtin_neon_vmaxvq_f64	double	vec(2,double)
+__builtin_neon_vmaxvq_s16	short	vec(8,short)
+__builtin_neon_vmaxvq_s32	int	vec(4,int)
+__builtin_neon_vmaxvq_s8	signed char	vec(16,signed char)
+__builtin_neon_vmaxvq_u16	unsigned short	vec(8,unsigned short)
+__builtin_neon_vmaxvq_u32	unsigned int	vec(4,unsigned int)
+__builtin_neon_vmaxvq_u8	unsigned char	vec(16,unsigned char)
+__builtin_neon_vmin_f16	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vmin_v	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vminnm_f16	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vminnm_v	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vminnmq_f16	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vminnmq_v	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vminnmv_f32	float	vec(2,float)
+__builtin_neon_vminnmvq_f32	float	vec(4,float)
+__builtin_neon_vminnmvq_f64	double	vec(2,double)
+__builtin_neon_vminq_f16	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vminq_v	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vminv_f32	float	vec(2,float)
+__builtin_neon_vminv_s16	short	vec(4,short)
+__builtin_neon_vminv_s32	int	vec(2,int)
+__builtin_neon_vminv_s8	signed char	vec(8,signed char)
+__builtin_neon_vminv_u16	unsigned short	vec(4,unsigned short)
+__builtin_neon_vminv_u32	unsigned int	vec(2,unsigned int)
+__builtin_neon_vminv_u8	unsigned char	vec(8,unsigned char)
+__builtin_neon_vminvq_f32	float	vec(4,float)
+__builtin_neon_vminvq_f64	double	vec(2,double)
+__builtin_neon_vminvq_s16	short	vec(8,short)
+__builtin_neon_vminvq_s32	int	vec(4,int)
+__builtin_neon_vminvq_s8	signed char	vec(16,signed char)
+__builtin_neon_vminvq_u16	unsigned short	vec(8,unsigned short)
+__builtin_neon_vminvq_u32	unsigned int	vec(4,unsigned int)
+__builtin_neon_vminvq_u8	unsigned char	vec(16,unsigned char)
+__builtin_neon_vmlalbq_f16_mf8_fpm	vec(8,__fp16)	vec(16,signed char)	vec(16,__mfp8)	vec(16,__mfp8)	unsigned long long
+__builtin_neon_vmlallbbq_f32_mf8_fpm	vec(4,float)	vec(4,float)	vec(16,__mfp8)	vec(16,__mfp8)	unsigned long long
+__builtin_neon_vmlallbtq_f32_mf8_fpm	vec(4,float)	vec(4,float)	vec(16,__mfp8)	vec(16,__mfp8)	unsigned long long
+__builtin_neon_vmlalltbq_f32_mf8_fpm	vec(4,float)	vec(4,float)	vec(16,__mfp8)	vec(16,__mfp8)	unsigned long long
+__builtin_neon_vmlallttq_f32_mf8_fpm	vec(4,float)	vec(4,float)	vec(16,__mfp8)	vec(16,__mfp8)	unsigned long long
+__builtin_neon_vmlaltq_f16_mf8_fpm	vec(8,__fp16)	vec(16,signed char)	vec(16,__mfp8)	vec(16,__mfp8)	unsigned long long
+__builtin_neon_vmmlaq_s32	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vmmlaq_u32	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vmovl_v	vec(16,signed char)	vec(8,signed char)	int
+__builtin_neon_vmovn_v	vec(8,signed char)	vec(16,signed char)	int
+__builtin_neon_vmul_n_f64	vec(1,double)	vec(1,double)	double
+__builtin_neon_vmul_v	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vmull_p64	unsigned __int128	unsigned long long	unsigned long long
+__builtin_neon_vmull_v	vec(16,signed char)	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vmulq_v	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vmulx_f16	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vmulx_v	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vmulxd_f64	double	double	double
+__builtin_neon_vmulxq_f16	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vmulxq_v	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vmulxs_f32	float	float	float
+__builtin_neon_vnegd_s64	long long	long long
+__builtin_neon_vpadal_v	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vpadalq_v	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vpadd_f16	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vpadd_v	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vpaddd_f64	double	vec(2,double)
+__builtin_neon_vpaddd_s64	long long	vec(2,long long)
+__builtin_neon_vpaddd_u64	unsigned long long	vec(2,unsigned long long)
+__builtin_neon_vpaddl_v	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vpaddlq_v	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vpaddq_f16	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vpaddq_v	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vpadds_f32	float	vec(2,float)
+__builtin_neon_vpmax_f16	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vpmax_v	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vpmaxnm_f16	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vpmaxnm_v	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vpmaxnmq_f16	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vpmaxnmq_v	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vpmaxnmqd_f64	double	vec(2,double)
+__builtin_neon_vpmaxnms_f32	float	vec(2,float)
+__builtin_neon_vpmaxq_f16	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vpmaxq_v	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vpmaxqd_f64	double	vec(2,double)
+__builtin_neon_vpmaxs_f32	float	vec(2,float)
+__builtin_neon_vpmin_f16	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vpmin_v	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vpminnm_f16	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vpminnm_v	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vpminnmq_f16	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vpminnmq_v	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vpminnmqd_f64	double	vec(2,double)
+__builtin_neon_vpminnms_f32	float	vec(2,float)
+__builtin_neon_vpminq_f16	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vpminq_v	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vpminqd_f64	double	vec(2,double)
+__builtin_neon_vpmins_f32	float	vec(2,float)
+__builtin_neon_vqabs_v	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vqabsb_s8	signed char	signed char
+__builtin_neon_vqabsd_s64	long long	long long
+__builtin_neon_vqabsh_s16	short	short
+__builtin_neon_vqabsq_v	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vqabss_s32	int	int
+__builtin_neon_vqadd_v	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vqaddb_s8	signed char	signed char	signed char
+__builtin_neon_vqaddb_u8	unsigned char	unsigned char	unsigned char
+__builtin_neon_vqaddd_s64	long long	long long	long long
+__builtin_neon_vqaddd_u64	unsigned long long	unsigned long long	unsigned long long
+__builtin_neon_vqaddh_s16	short	short	short
+__builtin_neon_vqaddh_u16	unsigned short	unsigned short	unsigned short
+__builtin_neon_vqaddq_v	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vqadds_s32	int	int	int
+__builtin_neon_vqadds_u32	unsigned int	unsigned int	unsigned int
+__builtin_neon_vqdmlal_v	vec(16,signed char)	vec(16,signed char)	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vqdmlalh_s16	int	int	short	short
+__builtin_neon_vqdmlals_s32	long long	long long	int	int
+__builtin_neon_vqdmlsl_v	vec(16,signed char)	vec(16,signed char)	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vqdmlslh_s16	int	int	short	short
+__builtin_neon_vqdmlsls_s32	long long	long long	int	int
+__builtin_neon_vqdmulh_v	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vqdmulhh_s16	short	short	short
+__builtin_neon_vqdmulhq_v	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vqdmulhs_s32	int	int	int
+__builtin_neon_vqdmull_v	vec(16,signed char)	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vqdmullh_s16	int	short	short
+__builtin_neon_vqdmulls_s32	long long	int	int
+__builtin_neon_vqmovn_v	vec(8,signed char)	vec(16,signed char)	int
+__builtin_neon_vqmovnd_s64	int	long long
+__builtin_neon_vqmovnd_u64	unsigned int	unsigned long long
+__builtin_neon_vqmovnh_s16	signed char	short
+__builtin_neon_vqmovnh_u16	unsigned char	unsigned short
+__builtin_neon_vqmovns_s32	short	int
+__builtin_neon_vqmovns_u32	unsigned short	unsigned int
+__builtin_neon_vqmovun_v	vec(8,signed char)	vec(16,signed char)	int
+__builtin_neon_vqmovund_s64	unsigned int	long long
+__builtin_neon_vqmovunh_s16	unsigned char	short
+__builtin_neon_vqmovuns_s32	unsigned short	int
+__builtin_neon_vqneg_v	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vqnegb_s8	signed char	signed char
+__builtin_neon_vqnegd_s64	long long	long long
+__builtin_neon_vqnegh_s16	short	short
+__builtin_neon_vqnegq_v	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vqnegs_s32	int	int
+__builtin_neon_vqrdmlah_s16	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vqrdmlah_s32	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vqrdmlahh_s16	short	short	short	short
+__builtin_neon_vqrdmlahq_s16	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vqrdmlahq_s32	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vqrdmlahs_s32	int	int	int	int
+__builtin_neon_vqrdmlsh_s16	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vqrdmlsh_s32	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vqrdmlshh_s16	short	short	short	short
+__builtin_neon_vqrdmlshq_s16	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vqrdmlshq_s32	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vqrdmlshs_s32	int	int	int	int
+__builtin_neon_vqrdmulh_v	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vqrdmulhh_s16	short	short	short
+__builtin_neon_vqrdmulhq_v	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vqrdmulhs_s32	int	int	int
+__builtin_neon_vqrshl_v	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vqrshlb_s8	signed char	signed char	signed char
+__builtin_neon_vqrshlb_u8	unsigned char	unsigned char	signed char
+__builtin_neon_vqrshld_s64	long long	long long	long long
+__builtin_neon_vqrshld_u64	unsigned long long	unsigned long long	long long
+__builtin_neon_vqrshlh_s16	short	short	short
+__builtin_neon_vqrshlh_u16	unsigned short	unsigned short	short
+__builtin_neon_vqrshlq_v	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vqrshls_s32	int	int	int
+__builtin_neon_vqrshls_u32	unsigned int	unsigned int	int
+__builtin_neon_vqshl_v	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vqshlb_s8	signed char	signed char	signed char
+__builtin_neon_vqshlb_u8	unsigned char	unsigned char	signed char
+__builtin_neon_vqshld_s64	long long	long long	long long
+__builtin_neon_vqshld_u64	unsigned long long	unsigned long long	long long
+__builtin_neon_vqshlh_s16	short	short	short
+__builtin_neon_vqshlh_u16	unsigned short	unsigned short	short
+__builtin_neon_vqshlq_v	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vqshls_s32	int	int	int
+__builtin_neon_vqshls_u32	unsigned int	unsigned int	int
+__builtin_neon_vqsub_v	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vqsubb_s8	signed char	signed char	signed char
+__builtin_neon_vqsubb_u8	unsigned char	unsigned char	unsigned char
+__builtin_neon_vqsubd_s64	long long	long long	long long
+__builtin_neon_vqsubd_u64	unsigned long long	unsigned long long	unsigned long long
+__builtin_neon_vqsubh_s16	short	short	short
+__builtin_neon_vqsubh_u16	unsigned short	unsigned short	unsigned short
+__builtin_neon_vqsubq_v	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vqsubs_s32	int	int	int
+__builtin_neon_vqsubs_u32	unsigned int	unsigned int	unsigned int
+__builtin_neon_vqtbl1_v	vec(8,signed char)	vec(16,signed char)	vec(8,signed char)	int
+__builtin_neon_vqtbl1q_v	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vqtbl2_v	vec(8,signed char)	vec(16,signed char)	vec(16,signed char)	vec(8,signed char)	int
+__builtin_neon_vqtbl2q_v	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vqtbl3_v	vec(8,signed char)	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	vec(8,signed char)	int
+__builtin_neon_vqtbl3q_v	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vqtbl4_v	vec(8,signed char)	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	vec(8,signed char)	int
+__builtin_neon_vqtbl4q_v	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vqtbx1_v	vec(8,signed char)	vec(8,signed char)	vec(16,signed char)	vec(8,signed char)	int
+__builtin_neon_vqtbx1q_v	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vqtbx2_v	vec(8,signed char)	vec(8,signed char)	vec(16,signed char)	vec(16,signed char)	vec(8,signed char)	int
+__builtin_neon_vqtbx2q_v	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vqtbx3_v	vec(8,signed char)	vec(8,signed char)	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	vec(8,signed char)	int
+__builtin_neon_vqtbx3q_v	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vqtbx4_v	vec(8,signed char)	vec(8,signed char)	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	vec(8,signed char)	int
+__builtin_neon_vqtbx4q_v	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vraddhn_v	vec(8,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vrax1q_u64	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vrbit_v	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vrbitq_v	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vrecpe_f16	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vrecpe_v	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vrecped_f64	double	double
+__builtin_neon_vrecpeq_f16	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vrecpeq_v	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vrecpes_f32	float	float
+__builtin_neon_vrecps_f16	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vrecps_v	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vrecpsd_f64	double	double	double
+__builtin_neon_vrecpsq_f16	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vrecpsq_v	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vrecpss_f32	float	float	float
+__builtin_neon_vrecpxd_f64	double	double
+__builtin_neon_vrecpxs_f32	float	float
+__builtin_neon_vrhadd_v	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vrhaddq_v	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vrnd32x_f32	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vrnd32x_f64	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vrnd32xq_f32	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vrnd32xq_f64	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vrnd32z_f32	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vrnd32z_f64	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vrnd32zq_f32	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vrnd32zq_f64	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vrnd64x_f32	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vrnd64x_f64	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vrnd64xq_f32	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vrnd64xq_f64	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vrnd64z_f32	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vrnd64z_f64	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vrnd64zq_f32	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vrnd64zq_f64	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vrnd_f16	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vrnd_v	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vrnda_f16	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vrnda_v	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vrndaq_f16	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vrndaq_v	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vrndi_f16	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vrndi_v	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vrndiq_f16	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vrndiq_v	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vrndm_f16	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vrndm_v	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vrndmq_f16	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vrndmq_v	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vrndn_f16	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vrndn_v	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vrndnq_f16	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vrndnq_v	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vrndns_f32	float	float
+__builtin_neon_vrndp_f16	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vrndp_v	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vrndpq_f16	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vrndpq_v	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vrndq_f16	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vrndq_v	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vrndx_f16	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vrndx_v	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vrndxq_f16	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vrndxq_v	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vrshl_v	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vrshld_s64	long long	long long	long long
+__builtin_neon_vrshld_u64	unsigned long long	unsigned long long	long long
+__builtin_neon_vrshlq_v	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vrsqrte_f16	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vrsqrte_v	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vrsqrted_f64	double	double
+__builtin_neon_vrsqrteq_f16	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vrsqrteq_v	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vrsqrtes_f32	float	float
+__builtin_neon_vrsqrts_f16	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vrsqrts_v	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vrsqrtsd_f64	double	double	double
+__builtin_neon_vrsqrtsq_f16	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vrsqrtsq_v	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vrsqrtss_f32	float	float	float
+__builtin_neon_vrsubhn_v	vec(8,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vscale_f16	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vscale_f32	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vscaleq_f16	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vscaleq_f32	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vscaleq_f64	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vsha1cq_u32	vec(4,int)	vec(4,unsigned int)	unsigned int	vec(4,unsigned int)
+__builtin_neon_vsha1h_u32	unsigned int	unsigned int
+__builtin_neon_vsha1mq_u32	vec(4,int)	vec(4,unsigned int)	unsigned int	vec(4,unsigned int)
+__builtin_neon_vsha1pq_u32	vec(4,int)	vec(4,unsigned int)	unsigned int	vec(4,unsigned int)
+__builtin_neon_vsha1su0q_u32	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vsha1su1q_u32	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vsha256h2q_u32	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vsha256hq_u32	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vsha256su0q_u32	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vsha256su1q_u32	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vsha512h2q_u64	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vsha512hq_u64	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vsha512su0q_u64	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vsha512su1q_u64	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vshl_v	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vshld_s64	long long	long long	long long
+__builtin_neon_vshld_u64	unsigned long long	unsigned long long	long long
+__builtin_neon_vshll_n_v	vec(16,signed char)	vec(8,signed char)	int	int
+__builtin_neon_vshlq_v	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vsm3partw1q_u32	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vsm3partw2q_u32	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vsm3ss1q_u32	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vsm4ekeyq_u32	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vsm4eq_u32	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vsqadd_v	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vsqaddb_u8	unsigned char	unsigned char	signed char
+__builtin_neon_vsqaddd_u64	unsigned long long	unsigned long long	long long
+__builtin_neon_vsqaddh_u16	unsigned short	unsigned short	short
+__builtin_neon_vsqaddq_v	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vsqadds_u32	unsigned int	unsigned int	int
+__builtin_neon_vsqrt_f16	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vsqrt_v	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vsqrtq_f16	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vsqrtq_v	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vsubd_s64	long long	long long	long long
+__builtin_neon_vsubd_u64	unsigned long long	unsigned long long	unsigned long long
+__builtin_neon_vsubhn_v	vec(8,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vtbl1_v	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vtbl2_v	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vtbl3_v	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vtbl4_v	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vtbx1_v	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vtbx2_v	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vtbx3_v	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vtbx4_v	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vtrn_v	void	ptr(void)	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vtrnq_v	void	ptr(void)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vtst_v	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vtstd_s64	unsigned long long	long long	long long
+__builtin_neon_vtstd_u64	unsigned long long	unsigned long long	unsigned long long
+__builtin_neon_vtstq_v	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vuqadd_v	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vuqaddb_s8	signed char	signed char	unsigned char
+__builtin_neon_vuqaddd_s64	long long	long long	unsigned long long
+__builtin_neon_vuqaddh_s16	short	short	unsigned short
+__builtin_neon_vuqaddq_v	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vuqadds_s32	int	int	unsigned int
+__builtin_neon_vusdot_s32	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vusdotq_s32	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vusmmlaq_s32	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vuzp_v	void	ptr(void)	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vuzpq_v	void	ptr(void)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vzip_v	void	ptr(void)	vec(8,signed char)	vec(8,signed char)	int
+__builtin_neon_vzipq_v	void	ptr(void)	vec(16,signed char)	vec(16,signed char)	int
+__builtin_neon_vld1q_v	vec(16,signed char)	ptr(const void)	int
+__builtin_neon_vst1q_v	void	ptr(void)	vec(16,signed char)	int
+__builtin_neon_vsetq_lane_f32	vec(4,float)	float	vec(4,float)	int
+__builtin_neon_vgetq_lane_f32	float	vec(4,float)	int
+__builtin_neon_vextq_v	vec(16,signed char)	vec(16,signed char)	vec(16,signed char)	int	int
+__builtin_roundeven	double	double
+__builtin_roundevenf	float	float

@@ -12,6 +12,9 @@ impl<'a> FunctionLowerer<'a> {
         span: SourceSpan,
         state: &mut State,
     ) -> Result<Option<ExprValue>, LowerError> {
+        if evocc_types::neon::apple_signature(name).is_some() {
+            return self.lower_apple_neon_call(name, function_ty, arguments, span, state);
+        }
         let unsupported = || LowerError::TargetBuiltin {
             name: name.into(),
             span,
@@ -459,5 +462,138 @@ impl<'a> FunctionLowerer<'a> {
             result = self.emit_raw_binary(state, Inst::Xor, &result, &product)?;
         }
         Ok(result)
+    }
+}
+
+impl<'a> FunctionLowerer<'a> {
+    /// The Clang generic forms carry vectors as sixteen bytes and specify
+    /// their lane type with a constant selector. Preserve each operand once
+    /// before another operand can change the block or memory state.
+    fn lower_apple_neon_call(
+        &mut self,
+        name: &str,
+        function_ty: TypeId,
+        arguments: &[&'a CHirExpr<'a>],
+        span: SourceSpan,
+        state: &mut State,
+    ) -> Result<Option<ExprValue>, LowerError> {
+        let unsupported = || LowerError::UnknownBuiltin {
+            name: name.into(),
+            span,
+        };
+        if !matches!(
+            name,
+            "__builtin_neon_vld1q_v"
+                | "__builtin_neon_vst1q_v"
+                | "__builtin_neon_vzipq_v"
+                | "__builtin_neon_vuzpq_v"
+        ) {
+            return Err(unsupported());
+        }
+        let Some(TypeKind::Function {
+            return_type,
+            parameters:
+                FunctionParameters::Prototype {
+                    types,
+                    variadic: false,
+                },
+        }) = self.unit.types().get(function_ty).map(|ty| &ty.kind)
+        else {
+            return Err(unsupported());
+        };
+        let return_ty = *return_type;
+        let types = types.clone();
+        if types.len() != arguments.len() {
+            return Err(unsupported());
+        }
+        let selector = evocc_chir::constant::eval_integer_constant(
+            arguments.last().ok_or_else(unsupported)?,
+            self.unit.types(),
+            self.unit.symbols(),
+            self.target,
+        )
+        .map(|value| value.cast(CIntegerType::INT))
+        .and_then(CInteger::try_mathematical_value)
+        .ok_or_else(unsupported)?;
+        let width = match selector {
+            32 => 1,
+            33 => 2,
+            34 => 4,
+            _ => return Err(unsupported()),
+        };
+        let mut keys = Vec::new();
+        for (argument, parameter) in arguments[..arguments.len() - 1].iter().zip(&types) {
+            let value = self.lower_expr(argument, state)?;
+            let value = self.coerce_to_object_type(
+                value,
+                Some(argument),
+                *parameter,
+                argument.span(),
+                state,
+            )?;
+            let key = self.retain_temporary(value.value, state);
+            state.env.get_mut(&key).unwrap().integer = Some(value.integer);
+            keys.push(key);
+        }
+        let values = keys
+            .into_iter()
+            .map(|key| {
+                let value = state.env.remove(&key).expect("retained intrinsic operand");
+                ExprValue {
+                    value: value.value,
+                    integer: value.integer.unwrap(),
+                }
+            })
+            .collect::<Vec<_>>();
+        let layout = AccessLayout::new(16, 1);
+        if name == "__builtin_neon_vld1q_v" {
+            return self
+                .emit_memory_load_with_layout(
+                    values[0].value.clone(),
+                    return_ty,
+                    false,
+                    span,
+                    state,
+                    layout,
+                )
+                .map(Some);
+        }
+        if name == "__builtin_neon_vst1q_v" {
+            self.emit_memory_store_with_layout(
+                values[0].value.clone(),
+                values[1].clone(),
+                layout,
+                false,
+                state,
+            )?;
+            return Ok(None);
+        }
+        let lanes = 16 / width;
+        for half in 0..2 {
+            let indices = (0..16)
+                .map(|byte| {
+                    let lane = byte / width;
+                    let sub = byte % width;
+                    let source_lane = if name == "__builtin_neon_vzipq_v" {
+                        (lane % 2) * lanes + half * (lanes / 2) + lane / 2
+                    } else {
+                        (lane / (lanes / 2)) * lanes + 2 * (lane % (lanes / 2)) + half
+                    };
+                    source_lane * width + sub
+                })
+                .collect();
+            let vector = self.lower_vector_values(
+                &evocc_chir::vector::VectorOp::ShuffleStatic(indices),
+                &[Some(types[1]), Some(types[2])],
+                types[1],
+                vec![values[1].clone(), values[2].clone()],
+                span,
+                state,
+            )?;
+            let address =
+                self.constant_offset_address(values[0].value.clone(), half as u64 * 16, state)?;
+            self.emit_memory_store_with_layout(address, vector, layout, false, state)?;
+        }
+        Ok(None)
     }
 }

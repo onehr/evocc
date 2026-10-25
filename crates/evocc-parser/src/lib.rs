@@ -599,8 +599,6 @@ fn darwin_refuses_attribute(name: &str) -> bool {
             | "pass_dynamic_object_size"
             | "noderef"
             | "ms_struct"
-            | "neon_vector_type"
-            | "neon_polyvector_type"
             | "counted_by"
             | "counted_by_or_null"
             | "sized_by"
@@ -714,6 +712,7 @@ fn convention_refusals(
     unit: &CHirUnit<'_>,
     records: ConventionRecords,
     defer_internal_definitions: bool,
+    positive_target_attributes: bool,
 ) -> (Vec<(&'static str, SourceSpan, usize)>, Vec<DeferredRefusal>) {
     let ConventionRecords {
         mut unsettled,
@@ -730,6 +729,9 @@ fn convention_refusals(
                     internal.insert(function.symbol);
                 }
                 for attribute in &function.attributes {
+                    if positive_target_attributes && positive_target_attribute(attribute) {
+                        continue;
+                    }
                     if let Some((name, _)) = accepted
                         .contains(&span_key(attribute.span))
                         .then(|| attribute.semantic_name().and_then(convention_attribute))
@@ -910,6 +912,7 @@ struct AvailabilityFrame {
 
 pub struct Parser<'src, 'arena> {
     target_layout: TargetDataLayout,
+    general_registers_only: bool,
     /// The macOS deployment target of `aarch64-apple-darwin`. It gives the
     /// availability, `unavailable` and `weak_import` attributes their
     /// meaning; without it they are preserved without effect.
@@ -1065,6 +1068,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         let current_scope = symbols.file_scope();
         Self {
             tokens,
+            general_registers_only: false,
             pos: 0,
             file,
             _source_lifetime: std::marker::PhantomData,
@@ -1153,6 +1157,12 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         if layout.provides_clang_atomic_builtins() {
             self.promote_clang_atomic_builtins();
         }
+    }
+
+    /// A per-function target attribute cannot re-enable registers that this
+    /// compilation excludes. Set this together with the target layout.
+    pub fn set_general_registers_only(&mut self, value: bool) {
+        self.general_registers_only = value;
     }
 
     /// Give Clang's availability attributes the meaning of Apple clang for
@@ -1364,6 +1374,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             &unit,
             conventions,
             self.target_layout.names_clang_extensions(),
+            self.target_layout.names_clang_extensions() && !self.general_registers_only,
         );
         unit.set_gnu_inline(self.gnu_inline);
         if self.lint_declarations {
@@ -1770,7 +1781,12 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             };
             let accept = match settlement {
                 Settlement::Prototype => true,
-                Settlement::Definition => convention_permits(name, true),
+                Settlement::Definition => {
+                    convention_permits(name, true)
+                        || (self.target_layout.names_clang_extensions()
+                            && !self.general_registers_only
+                            && positive_target_attribute(attribute))
+                }
                 Settlement::Other => false,
             };
             let mut refused = None;
@@ -6468,6 +6484,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                             name.as_str(),
                             "aligned"
                                 | "vector_size"
+                                | "neon_vector_type"
+                                | "neon_polyvector_type"
                                 | "constructor"
                                 | "destructor"
                                 | "patchable_function_entry"
@@ -6766,6 +6784,29 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                         });
                     let Some(vector) = vector else {
                         self.report("E2903", "malformed-attribute", attribute.span);
+                        continue;
+                    };
+                    ty = vector;
+                    attribute.applied = Some(AppliedAttribute::VectorSize);
+                }
+                "neon_vector_type" | "neon_polyvector_type"
+                    if self.target_layout.names_clang_extensions() =>
+                {
+                    let vector = attribute
+                        .arguments
+                        .first()
+                        .and_then(|argument| argument.integer)
+                        .filter(|_| attribute.arguments.len() == 1)
+                        .and_then(|lanes| {
+                            self.apply_neon_vector(
+                                ty,
+                                lanes,
+                                attribute.semantic_name() == Some("neon_polyvector_type"),
+                                attribute.applied.is_some(),
+                            )
+                        });
+                    let Some(vector) = vector else {
+                        self.report("E2903", "malformed-neon-vector-attribute", attribute.span);
                         continue;
                     };
                     ty = vector;
@@ -7358,6 +7399,16 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             }
             if is_builtin_type_word(kind) {
                 let token = self.advance().expect("peeked builtin type word");
+                if self.token_text(&token) == "__mfp8"
+                    && !self.target_layout.names_clang_extensions()
+                {
+                    self.report(
+                        "E1007",
+                        "invalid-type-specifiers: __mfp8 is unavailable on this target",
+                        token.span,
+                    );
+                    return None;
+                }
                 let forced_int128_signedness = match (kind, self.token_text(&token)) {
                     (TokenKind::GnuInt128, "__int128_t") => Some(GnuInt128Signedness::Signed),
                     (TokenKind::GnuInt128, "__uint128_t") => Some(GnuInt128Signedness::Unsigned),
@@ -13908,6 +13959,22 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 self.side_declarations.push(declaration);
             }
             let operand = self.resolve_record_cast_operand(ty, operand, span)?;
+            let opaque = |ty| {
+                matches!(
+                    self.types.get(ty).map(|ty| &ty.kind),
+                    Some(TypeKind::TargetBuiltin(TargetBuiltinType::ArmMfp8))
+                )
+            };
+            let source_is_opaque = self.converted_expression_type(operand).is_some_and(
+                |source| matches!(source.ty, InferredType::Canonical(ty) if opaque(ty)),
+            );
+            if opaque(ty)
+                || (source_is_opaque
+                    && !matches!(self.types.get(ty).map(|ty| &ty.kind), Some(TypeKind::Void)))
+            {
+                self.report("E2102", "invalid-opaque-fp8-conversion", span);
+                return None;
+            }
             if matches!(
                 self.types.get(ty).map(|ty| &ty.kind),
                 Some(TypeKind::Vector { .. })
@@ -14395,6 +14462,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             }
             TokenKind::Identifier => {
                 let spelling = self.token_text(&tok).to_owned();
+                if spelling == "__builtin_bit_cast" && self.target_layout.names_clang_extensions() {
+                    return self.parse_neon_bit_cast(tok);
+                }
                 if matches!(
                     spelling.as_str(),
                     "__builtin_shuffle" | "__builtin_shufflevector" | "__builtin_convertvector"
@@ -19120,6 +19190,50 @@ fn nan_builtin_suffix(name: &str) -> Option<FloatSuffix> {
         "__builtin_nanl" => Some(FloatSuffix::L),
         _ => None,
     }
+}
+
+/// The feature requests used by Apple's NEON headers need no per-function
+/// code generation. Other feature and architecture contracts stay refused.
+fn positive_target_attribute(attribute: &Attribute) -> bool {
+    if attribute.semantic_name() != Some("target") || attribute.arguments.len() != 1 {
+        return false;
+    }
+    let Some(units) = attribute.arguments[0]
+        .string_literal()
+        .and_then(|s| s.decoded_units())
+    else {
+        return false;
+    };
+    let Some(text) = units
+        .into_iter()
+        .map(char::from_u32)
+        .collect::<Option<String>>()
+    else {
+        return false;
+    };
+    text.split(',').all(|feature| {
+        matches!(
+            feature.trim_ascii(),
+            "aes"
+                | "bf16"
+                | "dotprod"
+                | "faminmax"
+                | "fp16fml"
+                | "fp8"
+                | "fp8dot2"
+                | "fp8dot4"
+                | "fp8fma"
+                | "fullfp16"
+                | "i8mm"
+                | "neon"
+                | "sha2"
+                | "sha3"
+                | "sm4"
+                | "v8.1a"
+                | "v8.3a"
+                | "v8.5a"
+        )
+    })
 }
 
 fn disables_only_vectorization(arguments: &[AttributeArgument]) -> bool {

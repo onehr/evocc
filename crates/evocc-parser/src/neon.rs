@@ -5,6 +5,53 @@ use super::*;
 use evocc_types::neon::{self, BuiltinType};
 
 impl<'src, 'arena> Parser<'src, 'arena> {
+    /// Bit casts keep the object image. The destination is a type operand,
+    /// so it must be parsed before the value operand like `convertvector`.
+    pub(super) fn parse_neon_bit_cast(
+        &mut self,
+        keyword: Token,
+    ) -> Option<&'arena CHirExpr<'arena>> {
+        self.expect(TokenKind::LParen)?;
+        let (ty, _) = self.parse_type_name()?;
+        self.expect(TokenKind::Comma)?;
+        let value = self.parse_argument_expression()?;
+        let close = self.expect(TokenKind::RParen)?;
+        let span = self.merge_span(keyword.span, close.span);
+        let source = self.converted_expression_type(value)?.ty;
+        let source = self.materialize_inferred_type(source, Some(value))?;
+        if ![source, ty].into_iter().all(|ty| {
+            matches!(
+                self.types.get(ty).map(|ty| &ty.kind),
+                Some(
+                    TypeKind::Int(_)
+                        | TypeKind::GnuInt128(_)
+                        | TypeKind::Float(_)
+                        | TypeKind::TargetBuiltin(_)
+                        | TypeKind::Vector { .. }
+                )
+            )
+        }) {
+            self.report("E2102", "unsupported-bit-cast-type", span);
+            return None;
+        }
+        let size = |ty| {
+            self.target_layout
+                .layout_of(&self.types, ty)
+                .ok()
+                .map(|layout| layout.size_bytes)
+        };
+        if size(source).is_none_or(|bytes| bytes > 16) || size(source) != size(ty) {
+            self.report("E2102", "bit-cast-size-mismatch", span);
+            return None;
+        }
+        Some(self.vector_node(
+            evocc_chir::vector::VectorOp::Reinterpret,
+            vec![value],
+            ty,
+            span,
+        ))
+    }
+
     pub(super) fn validate_neon_call(
         &mut self,
         callee: &CHirExpr<'arena>,
@@ -17,7 +64,11 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         else {
             return Some(());
         };
-        if !self.symbols.is_builtin_function(*symbol) || neon::signature(spelling).is_none() {
+        if !self.symbols.is_builtin_function(*symbol)
+            || (neon::signature(spelling).is_none()
+                && (!self.target_layout.names_clang_extensions()
+                    || neon::apple_signature(spelling).is_none()))
+        {
             return Some(());
         }
         let FunctionParameters::Prototype {
@@ -121,10 +172,18 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         name: &str,
         span: SourceSpan,
     ) -> Option<SymbolId> {
-        if !name.starts_with("__builtin_aarch64_") && self.neon_tuple_types.is_empty() {
+        let apple = self
+            .target_layout
+            .names_clang_extensions()
+            .then(|| neon::apple_signature(name))
+            .flatten();
+        if apple.is_none()
+            && !name.starts_with("__builtin_aarch64_")
+            && self.neon_tuple_types.is_empty()
+        {
             return None;
         }
-        let signature = neon::signature(name)?;
+        let signature = apple.or_else(|| neon::signature(name))?;
         let return_ty = self.neon_signature_type(signature[0])?;
         let parameters = signature[1..]
             .iter()
@@ -144,8 +203,21 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     }
 
     fn neon_signature_type(&mut self, name: &str) -> Option<TypeId> {
-        let kind = if let Some(inner) = name.strip_prefix("ptr(").and_then(|s| s.strip_suffix(')'))
+        let kind = if let Some(inner) = name.strip_prefix("vec(").and_then(|s| s.strip_suffix(')'))
         {
+            let (lanes, inner) = inner.split_once(',')?;
+            let element = self.neon_signature_type(inner)?;
+            let family = if matches!(self.types.get(element)?.kind, TypeKind::TargetBuiltin(_)) {
+                evocc_types::VectorFamily::ArmNeon
+            } else {
+                evocc_types::VectorFamily::Gnu
+            };
+            TypeKind::Vector {
+                element,
+                lanes: lanes.parse().ok()?,
+                family,
+            }
+        } else if let Some(inner) = name.strip_prefix("ptr(").and_then(|s| s.strip_suffix(')')) {
             TypeKind::Pointer(self.neon_signature_type(inner)?)
         } else if let Some(inner) = name.strip_prefix("const ") {
             let ty = self.neon_signature_type(inner)?;
@@ -166,12 +238,17 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 "signed char" => TypeKind::Int(IntRank::SChar),
                 "unsigned char" => TypeKind::Int(IntRank::UChar),
                 "short int" => TypeKind::Int(IntRank::Short),
+                "short" => TypeKind::Int(IntRank::Short),
                 "short unsigned int" => TypeKind::Int(IntRank::UShort),
+                "unsigned short" => TypeKind::Int(IntRank::UShort),
                 "int" => TypeKind::Int(IntRank::Int),
                 "unsigned int" => TypeKind::Int(IntRank::UInt),
                 "long int" => TypeKind::Int(IntRank::Long),
                 "long unsigned int" => TypeKind::Int(IntRank::ULong),
                 "long long int" => TypeKind::Int(IntRank::LongLong),
+                "long long" => TypeKind::Int(IntRank::LongLong),
+                "unsigned long long" => TypeKind::Int(IntRank::ULongLong),
+                "unsigned __int128" => TypeKind::GnuInt128(GnuInt128Signedness::Unsigned),
                 "float" => TypeKind::Float(FloatKind::F32),
                 "double" => TypeKind::Float(FloatKind::F64),
                 tuple => {

@@ -1266,7 +1266,8 @@ fn floating_neon_intrinsics_keep_their_refusals() {
             (LINUX, "--interpret-c-hir", "E3007"),
             (LINUX, "--interpret-evoir", "E3050"),
             (LINUX, "-fsyntax-only", ""),
-            (DARWIN, "-fsyntax-only", "E1004"),
+            (DARWIN, "-fsyntax-only", ""),
+            (DARWIN, "--emit=asm", "E2949"),
         ] {
             runs.push((case, target, mode, code));
         }

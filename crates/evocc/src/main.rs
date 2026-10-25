@@ -1927,6 +1927,7 @@ fn run_parsed(options: &DriverOptions, action: ParsedAction) -> ExitCode {
     let arena = Arena::default();
     let mut parser = Parser::from_tokens(processed, FileId::new(1));
     parser.set_target_layout(options.target_layout());
+    parser.set_general_registers_only(options.codegen.general_registers_only);
     if let Some(deployment) = options.darwin_deployment {
         parser.set_availability_target(deployment);
     }

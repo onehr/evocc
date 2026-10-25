@@ -100,6 +100,10 @@ fn source_assembly_template(source: &AsmStmt<'_>) -> Result<String, LowerError> 
 /// reported rather than replaced with a placeholder value or terminator.
 #[derive(Debug, Clone, PartialEq)]
 pub enum LowerError {
+    UnknownBuiltin {
+        name: String,
+        span: SourceSpan,
+    },
     TargetBuiltin {
         name: String,
         span: SourceSpan,
@@ -199,6 +203,9 @@ pub enum LowerError {
 impl fmt::Display for LowerError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::UnknownBuiltin { name, .. } => {
+                write!(formatter, "unknown-builtin: {name}")
+            }
             Self::TargetBuiltin { name, .. } => {
                 write!(formatter, "not-lowered: target-builtin: {name}")
             }
@@ -256,6 +263,7 @@ impl LowerError {
     #[must_use]
     pub const fn code(&self) -> &'static str {
         match self {
+            Self::UnknownBuiltin { .. } => "E2949",
             Self::TargetBuiltin { .. } => "E3052",
             Self::Profile(error) => error.code,
             Self::Linkage(error) => error.code,
@@ -285,6 +293,7 @@ impl LowerError {
     #[must_use]
     pub const fn span(&self) -> Option<SourceSpan> {
         match self {
+            Self::UnknownBuiltin { span, .. } => Some(*span),
             Self::TargetBuiltin { span, .. } => Some(*span),
             Self::Profile(error) => Some(error.span),
             Self::Linkage(error) => Some(error.span),
@@ -3561,12 +3570,43 @@ fn function_info(
     })
 }
 
+/// FP8 storage does not yet have a call interface, including inside a
+/// composite. A pointer to storage does not pass that storage by value.
+fn contains_opaque_fp8(types: &TypeInterner, ty: TypeId, active: &mut Vec<TypeId>) -> bool {
+    if active.contains(&ty) {
+        return false;
+    }
+    active.push(ty);
+    let found = match types.get(ty).map(|ty| &ty.kind) {
+        Some(TypeKind::TargetBuiltin(evocc_types::TargetBuiltinType::ArmMfp8)) => true,
+        Some(TypeKind::Array { element, .. } | TypeKind::Vector { element, .. }) => {
+            contains_opaque_fp8(types, *element, active)
+        }
+        Some(TypeKind::Struct(tag) | TypeKind::Union(tag)) => {
+            match types.tag(*tag).map(|tag| &tag.state) {
+                Some(TagState::Complete(
+                    TagDefinition::Struct(fields) | TagDefinition::Union(fields),
+                )) => fields
+                    .iter()
+                    .any(|field| contains_opaque_fp8(types, field.ty, active)),
+                _ => false,
+            }
+        }
+        _ => false,
+    };
+    active.pop();
+    found
+}
+
 fn function_value_type(
     types: &TypeInterner,
     target: &TargetDataLayout,
     ty: TypeId,
     span: SourceSpan,
 ) -> Result<FunctionValueType, LowerError> {
+    if contains_opaque_fp8(types, ty, &mut Vec::new()) {
+        return Err(LowerError::FloatingCallInterface { span });
+    }
     if let Ok(integer) = canonical_integer(types, target, ty, span) {
         return Ok(FunctionValueType {
             source: ty,
@@ -6529,6 +6569,14 @@ impl<'a> FunctionLowerer<'a> {
         ty: TypeId,
         span: SourceSpan,
     ) -> Result<(EvoIRType, CIntegerType), LowerError> {
+        if matches!(
+            self.unit.types().get(ty).map(|ty| &ty.kind),
+            Some(TypeKind::TargetBuiltin(
+                evocc_types::TargetBuiltinType::ArmMfp8
+            ))
+        ) {
+            return Ok((EvoIRType::Bits(8), CIntegerType::UCHAR));
+        }
         if let Ok(integer) = canonical_integer(self.unit.types(), self.target, ty, span) {
             return Ok((bits(integer), integer));
         }
@@ -8374,6 +8422,14 @@ impl<'a> FunctionLowerer<'a> {
         span: SourceSpan,
         state: &mut State,
     ) -> Result<ExprValue, LowerError> {
+        if matches!(
+            self.unit.types().get(ty).map(|ty| &ty.kind),
+            Some(TypeKind::TargetBuiltin(
+                evocc_types::TargetBuiltinType::ArmMfp8
+            ))
+        ) {
+            return self.cast(value, CIntegerType::UCHAR, state);
+        }
         if let Ok(integer) = canonical_integer(self.unit.types(), self.target, ty, span) {
             return self.cast(value, integer, state);
         }
@@ -8579,6 +8635,17 @@ impl<'a> FunctionLowerer<'a> {
                 layout.align_bytes = layout.align_bytes.min(alignment);
                 let zero = self.constant(state, CIntegerType::USHORT, 0)?;
                 self.emit_memory_store_with_layout(address, zero, layout, false, state)?;
+                Ok(())
+            }
+            TypeKind::TargetBuiltin(evocc_types::TargetBuiltinType::ArmMfp8) => {
+                let value = self.constant(state, CIntegerType::UCHAR, 0)?;
+                self.emit_memory_store_with_layout(
+                    address,
+                    value,
+                    self.access_layout(ty, span)?,
+                    false,
+                    state,
+                )?;
                 Ok(())
             }
             TypeKind::TargetBuiltin(kind) if kind.polynomial_bits().is_some() => {
@@ -13538,7 +13605,9 @@ impl<'a> FunctionLowerer<'a> {
                     });
                 }
                 if self.unit.symbols().is_builtin_function(*symbol) {
-                    if evocc_types::neon::signature(spelling).is_some() {
+                    if evocc_types::neon::signature(spelling).is_some()
+                        || evocc_types::neon::apple_signature(spelling).is_some()
+                    {
                         return self.lower_neon_call(spelling, facts.ty(), arguments, span, state);
                     }
                     match spelling.as_str() {

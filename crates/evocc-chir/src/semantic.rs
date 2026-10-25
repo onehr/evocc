@@ -1238,7 +1238,7 @@ impl ScalarPlace {
                 | TypeKind::Enum(_)
                 | TypeKind::GnuInt128(_)
         ) && !matches!(canonical.kind, TypeKind::TargetBuiltin(kind)
-            if kind.polynomial_bits().is_some() || kind.half_format().is_some())
+            if kind.polynomial_bits().is_some() || kind.half_format().is_some() || kind == evocc_types::TargetBuiltinType::ArmMfp8)
         {
             return Err(ScalarPlaceError::NonScalarType { symbol, ty });
         }

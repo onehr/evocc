@@ -19,7 +19,13 @@ const DEFAULT_DEPLOYMENT: Version = Version::new(11, 0, 0);
 
 /// The `__has_attribute` answers of Apple clang for the attributes that this
 /// profile gives Apple clang's meaning (EvoIR 10.1.9).
-const ATTRIBUTES: [(&str, i64); 3] = [("availability", 1), ("unavailable", 1), ("weak_import", 1)];
+const ATTRIBUTES: [(&str, i64); 5] = [
+    ("availability", 1),
+    ("unavailable", 1),
+    ("weak_import", 1),
+    ("neon_vector_type", 1),
+    ("neon_polyvector_type", 1),
+];
 
 /// The `__has_feature` names of the availability attribute that Apple clang
 /// answers 1 for. Each names a form that this profile reads.
@@ -72,10 +78,23 @@ pub(crate) fn apply_predefined_profile(
     // refusal, E2965, so a unit that includes the header still compiles
     // (EvoIR 10.1.14).
     pp.add_target_builtins(OS_LOG_BUILTINS);
+    pp.add_target_builtins([
+        "__builtin_bit_cast",
+        "__builtin_neon_vld1q_v",
+        "__builtin_neon_vst1q_v",
+        "__builtin_neon_vzipq_v",
+        "__builtin_neon_vuzpq_v",
+    ]);
     // The SDK marks declarations with Clang's availability attribute only
     // when the compiler reports it (EvoIR 10.1.9).
     pp.add_target_attributes(ATTRIBUTES);
     pp.add_target_features(FEATURES);
+    // Apple guards the rounding declarations with this Armv8 feature macro.
+    // Their types are available even when a retained builtin is refused.
+    pp.define(
+        "__ARM_FEATURE_DIRECTED_ROUNDING".into(),
+        crate::decoded_tokens("1")?,
+    );
     pp.set_availability_target(deployment);
     let version = deployment.encoded().to_string();
     for name in [
