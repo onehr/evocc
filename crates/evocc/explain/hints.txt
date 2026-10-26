@@ -85,6 +85,7 @@ E2965	Write the message with the C library instead of the os_log builtins.
 E2966	Write the operation in C, or use inline assembly for the instruction.
 E2967	Remove the Clang extension, or use a supported GNU vector or ordinary C type.
 E2968	Use `-pedantic` or `-Wpedantic`, or remove `-pedantic-errors`.
+E2969	Use a constant range value or initialize the elements in a loop on Darwin.
 E3001	Initialize the object on every path before reading it.
 E3002	Check the divisor and choose the required error behavior before dividing.
 E3003	Handle zero separately before evaluating `%`.

@@ -2,9 +2,9 @@
 //! 10.1 that the parser did not make. Since L11a, a read of an admitted
 //! `_Atomic` scalar is a `seq_cst` atomic load; a read of any other atomic
 //! object is `E2702` at the read, as an update is, so that no read becomes a
-//! plain load. The initializer of a range designator must be a constant,
-//! because one written expression serves every element; a nonconstant one is
-//! `E2917` at the expression.
+//! plain load. The initializer of a range designator must be a constant
+//! on Darwin; a nonconstant value is `E2969` at the expression. Linux shares
+//! each admitted nonconstant range value across its surviving destinations.
 
 use evocc_common::{Arena, FileId, SourceFile, SourceSpan};
 use evocc_lex::{Lexer, TokenKind};
@@ -132,23 +132,41 @@ fn an_atomic_object_that_is_not_read_stays_accepted() {
 
 #[test]
 fn a_nonconstant_range_initializer_is_refused_at_the_expression() {
-    // The probe of the audit: before, `f` ran once per element and the
-    // program exited 33.
+    let refused_at = |text: &str, code: &str, spelling: &str, occurrence: usize| {
+        let source = file(text);
+        let arena = Arena::default();
+        let mut lexer = Lexer::new(source.id, &source.contents);
+        let mut tokens = Vec::new();
+        while let Some(token) = lexer.next() {
+            tokens.push(token);
+        }
+        let mut parser = Parser::new(tokens, source.id, &source.contents);
+        parser.set_target_layout(evocc_types::TargetDataLayout::aarch64_apple_darwin());
+        let _ = parser.parse_translation_unit_in(&arena);
+        let diagnostic = parser.diagnostic().expect("Darwin must refuse the value");
+        assert!(parser.had_error());
+        assert_eq!(diagnostic.code, code);
+        let expected = span_of(&source, spelling, occurrence);
+        assert_eq!(
+            (diagnostic.span.byte_start, diagnostic.span.line_start),
+            (expected.byte_start, expected.line_start)
+        );
+    };
     refused_at(
         "int n; int f(void) { return ++n; }\nint g(void) { int b[4] = {[0 ... 2] = f()}; return n * 10 + b[2]; }\n",
-        "E2917",
+        "E2969",
         "f()",
         0,
     );
     refused_at(
         "int g(int x) { int b[4] = {[1 ... 3] = x}; return b[2]; }\n",
-        "E2917",
+        "E2969",
         "x}",
         0,
     );
     refused_at(
         "struct p { int a, b; }; int g(int x) { struct p b[3] = {[0 ... 2] = {1, x}}; return b[1].b; }\n",
-        "E2917",
+        "E2969",
         "x}",
         0,
     );

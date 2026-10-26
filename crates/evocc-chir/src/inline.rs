@@ -2459,7 +2459,8 @@ impl<'a> Substitution<'a, '_> {
         c.expand_calls &= expand_calls;
         let mut actions = i.plan.actions().to_vec();
         let mut written_values = HashMap::new();
-        for a in &mut actions {
+        let mut range_values = HashMap::new();
+        for (index, a) in actions.iter_mut().enumerate() {
             let (InitAction::StoreScalar {
                 destination_type, ..
             }
@@ -2477,7 +2478,16 @@ impl<'a> Substitution<'a, '_> {
                 a
             {
                 let original = *value;
-                *value = self.expr(value, c)?;
+                if let Some(shared) = i.plan.shared_value(index) {
+                    if let Some(rewritten) = range_values.get(&shared) {
+                        *value = *rewritten;
+                    } else {
+                        *value = self.expr(value, c)?;
+                        range_values.insert(shared, *value);
+                    }
+                } else {
+                    *value = self.expr(value, c)?;
+                }
                 // Later entries may contain statement expressions which
                 // invalidate value facts. Keep this occurrence mapping apart
                 // from that cache: written syntax and the normalized plan
@@ -2494,6 +2504,9 @@ impl<'a> Substitution<'a, '_> {
         }
         let mut plan = InitPlan::new(self.substituted_type(i.plan.target_type(), c), actions)
             .with_flexible_array_elements(i.plan.flexible_array_elements());
+        if i.plan.has_shared_range_values() {
+            plan = plan.with_shared_range_values();
+        }
         if i.plan.zero_fills_unwritten() {
             plan = plan.with_zero_fill_unwritten();
         }

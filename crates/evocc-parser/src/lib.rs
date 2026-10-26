@@ -4071,6 +4071,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         }
         let mut resolved = InitPlan::new(plan.target_type(), actions)
             .with_flexible_array_elements(plan.flexible_array_elements());
+        if plan.has_shared_range_values() {
+            resolved = resolved.with_shared_range_values();
+        }
         if plan.zero_fills_unwritten() {
             resolved = resolved.with_zero_fill_unwritten();
         }
@@ -4577,6 +4580,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             );
         let mut plan = InitPlan::with_last_write_wins(target, actions, &self.types)
             .with_flexible_array_elements(flexible_array_elements);
+        if self.initializer_has_dynamic_range(written, false) {
+            plan = plan.with_shared_range_values();
+        }
         if matches!(
             self.types.get(target).map(|canonical| &canonical.kind),
             Some(
@@ -4593,6 +4599,35 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             return None;
         }
         Some(plan)
+    }
+
+    fn initializer_has_dynamic_range(
+        &self,
+        written: &WrittenInitializer<'arena>,
+        in_range: bool,
+    ) -> bool {
+        match written {
+            WrittenInitializer::Expression(value) => {
+                in_range && !self.static_initializer_expression_is_constant(value)
+            }
+            WrittenInitializer::List {
+                elements,
+                designations,
+                ..
+            } => elements
+                .iter()
+                .zip(designations)
+                .any(|(element, designation)| {
+                    let range = in_range
+                        || designation.as_ref().is_some_and(|designation| {
+                            designation
+                                .designators
+                                .iter()
+                                .any(|part| matches!(part, WrittenDesignator::Range { .. }))
+                        });
+                    self.initializer_has_dynamic_range(element, range)
+                }),
+        }
     }
 
     fn validate_initializer_object_graph(
@@ -5273,49 +5308,91 @@ impl<'src, 'arena> Parser<'src, 'arena> {
 
         let mut cursor = self.next_initializer_child(target, &path, None);
         for (element, designation) in elements.iter().zip(designations) {
-            if designation.as_ref().is_some_and(|designation| {
+            let range = designation.as_ref().is_some_and(|designation| {
                 designation
                     .designators
                     .iter()
                     .any(|designator| matches!(designator, WrittenDesignator::Range { .. }))
-            }) {
-                self.require_constant_range_initializer(element)?;
-            }
-            for destination in self.initializer_element_destinations(
+            });
+            let destinations = self.initializer_element_destinations(
                 target,
                 &path,
                 element,
                 designation.as_ref(),
                 &mut cursor,
-            )? {
+            )?;
+            if range {
+                let array_value = destinations.first().is_some_and(|destination| {
+                    matches!(
+                        self.types.get(destination.ty).map(|ty| &ty.kind),
+                        Some(TypeKind::Array { .. })
+                    )
+                });
+                self.require_admitted_range_initializer(element, array_value)?;
+            }
+            let mut first_values = Vec::new();
+            for (index, destination) in destinations.into_iter().enumerate() {
+                let start = actions.len();
                 self.normalize_initializer_value(
                     destination.ty,
                     destination.path,
                     element,
                     actions,
                 )?;
+                if range {
+                    // A range names many destinations, but each leaf value is
+                    // one source occurrence. Keep its converted identity even
+                    // when conversion allocated a new expression node.
+                    let mut value_index = 0;
+                    for action in &mut actions[start..] {
+                        if let InitAction::StoreScalar { value, .. }
+                        | InitAction::CopyAggregate { value, .. } = action
+                        {
+                            if index == 0 {
+                                first_values.push(*value);
+                            } else {
+                                *value = first_values[value_index];
+                            }
+                            value_index += 1;
+                        }
+                    }
+                }
             }
         }
         Some(())
     }
 
-    /// EvoIR 10.1.12: one written initializer serves every element of a
-    /// range designator, so it must be a constant; a nonconstant one would
-    /// run once per element. It is `E2917` at the expression.
-    fn require_constant_range_initializer(
+    /// Darwin keeps its named value refusal. GCC rejects a nonconstant array
+    /// value too; scalar and record range values use the shared Linux plan.
+    fn require_admitted_range_initializer(
         &mut self,
         written: &WrittenInitializer<'arena>,
+        array_value: bool,
     ) -> Option<()> {
         match written {
             WrittenInitializer::Expression(expression) => {
                 if !self.static_initializer_expression_is_constant(expression) {
-                    self.report("E2917", "designator-index-not-constant", expression.span());
-                    return None;
+                    if self.target_layout.names_clang_extensions() {
+                        self.report(
+                            "E2969",
+                            "range-designator-value-not-constant",
+                            expression.span(),
+                        );
+                        return None;
+                    }
+                    if array_value {
+                        self.report(
+                            "E2202",
+                            "range-designator-array-value-not-constant",
+                            expression.span(),
+                        );
+                        return None;
+                    }
                 }
             }
             WrittenInitializer::List { elements, .. } => {
                 for element in elements {
-                    self.require_constant_range_initializer(element)?;
+                    self.require_admitted_range_initializer(element, array_value)?;
                 }
             }
         }

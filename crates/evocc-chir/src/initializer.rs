@@ -305,6 +305,10 @@ pub struct InitPlan<'arena> {
     /// source entries rather than on the destination object's extent.
     zero_fills_unwritten: bool,
     flexible_array_elements: u64,
+    /// An action may reuse the converted value of an earlier range action.
+    /// The indices are local to this initializer execution, not to a frame
+    /// or a source span. Distinct macro expansions must remain distinct.
+    shared_values: Vec<Option<usize>>,
 }
 
 impl<'arena> InitPlan<'arena> {
@@ -445,7 +449,45 @@ impl<'arena> InitPlan<'arena> {
             actions,
             zero_fills_unwritten: false,
             flexible_array_elements: 0,
+            shared_values: Vec::new(),
         }
+    }
+
+    /// GCC evaluates the surviving range values in destination order. The
+    /// parser preserves one expression identity for each written range value;
+    /// conversion happens once before that value is copied to its targets.
+    #[must_use]
+    pub fn with_shared_range_values(mut self) -> Self {
+        self.actions.sort_by(|a, b| a.path().cmp(b.path()));
+        let mut first = std::collections::HashMap::new();
+        self.shared_values = vec![None; self.actions.len()];
+        for (index, action) in self.actions.iter().enumerate() {
+            if let InitAction::StoreScalar { value, .. } | InitAction::CopyAggregate { value, .. } =
+                action
+            {
+                let key = (
+                    *value as *const CHirExpr<'_> as usize,
+                    action.destination_type(),
+                );
+                if let Some(&previous) = first.get(&key) {
+                    self.shared_values[previous] = Some(previous);
+                    self.shared_values[index] = Some(previous);
+                } else {
+                    first.insert(key, index);
+                }
+            }
+        }
+        self
+    }
+
+    #[must_use]
+    pub fn has_shared_range_values(&self) -> bool {
+        !self.shared_values.is_empty()
+    }
+
+    #[must_use]
+    pub fn shared_value(&self, action: usize) -> Option<usize> {
+        self.shared_values.get(action).copied().flatten()
     }
 
     /// Build the canonical plan for a written initializer stream. When a

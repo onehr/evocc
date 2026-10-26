@@ -9054,6 +9054,49 @@ impl<'a> FunctionLowerer<'a> {
         Ok(())
     }
 
+    /// Hold a converted range value in the SSA environment. A later value
+    /// can branch or call, so a cached raw SSA name alone is not sufficient.
+    fn lower_shared_initializer_value(
+        &mut self,
+        value: &'a CHirExpr<'a>,
+        ty: TypeId,
+        shared: Option<usize>,
+        values: &mut HashMap<usize, (EnvKey, CIntegerType)>,
+        state: &mut State,
+    ) -> Result<ExprValue, LowerError> {
+        let Some(shared) = shared else {
+            return self.lower_expr(value, state);
+        };
+        if let Some((key, integer)) = values.get(&shared) {
+            return Ok(ExprValue {
+                value: self.token(state, *key)?.value,
+                integer: *integer,
+            });
+        }
+        let mut lowered = self.lower_expr(value, state)?;
+        if self.is_aggregate_type(ty) || evocc_chir::complex::admitted(self.unit.types(), ty) {
+            let source = self.retain_temporary(lowered.value, state);
+            let origin = self.synthetic_origin()?;
+            let snapshot = self.emit_alloca(ty, value.span(), origin, state)?;
+            let address = self.token(state, source)?.value;
+            self.emit_aggregate_transfer(
+                snapshot.clone(),
+                address,
+                ty,
+                CopyVolatility::new(self.aggregate_source_is_volatile(value), false),
+                value.span(),
+                state,
+            )?;
+            state.env.remove(&source);
+            lowered.value = snapshot;
+        } else {
+            lowered = self.coerce_to_object_type(lowered, Some(value), ty, value.span(), state)?;
+        }
+        let key = self.retain_temporary(lowered.value.clone(), state);
+        values.insert(shared, (key, lowered.integer));
+        Ok(lowered)
+    }
+
     fn lower_initializer_at(
         &mut self,
         address: Value,
@@ -9075,7 +9118,8 @@ impl<'a> FunctionLowerer<'a> {
                 self.access_layout(object_ty, object_span)?.align_bytes,
             )?;
         }
-        for action in initializer.plan().actions() {
+        let mut shared_values = HashMap::new();
+        for (index, action) in initializer.plan().actions().iter().enumerate() {
             let action_span = action.span().unwrap_or(object_span);
             let (offset, actual_ty, bit_field) = subobject_offset(
                 self.unit,
@@ -9140,7 +9184,13 @@ impl<'a> FunctionLowerer<'a> {
                         continue;
                     }
                     let action_key = self.retain_temporary(action_address, state);
-                    let lowered = self.lower_expr(value, state)?;
+                    let lowered = self.lower_shared_initializer_value(
+                        value,
+                        *destination_type,
+                        initializer.plan().shared_value(index),
+                        &mut shared_values,
+                        state,
+                    )?;
                     let action_address = state
                         .env
                         .remove(&action_key)
@@ -9309,7 +9359,13 @@ impl<'a> FunctionLowerer<'a> {
                     ..
                 } => {
                     let action_key = self.retain_temporary(action_address, state);
-                    let source = self.lower_expr(value, state)?;
+                    let source = self.lower_shared_initializer_value(
+                        value,
+                        *destination_type,
+                        initializer.plan().shared_value(index),
+                        &mut shared_values,
+                        state,
+                    )?;
                     let action_address = state
                         .env
                         .remove(&action_key)
@@ -9348,7 +9404,8 @@ impl<'a> FunctionLowerer<'a> {
                         source.value,
                         *destination_type,
                         CopyVolatility::new(
-                            self.aggregate_source_is_volatile(value),
+                            initializer.plan().shared_value(index).is_none()
+                                && self.aggregate_source_is_volatile(value),
                             volatile_destination,
                         ),
                         *span,
@@ -9356,6 +9413,9 @@ impl<'a> FunctionLowerer<'a> {
                     )?;
                 }
             }
+        }
+        for (key, _) in shared_values.values() {
+            state.env.remove(key);
         }
         Ok(state
             .env

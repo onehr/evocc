@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 2.32.0** | **Pinned ground truth** | Darwin NEON header subset on 2026-10-24
+**Revision 2.33.0** | **Pinned ground truth** | Shared Linux range initializer values on 2026-10-27
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract of the parser, the C lowering, equality saturation,
@@ -2863,6 +2863,7 @@ for them. Codes `E4xxx` belong to EvoMIR (`spec/evomir.md`).
 | `E2966` | `unsupported-acle-builtin` | front end |
 | `E2967` | `unsupported-darwin-attribute` | front end |
 | `E2968` | `unsupported-pedantic-errors` | driver |
+| `E2969` | `range-designator-value-not-constant` | front end |
 | `E3001` | `read-of-uninitialized-object` | runtime |
 | `E3002` | `integer-division-by-zero` | runtime |
 | `E3003` | `integer-remainder-by-zero` | runtime |
@@ -5697,15 +5698,28 @@ expression, or a range with `a > b`, is `E2917`
 (`designator-index-not-constant`) at that expression. For an array of
 unknown bound the bound becomes one more than the largest index any
 designator or positional element reaches: `[5] = 1` gives 6, `[2 ... 4] = 7`
-gives 5. One written initializer serves every element of a range, so it
-must be a constant, as a static initializer is: an arithmetic constant
-expression, an address constant or a label difference, and each element of a
-braced list likewise. A nonconstant one would run once per element; it is
-`E2917` at the expression.
+gives 5. `E2917` describes an index or bound, not an initializer value.
 
-Nothing changes below the plan: lowering consumes `InitAction`s exactly as
-before, so an initializer that arrives through designators is
-indistinguishable, in EvoIR, from one written positionally.
+On Linux, a nonconstant scalar or record value of a range is evaluated once
+and converted once, then copied to each surviving destination. Each leaf of
+a braced record initializer is shared separately. Overwritten actions are
+dropped first; a value whose whole range is overwritten does not execute.
+The surviving actions execute in subobject-path order, as in GCC 14. Shared
+values belong to one execution of one object initializer, so loops and
+recursive calls do not reuse earlier executions. A shared aggregate value
+is a snapshot, not a continuing view of mutable source storage. A
+nonconstant array value of a range is refused with `E2202`, named
+`range-designator-array-value-not-constant`, as GCC 14 refuses that form.
+
+On Darwin, each value in a range must remain a static initializer constant:
+an arithmetic constant expression, an address constant or a label
+difference, and each element of a braced list likewise. A nonconstant value
+is `E2969` (`range-designator-value-not-constant`) at that expression.
+Static-storage objects on either target keep their constant requirements.
+
+The normalized plan records the shared evaluation identities. Lowering
+uses ordinary SSA values and object copies; this adds no EvoIR instruction
+and does not extend the proved `core-v1` source subset.
 
 **Range designators and inferred bounds.** `[lo ... hi]` designates every
 element from `lo` to `hi` inclusive; `lo` and `hi` are integer constant
@@ -8988,6 +9002,14 @@ to the signature spelling.
 ---
 
 ## Revision
+
+**Revision 2.33.0, 2026-10-27.** Section 10.1.12 admits nonconstant scalar
+and record range values on Linux, with one converted value per written
+occurrence and initializer execution. It records destination-order execution,
+overridden-value omission and aggregate snapshots. Nonconstant array values
+keep a named refusal. Darwin uses the new `E2969` for a nonconstant range
+value; `E2917` remains an index/bound diagnostic. No EvoIR operation,
+registry, or proved Core domain changes.
 
 **Revision 2.32.0, 2026-10-24.** Admit the Darwin NEON header subset: opaque
 FP8 storage with a refused by-value interface; 64/128-bit NEON vector

@@ -6813,6 +6813,18 @@ plan, RED, flag, gates, one-page note, TODO update in the same commit.
   `optimize`, `stdcall`, four option and range cases have goals. The three
   permission-only options and `-fno-trapping-math`, the incompatible-pointer
   downgrade and the old-style call wait for owner decisions.
+  October 27 range-value repair: Linux evaluates each surviving nonconstant
+  scalar or record range value once, in destination order, and copies a
+  snapshot of a shared record. Fully overwritten values do not execute.
+  Darwin now reports E2969 at the value; E2917 remains an index/bound code.
+  The original c-testsuite `00216.c` and its expected output are embedded
+  byte-for-byte in `range_designator_values.rs`. Its native GCC/EvoCC replay
+  matches all 43 output lines and exits zero. Eighteen smaller cases cover
+  both interpreters, `--check`, native GCC comparison, overlap, macro values,
+  conversions, branches, snapshots and repeated executions. The five parser
+  controls pass; all six Lean gate steps pass. The package's full-workspace
+  result is retained with the release-batch evidence. This bounded replay
+  restores one old PASS; the complete frozen B10 campaign remains open.
 
 - [x] **N10 — Keep one-word records and small arrays in registers** — `DONE`, P1, 2026-10-19.
   `pte_t` and `pmd_t` values live in memory: zero-filled, copied from slot to

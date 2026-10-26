@@ -1068,6 +1068,9 @@ struct Interpreter<'unit, 'arena> {
     manifest: Option<AllocationSiteManifest<'arena>>,
     static_bindings: HashMap<SymbolId, MemoryBinding>,
     static_compound_bindings: HashMap<usize, MemoryBinding>,
+    /// Pending range values belong to one destination allocation and one
+    /// initializer execution. Recursive calls cannot reuse a caller's cache.
+    initializer_values: HashMap<Pointer, HashMap<usize, CValue>>,
     string_bindings: HashMap<usize, Pointer>,
     symbol_order: OnceCell<SymbolOrder>,
     memory_frame: Option<MemoryFrame<'arena>>,
@@ -1124,6 +1127,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             manifest: None,
             static_bindings: HashMap::new(),
             static_compound_bindings: HashMap::new(),
+            initializer_values: HashMap::new(),
             string_bindings: HashMap::new(),
             symbol_order: OnceCell::new(),
             memory_frame: None,
@@ -2347,7 +2351,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     None
                 }
                 MachineTask::ContinueMemoryInitializer { target, index } => {
-                    self.continue_memory_initializer(target, index, &mut tasks)?;
+                    self.continue_memory_initializer(target, index, &mut tasks, &mut values)?;
                     None
                 }
                 MachineTask::FinishMemorySubobject { target, index } => {
@@ -2369,6 +2373,39 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                         self.subobject_address(target.binding, path, *span)?;
                     let value =
                         self.cast_runtime_value(value, self.value_type(ty, *span)?, *span)?;
+                    let value = if let Some(shared) = target.initializer.plan().shared_value(index)
+                    {
+                        if let Some(cached) = self
+                            .initializer_values
+                            .get(&target.binding.address)
+                            .and_then(|values| values.get(&shared))
+                            .copied()
+                        {
+                            cached
+                        } else {
+                            // An aggregate value must not remain a view of
+                            // mutable source storage between range stores.
+                            let value = if let CValue::Aggregate { ty, .. } = value {
+                                let snapshot = self.vector_temporary(ty, *span)?;
+                                self.store_memory_value(
+                                    snapshot,
+                                    ty,
+                                    Qualifiers::default(),
+                                    value,
+                                    *span,
+                                )?
+                            } else {
+                                value
+                            };
+                            self.initializer_values
+                                .entry(target.binding.address)
+                                .or_default()
+                                .insert(shared, value);
+                            value
+                        }
+                    } else {
+                        value
+                    };
                     if let Some(field) = bit_field {
                         self.store_bit_field(address, ty, field, value, false, *span)?;
                     } else {
@@ -3599,9 +3636,14 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         target: InitializerTarget<'arena>,
         index: usize,
         tasks: &mut Vec<MachineTask<'arena>>,
+        values: &mut Vec<CValue>,
     ) -> Result<(), InterpreterError> {
         let initializer = target.initializer;
+        if index == 0 {
+            self.initializer_values.remove(&target.binding.address);
+        }
         let Some(action) = initializer.plan().actions().get(index) else {
+            self.initializer_values.remove(&target.binding.address);
             return Ok(());
         };
         if let InitAction::StoreScalar {
@@ -3653,6 +3695,19 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     index: index + 1,
                 });
                 tasks.push(MachineTask::FinishMemorySubobject { target, index });
+                if let Some(cached) = initializer
+                    .plan()
+                    .shared_value(index)
+                    .and_then(|shared| {
+                        self.initializer_values
+                            .get(&target.binding.address)?
+                            .get(&shared)
+                    })
+                    .copied()
+                {
+                    values.push(cached);
+                    return Ok(());
+                }
                 tasks.push(MachineTask::EvalExpression {
                     expression: value,
                     allow_root_mutation: true,

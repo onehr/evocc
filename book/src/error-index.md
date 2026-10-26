@@ -742,7 +742,7 @@ int main(void) {
 ### E2917: designator-index-not-constant
 
 An array initializer designator does not give a valid constant index or range.
-A runtime variable cannot specify that position.
+A runtime variable cannot specify that index position; this code does not describe the value.
 
 C uses initializer designators to select subobjects during translation.
 Use a nonnegative integer constant expression within the array's bounds.
@@ -1794,6 +1794,24 @@ without the option.
 
 Use `-pedantic` or `-Wpedantic` for the supported warning policy, or remove
 the option.
+
+### E2969: range-designator-value-not-constant
+
+A GNU range initializer has a nonconstant value on the Darwin target.
+The index range can be constant even when its value needs execution.
+Linux supports the shared value; Darwin keeps this source-profile refusal.
+
+Flags: --target=aarch64-apple-darwin
+
+```c
+int main(void) { int x = 7; int a[3] = {[0 ... 2] = x}; return a[2] != 7; }
+```
+
+```c
+int main(void) { int a[3] = {[0 ... 2] = 7}; return a[2] != 7; }
+```
+
+Use a constant value or initialize the elements in a loop.
 
 ## E3xxx
 
