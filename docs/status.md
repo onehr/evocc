@@ -14,17 +14,24 @@ APPLICATIONS - each lane keeps its own frozen measurement
   Rung Benchmark        Status          Validated            Measurement (UTC run ID)
   -------------------------------------------------------------------------------------------------------
   E0a  torture          INCOMPLETE      1,538/1,692 programs 20261025T095225.948278Z
+    0 reference failures; 5 EvoCC failures; 80 raw refusals; 146 not applicable; 3 unusable oracles
   E0b  ctest            INCOMPLETE      218/220 programs     20261025T095157.857401Z
+    0 reference failures; 2 EvoCC failures; 2 raw refusals
   E0c  csmith           INCOMPLETE      932/1,000 programs   20261025T161053.238622Z
+    0 reference failures; 0 EvoCC failures; 68 unusable oracles
   E1   zlib             PASS            19/19 TU             20261025T103039.770186Z
   E2   zstd             PASS            44/44 TU             20261025T103047.899072Z
   E3   cjson            PASS            23/23 TU             20261025T103237.329219Z
   E4   mbedtls          PASS            382/382 TU           20261025T171207.529086Z
   E5   tinycc           PASS            11/11 TU             20261025T103255.036640Z
   E6   toybox           INCOMPLETE      203/203 TU           20261025T103326.479591Z
+    1 reference failures; 0 EvoCC failures
   E7   musl             INCOMPLETE      1,339/1,339 TU       20261025T112904.216761Z
+    13 reference failures; 0 EvoCC failures
   E8   polybench        PASS            30/30 programs       20261025T114035.088823Z
   E9   llvm-test-suite  INCOMPLETE      1,054/1,735 programs 20261025T114050.806136Z
+    2 reference failures; 11 EvoCC failures; 61 raw refusals; 3 FP deferrals; 665 not applicable; 2
+    unusable oracles
   E10  jq               PASS            70/70 TU             20261025T115050.649436Z
   E11  lua              PASS            34/34 TU             20261025T115409.740449Z
   E12  sqlite           PASS            86/86 TU             20261025T115837.921429Z
@@ -89,18 +96,18 @@ PASS is limited to the lane's recorded configuration, installed objects and orig
 
 | Benchmark | Classification / scope | Compiler SHA-256 (prefix) |
 |---|---|---|
-| torture | PASS: 1538; compiler-failure: 5; FP-deferred: 0; not-applicable: 146; oracle-unusable: 3 | `978a3771912d` |
-| ctest | PASS: 218; compiler-failure: 2; FP-deferred: 0; not-applicable: 0; oracle-unusable: 0 | `978a3771912d` |
-| csmith | agree: 932; oracle-unusable: 68; original seeds; unavailable oracles are not passes | `a97453ed756d` |
+| torture | PASS: 1538; compiler-failure: 5; FP-deferred: 0; not-applicable: 146; oracle-unusable: 3; 0 reference failures; 5 EvoCC failures; 80 raw refusals; 146 not applicable; 3 unusable oracles | `978a3771912d` |
+| ctest | PASS: 218; compiler-failure: 2; FP-deferred: 0; not-applicable: 0; oracle-unusable: 0; 0 reference failures; 2 EvoCC failures; 2 raw refusals | `978a3771912d` |
+| csmith | agree: 932; oracle-unusable: 68; original seeds; unavailable oracles are not passes; 0 reference failures; 0 EvoCC failures; 68 unusable oracles | `a97453ed756d` |
 | zlib | mixed-link program tests | `978a3771912d` |
 | zstd | mixed-link program tests; see recorded source/build adjustments | `978a3771912d` |
 | cjson | installed libraries plus all 21 upstream Unity test translation units | `978a3771912d` |
 | mbedtls | default release selftest and CTest against installed objects; mixed-link ramp | `9f486dd69fc1` |
 | tinycc | mixed-link compiler tests | `978a3771912d` |
-| toybox | mixed-link tests relative to baseline failures | `978a3771912d` |
-| musl | libc-test relative to baseline failures | `978a3771912d` |
+| toybox | mixed-link tests relative to baseline failures; 1 reference failures; 0 EvoCC failures | `978a3771912d` |
+| musl | libc-test relative to baseline failures; 13 reference failures; 0 EvoCC failures | `978a3771912d` |
 | polybench | PASS: 30; 30 original kernels, MINI_DATASET array-output correctness; reference-built allocation utility, not performance | `978a3771912d` |
-| llvm-test-suite | PASS: 1054; compiler-failure: 11; FP-deferred: 3; not-applicable: 665; oracle-unusable: 2 | `978a3771912d` |
+| llvm-test-suite | PASS: 1054; compiler-failure: 11; FP-deferred: 3; not-applicable: 665; oracle-unusable: 2; 2 reference failures; 11 EvoCC failures; 61 raw refusals; 3 FP deferrals; 665 not applicable; 2 unusable oracles | `978a3771912d` |
 | jq | original make check with bundled Oniguruma; mixed-object ramp | `978a3771912d` |
 | lua | matching official all.lua without soft skips; mixed-object ramp | `978a3771912d` |
 | sqlite | public Tcl veryquick suite against installed fixture objects; mixed-object ramp | `978a3771912d` |

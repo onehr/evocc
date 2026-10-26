@@ -315,6 +315,42 @@ def lane_status(row: dict) -> str:
     return state
 
 
+def application_causes(row: dict) -> str:
+    """Describe recorded counts, without reclassifying a lane or its programs.
+
+    Reviewed dispositions take precedence over raw execution outcomes. Raw
+    refusals can include deferred or inapplicable programs, so they are not
+    an additional count of compiler failures.
+    """
+    if lane_status(row) != "INCOMPLETE":
+        return ""
+    disposition = row.get("dispositions") or {}
+    outcomes = row.get("outcomes") or {}
+    failures = disposition.get("compiler-failure")
+    if failures is None:
+        if (row.get("testVerdict") in ("no-regression", "libc-test-clean")
+                and row.get("failingUnits") == []):
+            failures = 0
+        elif ("agree" in outcomes and all(isinstance(n, int) and n >= 0 for n in outcomes.values())
+              and sum(outcomes.values()) == row.get("total")):
+            # Csmith records one outcome per program, not reviewed dispositions.
+            non_failures = {"agree", "oracle-unusable", "oracle-split", "not-run"}
+            failures = sum(n for outcome, n in outcomes.items() if outcome not in non_failures)
+    counts = [("reference failures", row.get("baselineFailures")), ("EvoCC failures", failures)]
+    refusals = row.get("refusals") or {}
+    if refusals:
+        counts.append(("raw refusals", sum(refusals.values())))
+    counts += [("FP deferrals", disposition.get("FP-deferred")),
+               ("not applicable", disposition.get("not-applicable")),
+               ("unusable oracles", disposition.get("oracle-unusable",
+                    outcomes.get("oracle-unusable", 0) + outcomes.get("oracle-split", 0))),
+               ("not run", outcomes.get("not-run"))]
+    parts = [f"{count} {label}" for label, count in counts
+             if isinstance(count, int) and count >= 0
+             and (count or label in ("reference failures", "EvoCC failures"))]
+    return "; ".join(parts) or "cause counts not recorded"
+
+
 def measurement(row: dict) -> str:
     return (row.get("measurement") or {}).get("run") or row.get("run") or "unmeasured"
 
@@ -423,6 +459,9 @@ def render_ascii(receipts: dict[str, dict], *, evoir: str, evomir: str) -> str:
         kind = "TU" if row.get("kind") == "units" else row.get("kind", "")
         amount = f"{ratio(validated(row), row.get('total'))} {kind}".rstrip()
         lines.append(f"  {rung:4} {name:16} {lane_status(row):15} {amount:20} {measurement(row)}")
+        causes = application_causes(row)
+        if causes:
+            lines.extend(textwrap.wrap(causes, width=105, initial_indent="    ", subsequent_indent="    "))
     lines += [
         "  PROFILE_CLEAN excludes evidenced deferrals/inapplicability; it is not all-program PASS.",
         "  TU = translation unit. Mixed-link coverage and whole-program PASS are different claims.",
@@ -583,6 +622,9 @@ def render_document(receipts: dict[str, dict], *, evoir: str, evomir: str) -> st
         if not detail:
             outcomes = "; ".join(f"{key}: {value}" for key, value in row.get("outcomes", {}).items())
             detail = (outcomes + "; " if outcomes else "") + row.get("note", "No measurement receipt.")
+        causes = application_causes(row)
+        if causes:
+            detail += "; " + causes
         digest = (row.get("measurement") or {}).get("driverSha256") or "unrecorded"
         text += f"| {name} | {detail.replace('|', '/')} | `{digest[:12]}` |\n"
     text += (

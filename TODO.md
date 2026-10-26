@@ -4035,6 +4035,14 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
   this gate. The results section of `CHANGELOG.md` names the date of each result
   and carries the current workspace and Lean gates; `docs/release-checklist.md`
   is updated. T05 stays open until the last semantic repair.
+  October 27: the status renderer now names the recorded cause of each
+  INCOMPLETE application row. It distinguishes shared reference failures
+  (musl 13, toybox one) from zero added EvoCC failures, and keeps reviewed
+  compiler failures separate from raw refusals and coverage exclusions.
+  The renderer changes no status, count, receipt or classification rule.
+  Reference-only, compiler-failure, unusable-oracle and unchanged-PASS
+  controls cover the observed rows. This presentation repair does not close
+  the final health or frozen application/kernel acceptance gates.
 
   - [x] **T05a — Preserve multiline benchmark command failures**.
     Six RED assertions showed that trailing newlines/comments detached log
