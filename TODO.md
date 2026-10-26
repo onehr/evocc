@@ -135,7 +135,7 @@ was found in the read-only process check at this planning checkpoint.
 | Queue | Open IDs | Next deliverable |
 | --- | --- | --- |
 | KERNEL | K01, K02, K03, K04, K10, K11, K11f, K12, N08, N09, N11 | Start with K02/K03's existing current-Image profiles; produce a cause-backed hot-path reduction, then address BPF/pidfd budgets and intermittent sched_ext/ublk failures. |
-| APPLICATION | B08, L11a, P17a, P22 | P21 completed 144 registered sessions: P1-P3 held; P4 and the earlier control penalty did not. P22's pilot of 2026-10-20 failed two go criteria on a false escape record. P01 through P20 retain their completed scope: P20 had no repair-count advantage; P18 stopped at the provider key limit. Existing application tasks keep separate exits. |
+| APPLICATION | L11a, P17a, P22 | P21 completed 144 registered sessions: P1-P3 held; P4 and the earlier control penalty did not. P22's pilot of 2026-10-20 failed two go criteria on a false escape record. P01 through P20 retain their completed scope: P20 had no repair-count advantage; P18 stopped at the provider key limit. Existing application tasks keep separate exits. |
 | REVIEW |  | No rule decision is open. The 2026-10-13 decisions for K07, L03 to L10 and L11a to L11c are in docs/archive/notebook/rules-20261013/DECISIONS.md. |
 | AUDIT | D33 | D24 to D28 closed the follow-ups of D22, D23, L04 and L05; D33 changes the alignment model. D01-D15 are closed in their recorded scope. Keep the T03 audit boundary; kernel/application acceptance and deferred proof domains remain separate. |
 | ACCEPTANCE | T04, T02, K13, K14, B10, T05, R05, R05a, R05k | Independently freeze repaired kernel/application subjects, run their existing paired/serial acceptance and refresh health/docs. |
@@ -2541,7 +2541,7 @@ KUnit, and it closes none of those separate tasks.
     sub-makes. The case-sensitive sysroot for this run is a sparse APFS image
     mounted at `.build/case`. [Receipt](tests/contracts/ladder-jq-receipt.json).
 
-- [ ] **B08 — Build and test musl with its actual semantic flags** — `OPEN`, P2.
+- [x] **B08 — Build and test musl with its actual semantic flags** — `DONE`, P2, 2026-10-27.
   Fresh run `20260927T110110Z` attempts all 1,339 records with `-frounding-math`:
   1,271 compile/assemble with exact symbol parity and survive two complete
   libc-test replays without additional failures or replaced objects. This
@@ -2555,6 +2555,15 @@ KUnit, and it closes none of those separate tasks.
   interfaces compile with their original commands. A replay of the libc-test
   complex cases is still NOT_RUN: the only command, `tools/ladder/musl.py`,
   rebuilds the whole library and runs every case.
+  Closed on 2026-10-27. Fresh run `20261025T112904Z` (compiler `978a3771912d`)
+  compiles all 1,339 units with their original commands, with `-frounding-math`
+  and the B08b options: 1,339 units in a passing build, no refusal. The two
+  libc-test replays add no failure to the 13 dispositioned baseline cases
+  (B08d), and they include the complex cases that the October 21 note left
+  NOT_RUN. The five shared-loader subjects pass. The ladder drops only `-o` and
+  `-pipe`, and it gives `-Wa,--noexecstack` to the assembler step. The status
+  view keeps E7 INCOMPLETE, because a reference failure is not PASS.
+  [Receipt](tests/contracts/ladder-musl-receipt.json).
 
   - [x] **B08a — Admit scalar FP inline-assembly bindings** — `DONE`, P2, 2026-09-27.
     Explicitly approved and specified in EvoIR 1.9.114 / EvoMIR 0.50. Scalar
@@ -6159,6 +6168,21 @@ refusal; changing the P13 demo does not close it.
   required alignment. Exit: both originals run to exit 0 in both interpreters on
   both targets; a misaligned absolute address still reports E3012; the spec, the
   Rust/Lean model differential and the Lean gate agree.
+  October 25 design, no code change. The Rust interpreters already give each
+  object a deterministic concrete address (a hash of site, instance and thread)
+  with an 8-byte floor, but the access check tests the declared alignment and
+  the relative offset. Lean Core has no object base. The design raises the floor
+  to 16, keeps the allocator, and adds a base to the Lean objects, with the
+  private-cell invariants and the machine/source relations. The Rust/Lean
+  differential has six scalar groups and no memory group. Four goals, in order:
+  (1) the address function, floor 16 and RED cases (the two originals and a real
+  offset-1 fault); (2) the Lean fields and proofs; (3) a memory group in the
+  differential, with a mutant that it must reject; (4) the rule switch in Rust
+  and Lean in one commit, with the spec, the changed expectations, the originals
+  in both interpreters on both targets, and the full and Lean gates. One memory
+  unit test pins the old rule, and a MIR record-transport test changes from
+  E3012 to E3001 (uninitialized padding). Evidence:
+  `.evidence/d33a-design-20261025/`.
 
 ## Codegen quality track — next quarter
 
@@ -6653,6 +6677,22 @@ plan, RED, flag, gates, one-page note, TODO update in the same commit.
   arguments, and allocator and frame improvements may become the default. A goal
   that changes object hashes or proof-required outputs re-baselines them in the
   same commit and lists them.
+  October 25 measurement of the nine opt-in code-generation variants with the
+  compiler of 91348ade. Under the kernel flags every variant, and all of them
+  together, give byte-identical reduction objects and the same `memory.c`
+  `.text` (234,248 bytes): the variants do not change the K02 reductions under
+  the kernel contract. With `-fomit-frame-pointer -mno-general-regs-only` added,
+  a diagnostic and not the kernel contract, all variants together give 25,626 /
+  134 / 15 / 41 / 136 instructions per call for loop / asm-goto / helper /
+  struct / array (baseline 26,660 / 147 / 17 / 43 / 141; GCC 14 8,236 / 67 / 9 /
+  23 / 94). Plain `-O2` `memory.c` `.text` is 220,044 bytes at baseline and
+  200,676 with all variants (-8.8 percent); the largest single savings are
+  shared epilogues (-7,408), constants (-4,624) and paired saves (-4,572). Every
+  checksum pair matches GCC 14. Each variant and the combination refuse
+  proof-required admission (30 refusals, no output), so a default needs that
+  admission first. Order by gain and checker coverage: copy hints, paired saves,
+  constants, local, shared epilogues, controls, leaf frames, extensions, reload
+  reuse. Evidence: `.evidence/n08b-variants-20261025/`.
 
 - [ ] **N09 — Inline small static helpers by default** — `OPEN`, P1.
   The K02 fault path makes about 204 calls to small helpers that GCC
