@@ -6795,6 +6795,24 @@ plan, RED, flag, gates, one-page note, TODO update in the same commit.
   runtimes remain in verified lossless archives; only their expanded copies
   were retired. [Csmith receipt](tests/contracts/ladder-csmith-receipt.json),
   [Mbed TLS receipt](tests/contracts/ladder-mbedtls-receipt.json).
+  October 27 classification of the 19 old PASS programs that the run of
+  2026-10-25 lost (ctest 2, torture 5, LLVM 12), with the compiler of e7a3408c
+  and each original command. Six stop at `optimize` (E2952): torture `pr60062`,
+  `pr60072`, `alias-1` and `pr79043`, and two LLVM copies. One stops at
+  `stdcall` (E2952): ctest 00210. Seven LLVM programs stop at a strict-driver
+  option, because the LLVM projection has passed `-f` options to the driver
+  since 2026-09-28: `-fno-common`, `-fno-builtin-abort`, `-fno-inline`,
+  `-finput-charset=utf-8`, `-fexpensive-optimizations`, `-ftree-vectorize` with
+  `-fno-vect-cost-model`, and `-fno-trapping-math`. Two stop at an incompatible
+  pointer argument under `-Wno-error=incompatible-pointer-types` (E2202):
+  PolyBench `correlation` and Shootout `methcall`. One stops at a call to an
+  old-style definition (E2202): torture `920302-1`. One stops at a nonconstant
+  range-designator value (E2917): ctest 00216. LLVM `acle-fmv-features` still
+  passes natively; its reference build gives no executable after
+  `--rtlib=compiler-rt`, so it is a reference loss and not a compiler loss. The
+  `optimize`, `stdcall`, four option and range cases have goals. The three
+  permission-only options and `-fno-trapping-math`, the incompatible-pointer
+  downgrade and the old-style call wait for owner decisions.
 
 - [x] **N10 — Keep one-word records and small arrays in registers** — `DONE`, P1, 2026-10-19.
   `pte_t` and `pmd_t` values live in memory: zero-filled, copied from slot to
