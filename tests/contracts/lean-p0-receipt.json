@@ -19,7 +19,7 @@
     },
     "spec_revision": "**Revision 2.35.0** | **Pinned ground truth** | Four GCC driver options on 2026-10-27",
     "spec_sha256": "0c821385f6256b999a9b87ff8aa62f0498cbbf2d9c29e6fee2d6b8e88a0bfee4",
-    "lean_commit": "f81a13d420df202b6eefcdfe75158d734574c263",
+    "lean_commit": "02d84269c97c9833073af0cf49717e76a0ecccd6",
     "lean_worktree_clean": true,
     "toolchain": "leanprover/lean4:v4.32.2",
     "lean_version": "4.32.2"
