@@ -53,6 +53,13 @@ jobs:
       - uses: actions/download-artifact@v4
         with: {name: linux-headers}
       - run: tar -xzf linux-headers.tar.gz
+      # On Linux, tests run cmake, pkg-config with zlib, and llvm-objdump.
+      - name: Install the Linux test tools
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends cmake pkg-config zlib1g-dev llvm
+          command -v cmake pkg-config llvm-objdump && pkg-config --exists zlib
       # rustup reads the channel and the components from rust-toolchain.toml.
       - name: Install the pinned Rust toolchain
         run: |
