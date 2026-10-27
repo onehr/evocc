@@ -7,10 +7,13 @@ One theorem per row.  The bitwise rows, the shifts and the width changes are
 width parametric, proved one bit at a time; the shift rows are parametric in
 the amount's own width `M` as well, so the split of the plan's section 4
 (amount fully known or not, and `k.toNat` against `N`) is carried out once
-rather than per width.  The carry rows and the comparison rows are enumerated
-over `N` in `1 .. 64` by `bv_decide`; each is 64 theorems named `<row>_1`
-through `<row>_64`. Each `bv_decide` sets a SAT timeout of 60 s, not the
-default 10 s: a parallel build on a busy host can stretch a 3 s query past 10 s.
+rather than per width.  These proofs use only the kernel.
+
+The carry rows and the comparison rows use `bv_decide`. They are in
+`Proofs/TransferCarry.lean`, `Proofs/TransferMul.lean` and
+`Proofs/TransferCompare.lean`. The rewrite checker uses only the rows of this
+module (`Rewrite/Fact.lean`), so the `evoir-sem` build elaborates no
+`bv_decide` proof and compiles none of their certificates.
 
 Section 8.5 admits `bits<N>` with `1 <= N <= 64` for a root or witness and a
 shift amount inside the same bound, so every row proved here contains the
@@ -83,122 +86,6 @@ theorem transfer_xor : ∀ (n : Nat), TransferRowSound (Op.bin BinOp.xor n) := b
   revert ea eb na nb
   cases A.mask.getLsbD i <;> cases A.value.getLsbD i <;> cases B.mask.getLsbD i <;>
     cases B.value.getLsbD i <;> cases x.getLsbD i <;> cases y.getLsbD i <;> simp
-
-/-! ## The carry rows, enumerated over the widths Section 8.5 admits
-
-The mask is the trailing run of bits known in both inputs; the value is the
-sum or difference of the known values inside that run.  The argument is carry
-propagation, which `bv_decide` settles at each width. -/
-
-each_width transfer_add over (Op.bin BinOp.add) using
-  rintro ⟨A, B⟩ ⟨x, y⟩ ⟨hx, hy⟩
-  obtain ⟨ma, va, na⟩ := A
-  obtain ⟨mb, vb, nb⟩ := B
-  simp only [gamma, transfer, T_add, carryMask, Fact.mk', denoteOp, Op.res] at *
-  bv_decide (timeout := 60)
-
-each_width transfer_sub over (Op.bin BinOp.sub) using
-  rintro ⟨A, B⟩ ⟨x, y⟩ ⟨hx, hy⟩
-  obtain ⟨ma, va, na⟩ := A
-  obtain ⟨mb, vb, nb⟩ := B
-  simp only [gamma, transfer, T_sub, carryMask, Fact.mk', denoteOp, Op.res] at *
-  bv_decide (timeout := 60)
-
-each_width transfer_mul over (Op.bin BinOp.mul) using
-  rintro ⟨A, B⟩ ⟨x, y⟩ ⟨hx, hy⟩
-  obtain ⟨ma, va, na⟩ := A
-  obtain ⟨mb, vb, nb⟩ := B
-  simp only [gamma, transfer, T_mul, lowbit0, Fact.mk', denoteOp, Op.res] at *
-  bv_decide (timeout := 60)
-
-/-! ## The comparison rows, enumerated over the widths Section 8.5 admits
-
-Equality is decided by a bit known in both with different values, or by both
-operands being fully known; the ordered comparisons by the interval rule, the
-signed ones only when both sign bits are known.  Each `split` is one branch of
-that procedure, and the `top` branch is sound because `top` says nothing. -/
-
-each_width transfer_icmp_eq over (Op.cmp CmpOp.eq) using
-  rintro ⟨A, B⟩ ⟨x, y⟩ ⟨hx, hy⟩
-  obtain ⟨ma, va, na⟩ := A
-  obtain ⟨mb, vb, nb⟩ := B
-  simp only [gamma, transfer, T_icmp, Fact.lo, Fact.hi, fullyKnown, Fact.bit, Fact.const,
-    Fact.top, Fact.mk', denoteOp, Op.res] at *
-  split <;> rename_i h1
-  · bv_decide (timeout := 60)
-  · split <;> rename_i h2
-    · obtain ⟨e1, e2⟩ := h2
-      subst e1; subst e2
-      bv_decide (timeout := 60)
-    · bv_decide (timeout := 60)
-
-each_width transfer_icmp_ne over (Op.cmp CmpOp.ne) using
-  rintro ⟨A, B⟩ ⟨x, y⟩ ⟨hx, hy⟩
-  obtain ⟨ma, va, na⟩ := A
-  obtain ⟨mb, vb, nb⟩ := B
-  simp only [gamma, transfer, T_icmp, Fact.lo, Fact.hi, fullyKnown, Fact.bit, Fact.const,
-    Fact.top, Fact.mk', denoteOp, Op.res] at *
-  split <;> rename_i h1
-  · bv_decide (timeout := 60)
-  · split <;> rename_i h2
-    · obtain ⟨e1, e2⟩ := h2
-      subst e1; subst e2
-      bv_decide (timeout := 60)
-    · bv_decide (timeout := 60)
-
-each_width transfer_icmp_ult over (Op.cmp CmpOp.ult) using
-  rintro ⟨A, B⟩ ⟨x, y⟩ ⟨hx, hy⟩
-  obtain ⟨ma, va, na⟩ := A
-  obtain ⟨mb, vb, nb⟩ := B
-  simp only [gamma, transfer, T_icmp, Fact.lo, Fact.hi, fullyKnown, Fact.bit, Fact.const,
-    Fact.top, Fact.mk', denoteOp, Op.res] at *
-  split <;> rename_i h1
-  · bv_decide (timeout := 60)
-  · split <;> rename_i h2
-    · bv_decide (timeout := 60)
-    · bv_decide (timeout := 60)
-
-each_width transfer_icmp_ule over (Op.cmp CmpOp.ule) using
-  rintro ⟨A, B⟩ ⟨x, y⟩ ⟨hx, hy⟩
-  obtain ⟨ma, va, na⟩ := A
-  obtain ⟨mb, vb, nb⟩ := B
-  simp only [gamma, transfer, T_icmp, Fact.lo, Fact.hi, fullyKnown, Fact.bit, Fact.const,
-    Fact.top, Fact.mk', denoteOp, Op.res] at *
-  split <;> rename_i h1
-  · bv_decide (timeout := 60)
-  · split <;> rename_i h2
-    · bv_decide (timeout := 60)
-    · bv_decide (timeout := 60)
-
-each_width transfer_icmp_slt over (Op.cmp CmpOp.slt) using
-  rintro ⟨A, B⟩ ⟨x, y⟩ ⟨hx, hy⟩
-  obtain ⟨ma, va, na⟩ := A
-  obtain ⟨mb, vb, nb⟩ := B
-  simp only [gamma, transfer, T_icmp, Fact.lo, Fact.hi, fullyKnown, Fact.bit, Fact.const,
-    Fact.top, Fact.mk', denoteOp, Op.res] at *
-  split <;> rename_i hs
-  · obtain ⟨s1, s2⟩ := hs
-    split <;> rename_i h1
-    · bv_decide (timeout := 60)
-    · split <;> rename_i h2
-      · bv_decide (timeout := 60)
-      · bv_decide (timeout := 60)
-  · bv_decide (timeout := 60)
-
-each_width transfer_icmp_sle over (Op.cmp CmpOp.sle) using
-  rintro ⟨A, B⟩ ⟨x, y⟩ ⟨hx, hy⟩
-  obtain ⟨ma, va, na⟩ := A
-  obtain ⟨mb, vb, nb⟩ := B
-  simp only [gamma, transfer, T_icmp, Fact.lo, Fact.hi, fullyKnown, Fact.bit, Fact.const,
-    Fact.top, Fact.mk', denoteOp, Op.res] at *
-  split <;> rename_i hs
-  · obtain ⟨s1, s2⟩ := hs
-    split <;> rename_i h1
-    · bv_decide (timeout := 60)
-    · split <;> rename_i h2
-      · bv_decide (timeout := 60)
-      · bv_decide (timeout := 60)
-  · bv_decide (timeout := 60)
 
 /-! ## The shift rows, parametric in the value width and in the amount width
 

@@ -1,6 +1,6 @@
 # Verification Contract
 
-**Revision 1.1.2** | **Pinned ground truth** | **2026-10-15**
+**Revision 1.1.3** | **Pinned ground truth** | **2026-10-27**
 
 ## Status and scope
 
@@ -399,7 +399,7 @@ arguments. By `Pipeline.abiSourceEntry_of_abiEntry`, zero-extended `AbiEntry` im
 `Pipeline.checkPipelineTexts_sound`, `Rewrite.checkRewrite_refines`,
 `Rewrite.source_rewrite_refines` and `Rewrite.check_source_rewrite_refines`. No `sorry`, `axiom`
 declaration, `native_decide` or new `bv_decide` may enter the checked path; the `bv_decide` rows of
-`Proofs/Transfer.lean` are outside it. `Pipeline/Tests.lean` and `Rewrite/Tests.lean` put `#print
+`Proofs/TransferCarry.lean`, `Proofs/TransferMul.lean` and `Proofs/TransferCompare.lean` are outside it. `Pipeline/Tests.lean` and `Rewrite/Tests.lean` put `#print
 axioms` inside `#guard_msgs`, so a further axiom fails the module and `lake build`; run them from
 `lean/` with `lake env lean FILE`. `tools/gate-lean.sh` runs the registry generator check, `lake
 build` on the pinned toolchain, the self-test, the differential vectors and `tools/lean/audit.py`,
@@ -572,7 +572,9 @@ section 8.5); two regions with one root; any difference outside the replaced roo
 obligation included. The fact table of `Rewrite.propose` is untrusted; `Rewrite.tableOk` checks that
 it is inductive. `Rewrite.kernelRow` (`Rewrite/Fact.lean`) admits the known-bits rows of `and`,
 `or`, `xor`, shifts, width changes and guards. Every other row, among them `add`, `sub`, `mul` and
-the comparisons, gives no known bit, because its proof in `Proofs/Transfer.lean` uses `bv_decide`.
+the comparisons, gives no known bit, because its proof uses `bv_decide`. These proofs are in
+`Proofs/TransferCarry.lean`, `Proofs/TransferMul.lean` and `Proofs/TransferCompare.lean`;
+`Proofs/Transfer.lean` keeps the kernel-only rows that `Rewrite.kernelRow` admits.
 
 ## 10. Conformance
 
@@ -596,6 +598,10 @@ must keep the Lean and Rust tables equal, update this document, pass these tests
 refresh each receipt that it makes stale.
 
 ## 11. Revision
+
+Revision 1.1.3 of 2026-10-27 names the modules that now hold the `bv_decide` rows of the
+transfer table: `Proofs/TransferCarry.lean`, `Proofs/TransferMul.lean` and `Proofs/TransferCompare.lean`. `Proofs/Transfer.lean` keeps the
+kernel-only rows. No theorem, rule or check changes.
 
 Revision 1.1.2 of 2026-10-15 makes the assembly-only command boundary explicit
 and states that selected entries retain their full argument domains and bodies.

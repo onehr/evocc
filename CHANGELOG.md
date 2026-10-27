@@ -268,6 +268,10 @@ The first public version.
 
 ### Fixed
 
+- A clean Lean build no longer depends on a fast or large host. Each `bv_decide` proof of the
+  transfer table has a 60 s SAT timeout, and its rows moved out of `Proofs/Transfer.lean` into
+  three modules that `evoir-sem` does not import. A clean `lake build` now peaks at 8.3 GiB
+  instead of 17.2 GiB, and a clean `lake build evoir-sem` at 3.9 GiB.
 - `--interpret-c-hir` and `--interpret-evoir` run a `main(int argc, char *argv[])`, as `evo run`
   does: with no program arguments, `argc` is 1 and `argv[0]` is the source path. Before, both
   refused it with E3007.

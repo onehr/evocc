@@ -4683,6 +4683,14 @@ Reopening any of them needs a new owner decision after the N03 slices land.
     release workflow builds the Linux archive (R05a) and merges the checksum
     files (R05k). Exit: one green run of each workflow, and of `release.yml` for
     a test tag.
+    On 2026-10-27 a clean Lean build, as CI and `tools/release.sh --with-lean`
+    make it, failed twice on a busy host: `bv_decide` timed out at the default
+    10 s in `Proofs/Transfer.lean`, and that one module peaked at 17 GiB, more
+    than the 7 GB of a macOS runner. `02d84269` gives each `bv_decide` 60 s.
+    The bv_decide rows now live in `TransferCarry`, `TransferMul` (with
+    `Elab.async false`) and `TransferCompare`, which only the umbrella `EvoIR`
+    imports: a clean `lake build` peaks at 8.3 GiB in 164 s, and a clean
+    `lake build evoir-sem` at 3.9 GiB with no `bv_decide` module.
 
 - [x] **R06 — Pinned Doom integration** — `DONE`, 2026-09-28, bounded headless profile.
   doomgeneric `dcb7a8db...` plus Freedoom 0.13.0 Phase 1: all 80 engine units

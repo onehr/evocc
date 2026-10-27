@@ -592,7 +592,7 @@ one. It refuses any difference outside the replaced roots, a deleted obligation 
 | Layer | What it gives |
 |---|---|
 | Rule proofs | All 55 + 7 rules, for all widths, under their premises. Kernel-only. |
-| [Known-bits proofs](../lean/EvoIR/Proofs/Transfer.lean) | Transfer functions, lattice and side conditions. The add, sub, mul and comparison rows use SAT reflection (`bv_decide`): they are **native-backed** and trust the Lean compiler and the SAT/LRAT path. The stage `rewrite` does not use them. |
+| [Known-bits proofs](../lean/EvoIR/Proofs/Transfer.lean) | Transfer functions, lattice and side conditions. The add, sub, mul and comparison rows ([carry](../lean/EvoIR/Proofs/TransferCarry.lean), [mul](../lean/EvoIR/Proofs/TransferMul.lean), [compare](../lean/EvoIR/Proofs/TransferCompare.lean)) use SAT reflection (`bv_decide`): they are **native-backed** and trust the Lean compiler and the SAT/LRAT path. The stage `rewrite` does not use them. |
 | Rust `evocc-checker` | One certificate follows the allowed rules. It does not call Lean. |
 | [Rust–Lean correspondence tests](../tests/contracts/lean-correspondence-receipt.json) | Agreement on recorded vectors; not a proof that Rust equals the Lean model. |
 

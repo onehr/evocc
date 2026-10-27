@@ -10,8 +10,8 @@ natural numbers. The typed `Fact` of Section 8.10 is made again at each use.
 The checker uses only the transfer rows that have a kernel-only proof:
 `const`, `and`, `or`, `xor`, the three shifts, the three width changes and
 the seven guard rows. The rows for `add`, `sub`, `mul` and the comparisons
-are proved with `bv_decide` per width. This file does not use them. Their
-result is top, which is always sound.
+are proved with `bv_decide` per width, in other modules. This file does not
+import or use them. Their result is top, which is always sound.
 -/
 
 namespace EvoIR.Rewrite
