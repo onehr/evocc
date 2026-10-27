@@ -6838,6 +6838,19 @@ plan, RED, flag, gates, one-page note, TODO update in the same commit.
   controls pass; all six Lean gate steps pass. The package's full-workspace
   result is retained with the release-batch evidence. This bounded replay
   restores one old PASS; the complete frozen B10 campaign remains open.
+  October 27 `optimize` repair: the attribute accepts integer levels 0 to
+  3, the level strings `O`, `O0` to `O3`, `Os` and `Og`, and the twelve
+  disabling `-f` options that the strict driver accepts with no change of
+  code, `no-strict-aliasing` among them. Every other option keeps E2952.
+  Both drivers now accept `-fno-tree-vectorize`, `-fno-tree-loop-vectorize`
+  and `-fno-tree-slp-vectorize` on both targets, as GCC 14 does. On Darwin
+  EvoCC differs from Apple clang, which refuses `-fno-tree-loop-vectorize`
+  as an unknown argument and ignores `optimize` with a warning. At `-O2`,
+  Apple clang's strict aliasing makes torture `alias-1` and `pr79043`
+  abort; EvoCC and GCC 14 run them with exit 0. `optimize_attribute_levels.rs`
+  embeds `pr60062`, `pr60072`, `alias-1` and `pr79043`: each exits 0 natively
+  on Darwin and in the sealed GCC 14 image on Linux, at `-O0` and `-O2`.
+  The two LLVM copies of `pr60062` and `pr60072` wait for the B10 campaign.
 
 - [x] **N10 — Keep one-word records and small arrays in registers** — `DONE`, P1, 2026-10-19.
   `pte_t` and `pmd_t` values live in memory: zero-filled, copied from slot to

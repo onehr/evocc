@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 2.33.1** | **Pinned ground truth** | One code for nonconstant range values on 2026-10-27
+**Revision 2.34.0** | **Pinned ground truth** | Satisfied optimize options on 2026-10-27
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract of the parser, the C lowering, equality saturation,
@@ -5387,14 +5387,33 @@ function that returns twice is never a known constant. glibc's
 interpreters refuse its external call (`E3039`), as they refuse `setjmp`,
 `vfork` and `getcontext`.
 
-The sole accepted `optimize` form has one or more ordinary string arguments
-whose comma-separated options are all `no-tree-vectorize`,
-`no-tree-loop-vectorize` or `no-tree-slp-vectorize`, optionally prefixed by
-`-f`. String concatenation and escapes have their ordinary C meaning. Empty
-options and all other options remain `E2952`, including a mixture of supported
-and unsupported options. EvoCC does not automatically vectorize scalar code,
-so these restrictions require no code change. They do not disable explicit
-vector operations or permit any other per-function semantic option.
+**`optimize`.** The attribute is accepted with no effect on code when each
+of its arguments is one of these:
+
+- an integer constant expression with the value 0, 1, 2 or 3;
+- an ordinary string whose comma-separated options are each a level `O`,
+  `O0`, `O1`, `O2`, `O3`, `Os` or `Og`, with or without a leading `-`, or one
+  of these options, with or without a leading `-f`: `no-strict-aliasing`,
+  `no-optimize-sibling-calls`, `no-align-functions`, `no-align-jumps`,
+  `no-align-labels`, `no-align-loops`, `no-prefetch-loop-arrays`,
+  `no-tree-ch`, `no-tree-loop-distribute-patterns`, `no-tree-vectorize`,
+  `no-tree-loop-vectorize` and `no-tree-slp-vectorize`.
+
+This applies to `optimize` and `__optimize__`, in the GNU form and in the
+`gnu` and `__gnu__` bracket namespaces. String concatenation and escapes
+have their ordinary C meaning. An empty argument list, an empty
+option and every other option remain `E2952`, also in a mixture with
+accepted options. A semantic option such as `wrapv` or `fast-math` stays
+refused, because EvoCC has no per-function semantics. A level promises no
+transform. EvoCC makes none of the transforms that the listed options
+forbid: no analysis derives disjointness from C access types (6.2), and the
+compiler has no sibling-call, padding, prefetch, loop-header-copying,
+loop-distribution or automatic-vectorization transform. The options do not
+disable explicit vector operations. The strict driver and the cc command line
+also accept `-fno-tree-vectorize`, `-fno-tree-loop-vectorize` and
+`-fno-tree-slp-vectorize` with no effect, on both targets, as they accept the
+other listed options. GCC 14 accepts the three options; Apple clang refuses
+`-fno-tree-loop-vectorize` as an unknown argument.
 
 **`cleanup`.** `cleanup(function)` on an automatic object
 resolves a function at the declaration and calls it with the object's address
@@ -9003,6 +9022,16 @@ to the signature spelling.
 ---
 
 ## Revision
+
+**Revision 2.34.0, 2026-10-27.** Section 10.1.9 accepts the `optimize`
+arguments that EvoCC already satisfies, with no effect on code: an integer
+constant expression from 0 to 3, the levels `O`, `O0` to `O3`, `Os` and
+`Og`, and twelve disabling `-f` options, `no-strict-aliasing` among them.
+Every other option, an empty option and each mixture with another option
+keep `E2952`. The strict driver and the cc command line accept
+`-fno-tree-vectorize`, `-fno-tree-loop-vectorize` and
+`-fno-tree-slp-vectorize` with no effect. No EvoIR operation, registry or
+proved Core domain changes.
 
 **Revision 2.33.1, 2026-10-27.** Section 10.1.12 gives the Linux refusal of
 a nonconstant array value of a range the code `E2969`

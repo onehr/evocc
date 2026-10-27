@@ -9,6 +9,11 @@ The first public version.
 
 ### Added
 
+- The `optimize` attribute accepts what EvoCC already satisfies, with no effect on code: the
+  levels 0 to 3, `O`, `O0` to `O3`, `Os` and `Og`, and twelve disabling options such as
+  `no-strict-aliasing` and `no-tree-vectorize`. Every other option keeps E2952. Both drivers
+  accept `-fno-tree-vectorize`, `-fno-tree-loop-vectorize` and `-fno-tree-slp-vectorize` on
+  both targets, as GCC 14 does; Apple clang refuses `-fno-tree-loop-vectorize`.
 - GNU range initializers on Linux share each nonconstant scalar or record value across its
   surviving destinations. Fully overwritten values do not run. Values execute in destination
   order, as in GCC 14. E2969 names a range value that must be constant: each nonconstant value

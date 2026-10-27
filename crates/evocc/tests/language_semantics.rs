@@ -652,26 +652,11 @@ fn variable_arrays_reenter_labels_and_sibling_scopes() {
     check("variable-array-label-scopes.c", EXECUTION);
 }
 
+// optimize("-fno-strict-aliasing") changes nothing here: no analysis derives
+// disjointness from C access types (EvoIR 6.2), so the fixture is accepted.
 #[test]
-fn unsupported_function_options_do_not_silently_change_representation_accesses() {
-    // Preserve this original reproducer. Its per-function no-strict-aliasing
-    // request used to be silently ignored; it is now an explicit refusal.
-    let source = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../tests/fixtures/representation-only-array-places.c");
-    for mode in EXECUTION {
-        let output = Command::new(env!("CARGO_BIN_EXE_evocc"))
-            .args(["--target=aarch64-unknown-linux-gnu", mode])
-            .arg(&source)
-            .output()
-            .unwrap();
-        assert_eq!(output.status.code(), Some(1));
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        assert!(
-            stderr.contains("E2952") && stderr.contains("optimize"),
-            "{stderr}"
-        );
-        assert!(output.stdout.is_empty());
-    }
+fn floating_representation_array_places_do_not_require_floating_execution() {
+    check("representation-only-array-places.c", EXECUTION);
 }
 
 #[test]

@@ -840,6 +840,10 @@ fn parse_options(args: &[String], lenient: bool) -> Result<DriverOptions, String
             "-mno-omit-leaf-frame-pointer" => codegen.leaf_frame_pointer_required = true,
             // No sibling-call transform exists in this backend.
             "-fno-optimize-sibling-calls" => {}
+            // No automatic vectorizer exists either, so these disabling
+            // options select the existing contract on both targets. Explicit
+            // vector operations stay as written.
+            "-fno-tree-vectorize" | "-fno-tree-loop-vectorize" | "-fno-tree-slp-vectorize" => {}
             // x18 is reserved and never assigned on either target (EvoMIR
             // Section 2.5), so generated code already keeps it fixed. Other
             // `-ffixed-` registers stay unsupported.

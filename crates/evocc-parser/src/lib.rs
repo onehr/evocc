@@ -6571,6 +6571,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                                 1
                             },
                         )
+                    } else if gnu_name && name == "optimize" {
+                        self.parse_optimize_arguments(open.span)
                     } else {
                         self.parse_attribute_arguments(open.span)
                     };
@@ -6582,11 +6584,11 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                         None => return attributes,
                     }
                 }
-                // Automatic vectorization is absent from this compiler. Its
-                // three disabling options are therefore satisfied already.
+                // EvoIR 10.1.9: an optimization level and the listed disabling
+                // options select contracts that this compiler already has.
                 // Inspect every option after parsing: one permitted option
-                // must not hide a request for wrapping or aliasing semantics.
-                if gnu_name && name == "optimize" && !disables_only_vectorization(&arguments) {
+                // must not hide a semantic request such as `wrapv`.
+                if gnu_name && name == "optimize" && !optimize_options_are_satisfied(&arguments) {
                     convention = convention_attribute("optimize");
                     if !declaration_position {
                         self.report(
@@ -6754,6 +6756,54 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             }
             let close = self.advance().expect("peeked close").span;
             return Some((arguments, close));
+        }
+    }
+
+    /// Read the arguments of `optimize` in place, as GCC reads them: each one
+    /// is a constant expression. The text is kept, so a string argument
+    /// keeps its written form. An integer constant expression also records
+    /// its value.
+    fn parse_optimize_arguments(
+        &mut self,
+        open: SourceSpan,
+    ) -> Option<(Vec<AttributeArgument>, SourceSpan)> {
+        let mut arguments = Vec::new();
+        if self.peek_kind() == Some(TokenKind::RParen) {
+            let close = self.advance().expect("peeked close").span;
+            return Some((arguments, close));
+        }
+        loop {
+            // An empty slot, such as `optimize(,1)` or `optimize(1,)`, is a
+            // malformed attribute, as in the other argument lists.
+            if matches!(
+                self.peek_kind(),
+                Some(TokenKind::Comma | TokenKind::RParen) | None
+            ) {
+                self.report("E2903", "malformed-attribute", self.span());
+                return None;
+            }
+            let argument_start = self.pos;
+            let expression = self.parse_required_constant_conditional()?;
+            let mut argument = self.attribute_argument(&self.tokens[argument_start..self.pos]);
+            argument.integer = self
+                .eval_integer_constant_expression(expression)
+                .ok()
+                .and_then(CInteger::try_mathematical_value)
+                .and_then(|value| u64::try_from(value).ok());
+            arguments.push(argument);
+            match self.peek_kind() {
+                Some(TokenKind::Comma) => {
+                    self.advance();
+                }
+                Some(TokenKind::RParen) => {
+                    let close = self.advance().expect("peeked close").span;
+                    return Some((arguments, close));
+                }
+                _ => {
+                    self.report("E2903", "malformed-attribute", open);
+                    return None;
+                }
+            }
         }
     }
 
@@ -19310,9 +19360,37 @@ fn positive_target_attribute(attribute: &Attribute) -> bool {
     })
 }
 
-fn disables_only_vectorization(arguments: &[AttributeArgument]) -> bool {
+/// EvoIR 10.1.9: the `optimize` options that EvoCC already satisfies. An
+/// argument is an integer constant expression from 0 to 3, or a string whose
+/// comma-separated options are each an optimization level, with or without
+/// `-`, or a listed disabling option, with or without `-f`. The strict driver
+/// accepts each listed option with no change of code. A level promises no
+/// transform, and EvoCC makes none of the transforms that the options forbid.
+fn optimize_options_are_satisfied(arguments: &[AttributeArgument]) -> bool {
+    const LEVELS: [&str; 7] = ["O", "O0", "O1", "O2", "O3", "Os", "Og"];
+    const OPTIONS: [&str; 12] = [
+        "no-strict-aliasing",
+        "no-optimize-sibling-calls",
+        "no-align-functions",
+        "no-align-jumps",
+        "no-align-labels",
+        "no-align-loops",
+        "no-prefetch-loop-arrays",
+        "no-tree-ch",
+        "no-tree-loop-distribute-patterns",
+        "no-tree-vectorize",
+        "no-tree-loop-vectorize",
+        "no-tree-slp-vectorize",
+    ];
+    let names = |option: &[u32], list: &[&str]| {
+        list.iter()
+            .any(|name| option.iter().copied().eq(name.bytes().map(u32::from)))
+    };
     !arguments.is_empty()
         && arguments.iter().all(|argument| {
+            if let Some(level) = argument.integer {
+                return level <= 3;
+            }
             let Some(units) = argument
                 .string_literal()
                 .and_then(|literal| literal.decoded_units())
@@ -19320,16 +19398,11 @@ fn disables_only_vectorization(arguments: &[AttributeArgument]) -> bool {
                 return false;
             };
             units.split(|unit| *unit == u32::from(b',')).all(|option| {
-                let option = option
+                let level = option.strip_prefix(&[u32::from(b'-')]).unwrap_or(option);
+                let flag = option
                     .strip_prefix(&[u32::from(b'-'), u32::from(b'f')])
                     .unwrap_or(option);
-                [
-                    "no-tree-vectorize",
-                    "no-tree-loop-vectorize",
-                    "no-tree-slp-vectorize",
-                ]
-                .iter()
-                .any(|name| option.iter().copied().eq(name.bytes().map(u32::from)))
+                names(level, &LEVELS) || names(flag, &OPTIONS)
             })
         })
 }

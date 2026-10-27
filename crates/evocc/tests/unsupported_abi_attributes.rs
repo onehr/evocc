@@ -138,11 +138,9 @@ fn disabling_automatic_vectorization_preserves_scalar_execution() {
 fn vectorization_restrictions_cannot_hide_other_function_options() {
     for arguments in [
         "",
-        "3",
         "\"\"",
         "\"tree-vectorize\"",
         "\"no-tree-vectorize,wrapv\"",
-        "\"no-tree-vectorize\", \"no-strict-aliasing\"",
         "\"no-tree-vectorize,\"",
         "\"no-tree-vectorize\\0wrapv\"",
         "\"no-tree-vectorize\" + 0",
