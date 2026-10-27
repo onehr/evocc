@@ -9,6 +9,11 @@ The first public version.
 
 ### Added
 
+- The x86 calling-convention attributes `stdcall`, `fastcall`, `thiscall`, `vectorcall`,
+  `regcall` and `sseregparm`, and `regparm` on Linux, are ignored with the new warning W0011
+  (`attributes`), as in GCC 14 and Apple clang; before, they were E2952. `-Wno-attributes` and
+  `-w` silence it, and `-Werror` and `-Werror=attributes` make it an error. A form that GCC 14 or
+  Apple clang refuses stays E2952, and so does `regparm` on Darwin.
 - Both drivers accept `-fexpensive-optimizations`, `-ftree-vectorize`, `-fno-vect-cost-model`,
   `-ftrapping-math` and `-fno-trapping-math` with no change of code: they only permit transforms
   that EvoCC does not make. On Linux, a final `-fno-trapping-math` defines `__NO_TRAPPING_MATH__`,

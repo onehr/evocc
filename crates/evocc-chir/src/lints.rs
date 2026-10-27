@@ -6,7 +6,7 @@ use evocc_types::{TargetDataLayout, TypeKind};
 
 use crate::{semantic::ScopeKind, *};
 
-pub const NAMES: [&str; 10] = [
+pub const NAMES: [&str; 11] = [
     "unused-variable",
     "unused-parameter",
     "implicit-function-declaration",
@@ -17,6 +17,7 @@ pub const NAMES: [&str; 10] = [
     "discarded-qualifiers",
     "discarded-array-qualifiers",
     "cpp",
+    "attributes",
 ];
 
 #[derive(Clone, Copy, Debug)]
@@ -38,6 +39,7 @@ impl Finding {
             "pointer target discards qualifiers",
             "pointer target discards array element qualifiers",
             "warning directive",
+            "x86 calling convention ignored",
         ][self.lint]
     }
 
@@ -53,6 +55,7 @@ impl Finding {
             "preserve the source qualifier, or add a cast",
             "preserve the array element qualifier, or add a cast",
             "address the warning or suppress it with -Wno-cpp",
+            "remove the attribute, or write it only for x86 targets",
         ][self.lint]
     }
 }

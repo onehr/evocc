@@ -6874,6 +6874,21 @@ plan, RED, flag, gates, one-page note, TODO update in the same commit.
   `-Werror`; EvoCC stays silent. With their original arguments, LLVM
   `pr68381`, `pr68532` and `compare-fp-3` exit 0 in the sealed GCC 14 image
   with GCC 14's output (`permission_only_options.rs`).
+  October 27 x86 calling-convention repair: `stdcall`, `fastcall`,
+  `thiscall`, `vectorcall`, `regcall` and `sseregparm` on both targets, and
+  `regparm` on Linux, are the warning W0011 (`attributes`) at the attribute
+  name and have no effect on code, as in GCC 14 and Apple clang.
+  `-Wno-attributes` and `-w` silence it; `-Werror` and `-Werror=attributes`
+  make it an error. E2952 stays where a reference refuses the form: after the
+  abstract declarator of a type name, and on Darwin for a convention that
+  Apple clang knows, on a null statement or with an argument. On Darwin, a
+  known convention with an argument, such as `stdcall(1)`, is now E2952 also
+  on a prototype, which D17 accepted; Apple clang refuses it there. Darwin
+  keeps E2952 for `regparm`. Apple clang refuses `regparm` also on an unused
+  Darwin prototype, and EvoCC accepts and records it there (D17).
+  `x86_calling_conventions.rs` embeds ctest `00210`: it prints
+  `00210.c.expected` and exits 0 natively on Darwin and in the sealed GCC 14
+  image. Calls in both directions with GCC 14 and Apple clang objects agree.
 
 - [x] **N10 — Keep one-word records and small arrays in registers** — `DONE`, P1, 2026-10-19.
   `pte_t` and `pmd_t` values live in memory: zero-filled, copied from slot to

@@ -1423,6 +1423,10 @@ name, such as a call or an address, in code that the unit keeps.
 A type, a typedef, an object or a member with the attribute is an error too.
 `-w` does not suppress it.
 
+The x86 conventions `stdcall`, `fastcall`, `thiscall`, `vectorcall`, `regcall`
+and `sseregparm`, and `regparm` on Linux, are the warning W0011 instead. They
+stay this error only in a form that GCC 14 or Apple clang refuses.
+
 Three attributes keep ordinary uses. A callee marked `aarch64_vector_pcs`,
 `preserve_all` or `preserve_most` preserves more registers than its caller
 relies on, so a call of it is an ordinary call. `returns_twice` is never this
@@ -3002,4 +3006,33 @@ int main(void) { return 0; }
 
 Address the warning, or remove the directive when the diagnostic is no longer
 needed.
+
+### W0011: x86 calling convention ignored
+
+EvoCC ignores an x86 calling-convention attribute on AArch64.
+The function, its type and each call keep the base AAPCS64 convention.
+GCC 14 and Apple clang also ignore the attribute with a warning.
+
+The attributes are `stdcall`, `fastcall`, `thiscall`, `vectorcall`, `regcall`
+and `sseregparm`, and `regparm` on Linux. Apple clang refuses `regparm`, so it
+stays E2952 on Darwin. A form that GCC 14 or Apple clang refuses stays E2952
+too, such as an attribute after the abstract declarator of a type name.
+
+EvoCC reports this warning by default.
+`-Wno-attributes` suppresses it, `-Werror` or `-Werror=attributes` promotes it
+to an error, and `-w` suppresses it.
+
+Flags: -Werror=attributes
+
+```c
+__attribute__((stdcall)) int add(int a, int b) { return a + b; }
+int main(void) { return add(2, 3) != 5; }
+```
+
+```c
+int add(int a, int b) { return a + b; }
+int main(void) { return add(2, 3) != 5; }
+```
+
+Remove the attribute, or define it only for x86 targets.
 

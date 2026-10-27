@@ -9,8 +9,8 @@ pub enum Level {
 }
 
 pub struct Levels {
-    specific: [Option<Level>; 10],
-    no_error: [bool; 10],
+    specific: [Option<Level>; 11],
+    no_error: [bool; 11],
     all: bool,
     pedantic: bool,
     errors: bool,
@@ -22,8 +22,8 @@ pub struct Levels {
 impl Default for Levels {
     fn default() -> Self {
         Self {
-            specific: [None; 10],
-            no_error: [false; 10],
+            specific: [None; 11],
+            no_error: [false; 11],
             all: false,
             pedantic: false,
             errors: false,

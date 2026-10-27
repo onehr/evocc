@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 2.36.0** | **Pinned ground truth** | Options that only permit a transform on 2026-10-27
+**Revision 2.37.0** | **Pinned ground truth** | Ignored x86 calling conventions on 2026-10-27
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract of the parser, the C lowering, equality saturation,
@@ -2927,17 +2927,21 @@ for them. Codes `E4xxx` belong to EvoMIR (`spec/evomir.md`).
 | `W0008` | `pointer target discards qualifiers` | front-end lint |
 | `W0009` | `pointer target discards array element qualifiers` | front-end lint |
 | `W0010` | `warning directive` | preprocessor lint |
+| `W0011` | `x86 calling convention ignored` | front-end lint |
 
-The ten warning names, in code order, are `unused-variable`,
+The eleven warning names, in code order, are `unused-variable`,
 `unused-parameter`, `implicit-function-declaration`, `implicit-int`,
 `return-type`, `pointer-sign`, `pointer-arith`, `discarded-qualifiers`,
-`discarded-array-qualifiers` and `cpp`. The unused warnings default to allow; the
+`discarded-array-qualifiers`, `cpp` and `attributes`. The unused warnings
+default to allow; the
 implicit and return warnings default to warn, except an implicit function
 declaration defaults to deny in C99 and later modes. The pointer sign and
 pointer arithmetic warnings default to allow. The two discarded-qualifier
 warnings default to warn. The `cpp` warning for an active `#warning` defaults
 to warn; `-Wcpp`, `-Wno-cpp` and `-Werror=cpp` set its level, and
-`-Wno-error=cpp` keeps it a warning under `-Werror`. The driver keeps implicit
+`-Wno-error=cpp` keeps it a warning under `-Werror`. The `attributes` warning
+for an ignored x86 calling convention (10.1.9) defaults to warn, and its
+options act in the same way. The driver keeps implicit
 declaration evidence
 before lowering. An allowed or warned implicit declaration uses the existing
 implicit `int` and unprototyped-function rules. This does not enable old-style
@@ -2948,7 +2952,7 @@ setting of the same specificity wins. `-Wall` and `-Wextra` enable the unused
 warnings and `pointer-sign`, but not `pointer-arith`; `-Wpedantic` enables
 `pointer-sign` and `pointer-arith`. An explicit named setting takes priority
 over a group. `-Werror` promotes enabled warnings to errors. `-w` suppresses
-all ten. `-Wno-error=NAME` only stops `-Werror` from promoting that lint; it
+all eleven. `-Wno-error=NAME` only stops `-Werror` from promoting that lint; it
 does not enable or change the lint's own level. `-Werror` promotes only
 EvoCC's lints, so a program that only GCC 14 would warn about stays accepted.
 `--cap-lints=allow|warn|deny` limits the final severity; it never enables a
@@ -5321,11 +5325,12 @@ call and argument effects still execute exactly once.
 `interrupt`, `interrupt_handler`, `pcs`, `aarch64_vector_pcs`,
 `aarch64_sve_pcs`, `preserve_all`, `preserve_most`, `preserve_none`,
 `no_callee_saved_registers`, `no_caller_saved_registers`, `ms_abi`, `sysv_abi`,
-`stdcall`, `fastcall`, `thiscall`, `vectorcall`, `regcall`, `swiftcall`,
-`swiftasynccall`, `regparm`, `sseregparm`, `callee_pop_aggregate_return`,
-`returns_twice`, `target`, `target_clones`, `target_version` and `optimize`
-are `E2952` (`unsupported-function-attribute`) where this paragraph does not
-accept them. This also applies to names enclosed in `__` and to the `gnu` and
+`swiftcall`, `swiftasynccall`, `regparm` on Darwin,
+`callee_pop_aggregate_return`, `returns_twice`, `target`, `target_clones`,
+`target_version` and `optimize` are `E2952` (`unsupported-function-attribute`)
+where this paragraph does not accept them. The other x86 calling conventions
+are a warning (below). This also applies to names enclosed in `__` and to
+the `gnu` and
 `__gnu__` bracket namespaces, on both targets. A warning option cannot
 suppress this error. No ordinary frame or default calling convention may
 stand in for one of these contracts. Unrelated bracket namespaces do not
@@ -5361,6 +5366,34 @@ when the unit is complete, in any declaration order:
   use.
 - The message names the first attribute of the list, in the order above,
   that refuses the definition or the use.
+
+**Ignored x86 calling conventions.** GCC 14 and Apple clang ignore the x86
+calling conventions on AArch64 with a warning. EvoCC reports the lint `W0011`
+(`attributes`, Section 6.3) at the attribute name for `stdcall`, `fastcall`,
+`thiscall`, `vectorcall`, `regcall` and `sseregparm` on both targets, and for
+`regparm` on Linux. This applies in every placement and with every argument
+list, to the names enclosed in `__` and to the `gnu` and `__gnu__` bracket
+namespaces, except in the forms below. The attribute is preserved and has no
+other effect: the function, its type and each call stay base AAPCS64, a
+declaration with the attribute is compatible with one without it, and the
+code is the code without the attribute. A reference refuses these forms, and
+they keep `E2952` at the attribute name:
+
+- an attribute after the abstract declarator of a type name, as in
+  `sizeof(int (*)(void) __attribute__((stdcall)))`, on both targets. GCC 14
+  and Apple clang refuse this syntax for every attribute.
+- on Darwin, `stdcall`, `fastcall`, `thiscall` and `regcall`, and
+  `vectorcall` in the `__attribute__` syntax, on a null statement or with a
+  nonempty argument list, also on a prototype. Apple clang knows
+  `vectorcall` in no bracket namespace and does not know `sseregparm`, so it
+  warns about them there.
+
+Apple clang refuses `regparm` in every placement, also under `-w`. On Darwin,
+`regparm` keeps the rule of the list above: a prototype records it, and every
+other placement, a definition and each use are `E2952`. Only the options that
+name `attributes` set `W0011`. Apple clang's `-Wno-ignored-attributes` and
+`-Wno-unknown-attributes`, and GCC 14's `-Wno-attributes=gnu::stdcall`, have
+no effect on it.
 
 **`returns_twice`.** A function returns twice when a declaration of it
 carries `returns_twice`, or by GCC 14's name rule (`special_function_p` in
@@ -9053,6 +9086,17 @@ to the signature spelling.
 ---
 
 ## Revision
+
+**Revision 2.37.0, 2026-10-27.** Section 10.1.9 ignores the x86 calling
+conventions `stdcall`, `fastcall`, `thiscall`, `vectorcall`, `regcall` and
+`sseregparm` on both targets, and `regparm` on Linux, as GCC 14 and Apple
+clang do. They are the new lint `W0011` (`attributes`) and have no effect on
+code. The forms that a reference refuses keep `E2952`: an attribute after the
+abstract declarator of a type name, and on Darwin a convention that Apple
+clang knows, on a null statement or with an argument. Such a name with an
+argument is now `E2952` on a Darwin prototype too, where revision 2.13.0
+accepted it. `regparm` keeps its rule on Darwin. Section 6.3 adds `W0011`
+and its levels. No EvoIR operation, registry or Lean rule domain changes.
 
 **Revision 2.36.0, 2026-10-27.** The driver option text accepts
 `-fexpensive-optimizations`, `-ftree-vectorize`, `-fno-vect-cost-model`,

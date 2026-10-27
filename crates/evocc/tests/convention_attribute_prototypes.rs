@@ -16,8 +16,10 @@ const LINUX: &str = "aarch64-unknown-linux-gnu";
 const DARWIN: &str = "aarch64-apple-darwin";
 const TARGETS: [&str; 2] = [LINUX, DARWIN];
 
-/// Every attribute of the list except `returns_twice`, with arguments.
-const ATTRIBUTES: [&str; 27] = [
+/// Every attribute of the list except `returns_twice`, with arguments. The
+/// six other x86 conventions, and `regparm` on Linux, are the warning W0011
+/// instead (x86_calling_conventions.rs).
+const ATTRIBUTES: [&str; 21] = [
     "naked",
     "interrupt",
     "interrupt_handler",
@@ -31,21 +33,25 @@ const ATTRIBUTES: [&str; 27] = [
     "no_caller_saved_registers",
     "ms_abi",
     "sysv_abi",
-    "stdcall",
-    "fastcall",
-    "thiscall",
-    "vectorcall",
-    "regcall",
     "swiftcall",
     "swiftasynccall",
     "regparm(3)",
-    "sseregparm",
     "callee_pop_aggregate_return(1)",
     "target(\"+sve\")",
     "target_clones(\"default\")",
     "target_version(\"sve\")",
     "optimize(\"-fwrapv\")",
 ];
+
+/// The targets on which a definition or a use of a marked function stays
+/// refused. Linux ignores `regparm` with W0011, so only Darwin checks it.
+fn targets(attribute: &str) -> &'static [&'static str] {
+    if attribute.starts_with("regparm") {
+        &[DARWIN]
+    } else {
+        &TARGETS
+    }
+}
 
 /// The three conventions whose callers keep ordinary calls.
 const BASE_CALLS: [&str; 3] = ["aarch64_vector_pcs", "preserve_all", "preserve_most"];
@@ -200,7 +206,7 @@ fn a_definition_of_a_marked_function_stays_refused() {
         );
         let path = work.source("carried.c", &source);
         let at = position(&source, name);
-        for target in TARGETS {
+        for &target in targets(attribute) {
             refused(&MODES, &path, target, at, &message(attribute));
         }
         // A prototype marks a later definition, in any order.
@@ -217,7 +223,7 @@ fn a_definition_of_a_marked_function_stays_refused() {
         {
             let path = work.source(&format!("marked-{index}.c"), source);
             let at = position(source, "f(void) { return");
-            for target in TARGETS {
+            for &target in targets(attribute) {
                 refused(&MODES, &path, target, at, &message(attribute));
             }
         }
@@ -237,7 +243,7 @@ fn a_use_stays_refused_except_for_the_three_base_pcs_conventions() {
         let address =
             format!("{prototype}int main(void) {{ int (*p)(void) = f; return p == 0; }}\n");
         let taken = work.source("address.c", &address);
-        for target in TARGETS {
+        for &target in targets(attribute) {
             if base {
                 // An ordinary base-PCS call; the interpreters refuse the
                 // external callee as for every external call.

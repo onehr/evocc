@@ -508,7 +508,8 @@ enum Settlement {
 
 /// The execution and calling-convention attributes of EvoIR 10.1.9, with the
 /// E2952 message of each. The order is the order of the specification list.
-const CONVENTION_ATTRIBUTES: [(&str, &str); 28] = [
+/// `regparm` belongs to the list on Darwin only (`ignored_x86_convention`).
+const CONVENTION_ATTRIBUTES: [(&str, &str); 22] = [
     ("naked", "unsupported-function-attribute: naked"),
     ("interrupt", "unsupported-function-attribute: interrupt"),
     (
@@ -546,18 +547,12 @@ const CONVENTION_ATTRIBUTES: [(&str, &str); 28] = [
     ),
     ("ms_abi", "unsupported-function-attribute: ms_abi"),
     ("sysv_abi", "unsupported-function-attribute: sysv_abi"),
-    ("stdcall", "unsupported-function-attribute: stdcall"),
-    ("fastcall", "unsupported-function-attribute: fastcall"),
-    ("thiscall", "unsupported-function-attribute: thiscall"),
-    ("vectorcall", "unsupported-function-attribute: vectorcall"),
-    ("regcall", "unsupported-function-attribute: regcall"),
     ("swiftcall", "unsupported-function-attribute: swiftcall"),
     (
         "swiftasynccall",
         "unsupported-function-attribute: swiftasynccall",
     ),
     ("regparm", "unsupported-function-attribute: regparm"),
-    ("sseregparm", "unsupported-function-attribute: sseregparm"),
     (
         "callee_pop_aggregate_return",
         "unsupported-function-attribute: callee_pop_aggregate_return",
@@ -584,6 +579,24 @@ fn convention_attribute(name: &str) -> Option<(&'static str, &'static str)> {
         .iter()
         .copied()
         .find(|(attribute, _)| *attribute == name)
+}
+
+/// EvoIR 10.1.9: the x86 calling conventions. GCC 14 and Apple clang ignore
+/// them on AArch64 with a warning, and EvoCC reports W0011. Apple clang
+/// refuses `regparm`, so on Darwin it stays in the list above.
+fn ignored_x86_convention(name: &str, darwin: bool) -> bool {
+    matches!(
+        name,
+        "stdcall" | "fastcall" | "thiscall" | "vectorcall" | "regcall" | "sseregparm"
+    ) || (name == "regparm" && !darwin)
+}
+
+/// EvoIR 10.1.9: the x86 conventions that Apple clang implements. It refuses
+/// one on a statement or with an argument. It knows `vectorcall` only in the
+/// `__attribute__` syntax, and it does not know `sseregparm`.
+fn apple_clang_x86_convention(name: &str, bracketed: bool) -> bool {
+    matches!(name, "stdcall" | "fastcall" | "thiscall" | "regcall")
+        || (name == "vectorcall" && !bracketed)
 }
 
 /// Clang attributes whose meaning changes a type, a value, the layout or the
@@ -6420,6 +6433,17 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     /// type, tag or member apply `aligned` and `packed` and leave `applied`
     /// set so the dump and the inventory can tell the two apart.
     fn parse_attribute_specifiers(&mut self, placement: AttributePlacement) -> Vec<Attribute> {
+        self.parse_attribute_specifiers_in(placement, false)
+    }
+
+    /// `type_name_suffix` marks the attributes after the abstract declarator
+    /// of a type name. GCC 14 and Apple clang refuse that syntax, so an x86
+    /// calling convention keeps E2952 there (EvoIR 10.1.9).
+    fn parse_attribute_specifiers_in(
+        &mut self,
+        placement: AttributePlacement,
+        type_name_suffix: bool,
+    ) -> Vec<Attribute> {
         let is_attribute_name = |text: &str| {
             let mut chars = text.chars();
             chars
@@ -6535,8 +6559,12 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 ) || (placement
                     == AttributePlacement::PointerDeclarator
                     && self.target_layout.names_clang_extensions());
+                let darwin = self.target_layout.names_clang_extensions();
+                // EvoIR 10.1.9: an x86 calling convention has no AArch64
+                // meaning. It is W0011 or E2952 after its arguments, below.
+                let x86 = gnu_name && ignored_x86_convention(&name, darwin);
                 let mut convention = convention_attribute(&name)
-                    .filter(|(attribute, _)| gnu_name && *attribute != "optimize");
+                    .filter(|(attribute, _)| gnu_name && *attribute != "optimize" && !x86);
                 let preceding = self.diagnostics.len();
                 if let Some((_, message)) = convention.filter(|_| !declaration_position) {
                     self.report("E2952", message, name_token.span);
@@ -6611,6 +6639,32 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                             "unsupported-function-attribute: optimize",
                             name_token.span,
                         );
+                    }
+                }
+                // EvoIR 10.1.9: GCC 14 and Apple clang ignore an x86 calling
+                // convention with a warning, and so does EvoCC (W0011). The
+                // function, its type and each call stay base AAPCS64. E2952
+                // stays where a reference refuses the form: both refuse an
+                // attribute after the abstract declarator of a type name, and
+                // Apple clang refuses a convention that it knows on a
+                // statement or with an argument.
+                if x86 {
+                    if type_name_suffix
+                        || (darwin
+                            && apple_clang_x86_convention(&name, bracketed)
+                            && (placement == AttributePlacement::NullStatement
+                                || !arguments.is_empty()))
+                    {
+                        self.report(
+                            "E2952",
+                            format!("unsupported-function-attribute: {name}"),
+                            name_token.span,
+                        );
+                    } else {
+                        self.lint_findings.push(evocc_chir::lints::Finding {
+                            lint: 10,
+                            span: name_token.span,
+                        });
                     }
                 }
                 if bracketed
@@ -9110,7 +9164,11 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             let captures = self.capture_array_bounds(&mut derived)?;
             self.side_declarations.extend(captures);
         }
-        type_attributes.extend(self.parse_attribute_specifiers(AttributePlacement::TypeName));
+        // GCC 14 and Apple clang refuse an attribute after an abstract
+        // declarator; an x86 convention keeps E2952 there (EvoIR 10.1.9).
+        let suffix = !derived.is_empty();
+        type_attributes
+            .extend(self.parse_attribute_specifiers_in(AttributePlacement::TypeName, suffix));
         self.settle_convention_attributes(&type_attributes, Settlement::Other);
         for attribute in &mut type_attributes {
             attribute.placement = AttributePlacement::TypeName;

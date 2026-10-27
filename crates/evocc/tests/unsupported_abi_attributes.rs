@@ -38,15 +38,9 @@ fn naked_functions_and_unsupported_calling_conventions_are_refused() {
             "no_caller_saved_registers",
             "ms_abi",
             "sysv_abi",
-            "stdcall",
-            "fastcall",
-            "thiscall",
-            "vectorcall",
-            "regcall",
             "swiftcall",
             "swiftasynccall",
             "regparm(3)",
-            "sseregparm",
             "callee_pop_aggregate_return(1)",
             // D16 accepts a `returns_twice` definition; see
             // returns_twice_attribute.rs.
@@ -55,6 +49,11 @@ fn naked_functions_and_unsupported_calling_conventions_are_refused() {
             "target_version(\"sve\")",
             "optimize(\"-fwrapv\")",
         ] {
+            // Linux ignores `regparm` with W0011, as both targets ignore the
+            // six other x86 conventions (x86_calling_conventions.rs).
+            if target == "aarch64-unknown-linux-gnu" && attribute == "regparm(3)" {
+                continue;
+            }
             let source = format!("__attribute__(({attribute})) int f(void) {{ __asm__ volatile(\"mov w0, #7\\n\\tret\"); }}");
             for mode in ["--emit=asm", "-fsyntax-only"] {
                 let output = compile(&source, target, mode);
