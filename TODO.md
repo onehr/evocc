@@ -138,7 +138,7 @@ was found in the read-only process check at this planning checkpoint.
 | APPLICATION | L11a, P17a, P22 | P21 completed 144 registered sessions: P1-P3 held; P4 and the earlier control penalty did not. P22's pilot of 2026-10-20 failed two go criteria on a false escape record. P01 through P20 retain their completed scope: P20 had no repair-count advantage; P18 stopped at the provider key limit. Existing application tasks keep separate exits. |
 | REVIEW |  | No rule decision is open. The 2026-10-13 decisions for K07, L03 to L10 and L11a to L11c are in docs/archive/notebook/rules-20261013/DECISIONS.md. |
 | AUDIT | D33 | D24 to D28 closed the follow-ups of D22, D23, L04 and L05; D33 changes the alignment model. D01-D15 are closed in their recorded scope. Keep the T03 audit boundary; kernel/application acceptance and deferred proof domains remain separate. |
-| ACCEPTANCE | T04, T02, K13, K14, T05, R05, R05a, R05k | On 2026-10-27 the compiler of `08bf09bd` passed the frozen acceptance (B10 and the direct Kbuild replay), and the public documents cite its receipts. Next: the final gate T05 on a clean tree, both archives (R05a), then the owner's R05k. |
+| ACCEPTANCE | T04, T02, K13, K14, R05, R05a, R05k | On 2026-10-27 the compiler of `08bf09bd` passed the frozen acceptance (B10 and the direct Kbuild replay), and the public documents cite its receipts. Next: the final gate T05 on a clean tree, both archives (R05a), then the owner's R05k. |
 | LATER | R05m, R01, R02, R03, R03a, R03b, R03c, R03d, R03e, R03f, R03g, R03h, R04, R04a, R04b, R04c, R04d, R04e, N06, N06a, N06b, N06c, N06d, N06e | S1–S5 and R02e first slice are closed; S6 stays with R01's two G2 builds. R03 V1 negative-admission study is frozen; positive Q3 remains unachieved and R03a/b/c/d NOT_ADMITTED, R03e deferred. No VM timing or audit expansion; x86-64 and release stay separate. The bounded N01–N05/N07 batch is dispositioned, not a complete optimizing compiler: N03b/N03e preflights are negative, N07 E3 has zero SMT proofs, and all five library size targets remain missed. N03d C5 has size/correctness evidence but three compile-cost misses; C2/C5 remain outside the admitted cumulative configuration, and T1's misses stay frozen. All new defaults remain OFF. Retain N02's 70 admitted/187 opaque inputs and source-bridge mismatch. Broader inlining, mid-level and allocator work need newly scoped designs; no paused R activity is automatically reopened. |
 <!-- closure-queues:end -->
 
@@ -4039,7 +4039,7 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
     inputs come from earlier runbook steps. The k1 tests (332), the tools tests
     (78) and the ladder tests (575) pass.
 
-- [ ] **T05 — Final compiler-health and documentation gate** — `OPEN`, P1.
+- [x] **T05 — Final compiler-health and documentation gate** — `DONE`, P1, 2026-10-27, for release 0.1.0.
   After the last semantic repair, run workspace tests, Clippy `-D warnings`, fmt,
   relevant Ruff/Python checks, grammar/layout corpora and isolated offline replay.
   Keep historical ignored tests explicit. Refresh receipts, run
@@ -4195,6 +4195,27 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
     retained selected receipt recomputes to `sched_ext:runner`. Historical
     observations and verdicts remain unchanged. This is report integrity, not
     a kernel repair. [RED, GREEN and health](tests/fixtures/kernel-regression-identity.out).
+  Release 0.1.0 (2026-10-27): the gate passes on the clean tree of `fecd612f`,
+  whose compiler source is the freeze `08bf09bd` (equal tree IDs of `crates`,
+  `vendor` and `lean`). The offline workspace gate passes 522 suites: **3,928
+  PASS / 0 FAIL / 62 ignored**, with Clippy and fmt. The 62 ignored tests run
+  only on request: 54 sealed Linux lanes, 4 standing-campaign runs, a QEMU
+  lane, a large-intrinsic refusal, an N03f interaction lane and one LLVM NEON
+  original whose input lives outside the repository. The Python suites pass:
+  `tools/tests` 99, `tools/ladder/tests` 580, `tools/k1/tests` 334,
+  `tools/experiment/tests` 176 and `tools/lean/tests` 20; Ruff passes on the
+  whole tree. The textual grammar check finds 57 of 57 shapes. Both frozen
+  layout corpora match, 128/128 and 22/22, with zero mismatch. The
+  conformance wrapper stops at its environment cross-check, because the
+  sealed image changed on 2026-10-08 with the same GCC and Clang binaries, so
+  its subject steps ran directly, as in the September 27 checkpoint. The 13
+  isolated offline replays pass with an empty `CARGO_HOME`. `tools/gate-lean.sh`,
+  `render-status.py --check` and `--todo`, `check-spec-pins.py`,
+  `gen-error-index.py` and `gen-compat-matrix.py` (no diff), `showcase.py
+  --check` and `check-commit-references.py` pass, and the tree stays clean.
+  In a clean checkout of the same commit, the `ci.yml` docs job (1,231
+  relative links, none broken) and the book build with mdBook 0.4.52 pass.
+  K13 and K14 stay open.
 
 ## Later roadmap gates — not substitutes for runtime closure
 

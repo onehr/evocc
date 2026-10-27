@@ -406,7 +406,12 @@ builds below ran on 2026-10-27 with the release compiler of commit `08bf09bd`. T
 give their dates and were not run again on the final commit. [docs/evidence.md](docs/evidence.md)
 keeps their limits.
 
-<!-- after-t05: the final gate of t05 and the two archives go here, with their dates. -->
+- On 2026-10-27 the final health gate (T05) passes on the clean tree of `fecd612f`, whose
+  compiler source is that of `08bf09bd`: the workspace gate, 1,209 Python tests, Ruff, the
+  textual grammar, both frozen layout corpora (128 and 22 cases), 13 isolated offline replays,
+  the Lean gate, the generated pages, the relative links and the book build.
+
+<!-- after-release-archives: the two archives and SHA256SUMS go here, with their date. -->
 
 - On the clean tree of `08bf09bd` the full offline workspace gate passes 522 suites and 3,928
   tests with zero failures; 62 ignored tests run only on request, such as the sealed Linux lanes.
