@@ -85,6 +85,33 @@ class ShowcaseTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "missing or ambiguous"):
                 showcase.excerpt(text, segments)
 
+    def test_log_excerpt_can_end_at_its_matched_line(self):
+        text = "a\nPASS: one\nPASS: two\nend\n"
+        self.assertEqual(showcase.excerpt(text, [(r"^end$", 2, 1)]),
+                         [{"line": 3, "text": ["PASS: two", "end"]}])
+        for segments in ([(r"^PASS: one$", 3, 2)], [(r"^end$", 2, 2)]):
+            with self.assertRaisesRegex(ValueError, "missing or ambiguous"):
+                showcase.excerpt(text, segments)
+
+    def test_sqlite_card_ends_at_the_summary_of_each_run(self):
+        # The progress times differ from run to run. The six quoted lines end at the summary.
+        tail = ["Test database is /tmp/sqlite-test/testrunner.db",
+                "Test log is /tmp/sqlite-test/testrunner.log"]
+        runs = {
+            "2026-09-19": ["02:11 tcl(1079/1238) r2 ETC 00:16", "02:13 tcl(1108/1238) r2 ETC 00:12",
+                           "02:15 tcl(1182/1238) r2 ETC 00:06", "02:16 tcl(1238/1238) ETC 00:00", *tail,
+                           "0 errors out of 329803 tests in 02:16 on 4dc872e9 Linux 64-bit"],
+            "2026-10-25": ["01:00 tcl(1096/1238) r2 ETC 00:11", "01:02 tcl(1152/1238) r2 ETC 00:07",
+                           "01:04 tcl(1235/1238) r2 ETC 00:02", "01:06 tcl(1238/1238) ETC 00:00", *tail,
+                           "0 errors out of 329803 tests in 01:06 on de39b8c5 Linux 64-bit"],
+        }
+        head = ["splitting work across 2 cores", "built testset in 76ms..", "00:00 tcl(0/1238) r2"]
+        for run, lines in runs.items():
+            with self.subTest(run=run):
+                text = "\n".join(head + lines) + "\n"
+                self.assertEqual(showcase.excerpt(text, showcase.LOGS["sqlite"][2]),
+                                 [{"line": 1, "text": head[:2]}, {"line": 5, "text": lines[1:]}])
+
     def test_log_card_wraps_a_long_line_without_changing_its_text(self):
         banner = ("[    0.000000] Linux version 6.18.44 (evo@nexlab) (evocc 0.1.0 (fb05debf29c4 2026-10-13), "
                   "GNU ld (GNU Binutils for Debian) 2.44) #1 SMP PREEMPT Sun Aug 9 18:25:35 UTC 2026")

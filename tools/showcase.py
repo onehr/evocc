@@ -32,10 +32,12 @@ APPS = {
     "polybench": ("polybench", "native/20260919T222638Z/evocc/fdtd-2d.exe"),
 }
 # Gallery cards that quote the recorded logs of accepted runs. Each segment is
-# (pattern of its first line, number of lines); the lines are copied verbatim.
+# (pattern of one line, number of lines) or (pattern, number of lines, lines before
+# the matched line); the lines are copied verbatim. The SQLite progress times
+# change from run to run, so its second segment ends at the summary line.
 LOGS = {
     "sqlite": ("SQLite 3.53.4: testrunner.tcl veryquick", "ladder-sqlite-receipt.json",
-               [(r"^splitting work across ", 2), (r"^02:13 tcl\(", 6)]),
+               [(r"^splitting work across ", 2), (r"^\d+ errors out of \d+ tests in ", 6, 5)]),
     "jq": ("jq 1.8.2: make check", "ladder-jq-receipt.json", [(r"^PASS: tests/mantest$", 11)]),
     "cjson": ("cJSON 1.7.19: ./cJSON_test", "ladder-cjson-receipt.json", [(r"^Version: 1\.7\.19$", 11)]),
     "linux": ("Linux 6.18.44: serial console", "kernel-direct-virt-receipt.json",
@@ -308,11 +310,13 @@ def excerpt(text, segments):
     """Copy whole lines. Only trailing spaces are removed."""
     lines = [line.rstrip() for line in text.splitlines()]
     out = []
-    for pattern, count in segments:
-        starts = [i for i, line in enumerate(lines) if re.search(pattern, line)]
-        if len(starts) != 1 or starts[0] + count > len(lines):
+    for pattern, count, *before in segments:
+        before = before[0] if before else 0
+        matches = [i for i, line in enumerate(lines) if re.search(pattern, line)]
+        start = matches[0] - before if len(matches) == 1 else -1
+        if start < 0 or before >= count or start + count > len(lines):
             raise ValueError(f"log excerpt is missing or ambiguous: {pattern}")
-        out.append({"line": starts[0] + 1, "text": lines[starts[0]:starts[0] + count]})
+        out.append({"line": start + 1, "text": lines[start:start + count]})
     return out
 
 
@@ -367,7 +371,7 @@ def check():
         record = records["logs"][name]
         if (record["title"], record["receipt"]) != (title, f"tests/contracts/{receipt_name}"):
             raise ValueError(f"log card source changed: {name}")
-        if [len(s["text"]) for s in record["segments"]] != [count for _, count in segments]:
+        if [len(s["text"]) for s in record["segments"]] != [count for _, count, *_ in segments]:
             raise ValueError(f"log excerpt changed: {name}")
         if visualizer().log_card(name, record) != (OUT / f"{name}.svg").read_text():
             raise ValueError(f"log card differs from its recorded excerpt: {name}")
