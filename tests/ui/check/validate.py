@@ -1,5 +1,6 @@
 """Validate the diagnostic contract without a schema dependency."""
-import json
+# The Rust tests that embed this file call json in the code that they append.
+import json  # noqa: F401
 
 
 def validate(record):

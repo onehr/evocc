@@ -1,6 +1,7 @@
 """Channel metadata preserves retained evidence and names documented versions."""
 
 from contextlib import contextmanager
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -88,20 +89,30 @@ class CompatibilityMatrixTests(unittest.TestCase):
             chapter = self.generate(root)
             self.assertIn("retained", chapter.lower())
             self.assertIn("not revalidated", chapter.lower())
-            for name, passed, total, status in (
-                ("e0", 1522, 1692, "PROFILE_CLEAN"),
-                ("csmith", 932, 1000, "INCOMPLETE"),
-                ("llvm-test-suite", 1039, 1735, "INCOMPLETE"),
-                ("musl", 1271, 1339, "INCOMPLETE"),
-                ("toybox", 203, 203, "INCOMPLETE"),
+            # The populations are fixed. A new run changes the passed count and
+            # the status, so read both from the retained receipt, with the
+            # normalization of the copied bench.py that the generator uses.
+            spec = importlib.util.spec_from_file_location("compat_bench", root / "tools/bench.py")
+            bench = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(bench)
+            for name, lane, total in (
+                ("e0", "torture", 1692),
+                ("csmith", "csmith", 1000),
+                ("llvm-test-suite", "llvm-test-suite", 1735),
+                ("musl", "musl", 1339),
+                ("toybox", "toybox", 203),
+                ("doom", "doom", 81),
             ):
                 with self.subTest(receipt=name):
-                    row = self.row(chapter, f"ladder-{name}-receipt.json")
-                    self.assertRegex(row, rf"\b{passed}\s*/\s*{total}\b")
-                    self.assertIn(status, row)
-            doom = self.row(chapter, "ladder-doom-receipt.json")
-            self.assertRegex(doom, r"\b81\s*/\s*81\b")
-            self.assertIn("PASS", doom)
+                    path = root / "tests/contracts" / f"ladder-{name}-receipt.json"
+                    receipt = json.loads(path.read_text(encoding="utf-8"))
+                    measured = bench.metrics(lane, receipt.get("latest", receipt))
+                    self.assertEqual(measured["total"], total)
+                    if measured["passed"] < total:
+                        self.assertNotEqual(measured["status"], "PASS")
+                    row = self.row(chapter, path.name)
+                    self.assertRegex(row, rf"\b{measured['passed']}\s*/\s*{total}\b")
+                    self.assertIn(measured["status"], row)
             self.assertIn("headless", chapter.lower())
 
     def test_invalid_denominator_is_not_published_as_a_compatibility_result(self):
