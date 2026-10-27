@@ -9,6 +9,14 @@ The first public version.
 
 ### Added
 
+- The lint W0012 (`incompatible-pointer-types`) reports a conversion between pointers to
+  incompatible types and a conditional operator with such operands, as GCC 14 does. It is an
+  error by default in C99 and later modes and a warning in C89 and GNU89.
+  `-fpermissive` and `-Wno-error=incompatible-pointer-types` make it a warning, and
+  `-Wno-incompatible-pointer-types` removes it; a warned conversion is an explicit cast. Before,
+  these conversions were E2202 or E2102, and three forms were accepted without a diagnostic:
+  such a conditional when its result was discarded or its operands pointed to character types,
+  `_Atomic T *` from `T *`, and a cast of zero to another pointer type.
 - The x86 calling-convention attributes `stdcall`, `fastcall`, `thiscall`, `vectorcall`,
   `regcall` and `sseregparm`, and `regparm` on Linux, are ignored with the new warning W0011
   (`attributes`), as in GCC 14 and Apple clang; before, they were E2952. `-Wno-attributes` and

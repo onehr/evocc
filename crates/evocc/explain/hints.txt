@@ -145,3 +145,4 @@ W0008	Preserve the source qualifier, or add an explicit cast.
 W0009	Preserve the array element qualifier, or add an explicit cast.
 W0010	Address the warning, or remove the `#warning` directive.
 W0011	Remove the attribute, or define it only for x86 targets.
+W0012	Use a pointer of the target type, or add an explicit cast.

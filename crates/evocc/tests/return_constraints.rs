@@ -24,8 +24,13 @@ fn fixed_prototype_arguments_share_the_assignment_constraints() {
                 .output()
                 .unwrap();
             let error = String::from_utf8_lossy(&output.stderr);
+            let code = if (2..=4).contains(&case) {
+                "E2202"
+            } else {
+                "W0012"
+            };
             assert!(!output.status.success(), "case {case} {mode}");
-            assert!(error.contains("E2202"), "case {case} {mode}: {error}");
+            assert!(error.contains(code), "case {case} {mode}: {error}");
             assert!(output.stdout.is_empty());
         }
     }
@@ -59,8 +64,10 @@ fn return_constraints_reject_before_execution_or_ir_construction() {
     for case in 1..=11 {
         let code = if (8..=10).contains(&case) {
             "E1207"
-        } else {
+        } else if (2..=4).contains(&case) {
             "E2202"
+        } else {
+            "W0012"
         };
         for mode in [
             "--parse-only",

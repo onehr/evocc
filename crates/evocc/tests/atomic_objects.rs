@@ -254,7 +254,7 @@ fn atomic_constraint_violations_are_errors() {
         (0, Some("E2956")), // member of an atomic record
         (1, Some("E2955")), // _Atomic(int[3])
         (2, Some("E2955")), // _Atomic(const int)
-        (3, Some("E2202")), // int * from &atomic_int
+        (3, Some("W0012")), // int * from &atomic_int
         (4, Some("E2955")), // atomic bit-field
         (5, None),          // update of an atomic array element
         (6, Some("E2955")), // _Atomic on a function typedef

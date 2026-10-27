@@ -1119,6 +1119,10 @@ fn parse_options(args: &[String], lenient: bool) -> Result<DriverOptions, String
                 return Err(format!("unsupported C language mode `{arg}`"));
             }
             "-pedantic" => {}
+            // GCC 14's -fpermissive lowers the error of W0012 to a warning
+            // (EvoIR 6.3); it changes no other diagnostic of EvoCC.
+            "-fpermissive" => lints.set_permissive(true),
+            "-fno-permissive" => lints.set_permissive(false),
             _ if arg.starts_with("-W") || arg == "-w" || arg.starts_with("--cap-lints=") => {
                 lints.option(arg)?
             }
@@ -2064,10 +2068,14 @@ fn run_parsed(options: &DriverOptions, action: ParsedAction) -> ExitCode {
     let mut repair_diagnostics = Vec::new();
     for finding in parser.lint_findings() {
         // System search paths suppress ordinary source warnings, not parser
-        // errors, #warning, or the modern-C undeclared-function constraint.
+        // errors, #warning, the modern-C undeclared-function constraint, or
+        // an incompatible pointer conversion that stays an error (W0012).
         if pp.source_is_system_header(finding.span.file)
             && !options.lints.system_header_warnings()
             && (finding.lint != 2 || options.language.legacy_declarations())
+            && !options
+                .lints
+                .reports_in_system_header(finding.lint, options.language.legacy_declarations())
         {
             continue;
         }

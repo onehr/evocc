@@ -5171,6 +5171,12 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 | TypeKind::TargetBuiltin(_),
                 WrittenInitializer::Expression(expression),
             ) => {
+                let mut expression: &'arena CHirExpr<'arena> = expression;
+                if self.incompatible_pointer_conversion(target, expression)
+                    && self.record_incompatible_pointers(expression.span())
+                {
+                    expression = self.incompatible_pointer_cast(target, expression);
+                }
                 if self.assignment_constraint(AssignmentOp::Simple, target, expression)
                     != UpdateConstraint::Scalar
                 {
@@ -10670,15 +10676,22 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                         if target_void != source_void {
                             self.report("E1207", "invalid-return-value", expr.span());
                         }
-                    } else if self.assignment_constraint(AssignmentOp::Simple, target, expr)
-                        == UpdateConstraint::Invalid
-                    {
-                        // Returning initializes the result value. Reuse the
-                        // same compatibility rule as initialization/assignment;
-                        // an explicit source cast still supplies its own type.
-                        self.report("E2202", "invalid-initializer-type", expr.span());
                     } else {
-                        expr = self.explicit_floating_integer_conversion(target, expr);
+                        if self.incompatible_pointer_conversion(target, expr)
+                            && self.record_incompatible_pointers(expr.span())
+                        {
+                            expr = self.incompatible_pointer_cast(target, expr);
+                        }
+                        if self.assignment_constraint(AssignmentOp::Simple, target, expr)
+                            == UpdateConstraint::Invalid
+                        {
+                            // Returning initializes the result value. Reuse the
+                            // same compatibility rule as initialization/assignment;
+                            // an explicit source cast still supplies its own type.
+                            self.report("E2202", "invalid-initializer-type", expr.span());
+                        } else {
+                            expr = self.explicit_floating_integer_conversion(target, expr);
+                        }
                     }
                 }
                 let semi = self.expect(TokenKind::Semicolon);
@@ -11333,6 +11346,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         let Some(op) = self.peek_kind().and_then(assignment_op) else {
             return Some(target);
         };
+        // GCC 14 reports an incompatible pointer assignment at the operator.
+        let operator_span = self.span();
         self.advance();
         // Diagnose the target first, but still consume the complete
         // right-associative RHS so recovery resumes at the statement boundary.
@@ -11401,6 +11416,12 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             value = operation.operands[1];
             UpdateConstraint::Scalar
         } else {
+            if op == AssignmentOp::Simple
+                && self.incompatible_pointer_conversion(typed_target.ty(), value)
+                && self.record_incompatible_pointers(operator_span)
+            {
+                value = self.incompatible_pointer_cast(typed_target.ty(), value);
+            }
             self.assignment_constraint(op, typed_target.ty(), value)
         };
         match constraint {
@@ -13441,6 +13462,10 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     /// Record the GCC pointer conversion warnings that depend on the source
     /// and target pointer types. The driver applies the selected lint level.
     fn note_pointer_conversion(&self, target_ty: TypeId, value: &CHirExpr<'_>) {
+        // GCC 14 reports only the incompatibility of such a pair (W0012).
+        if self.incompatible_pointer_conversion(target_ty, value) {
+            return;
+        }
         let Some(source_inferred) = self.converted_expression_type(value) else {
             return;
         };
@@ -13521,13 +13546,200 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         // GNU compatible-pointer conversions may discard immediate const or
         // volatile qualification. This does not change a const place, an
         // atomic pointee, or qualifiers nested inside another pointer type.
+        // As in GCC 14, the targets must agree on `_Atomic` unless one of
+        // them is `void`: `_Atomic int *` from `int *` is W0012.
+        let void_target = |pointer: InferredPointerType| {
+            matches!(
+                self.types.get(pointer.pointee).map(|ty| &ty.kind),
+                Some(TypeKind::Void)
+            )
+        };
+        let atomic_agrees = match (target.qualifiers.is_atomic, source.qualifiers.is_atomic) {
+            (false, false) => true,
+            (true, false) if !void_target(target) && !void_target(source) => false,
+            _ => qualifiers_include(
+                target.qualifiers.compatibility(),
+                source.qualifiers.compatibility(),
+            ),
+        };
         self.function_and_void_pointer_pair(target, source)
-            || (self.pointer_conversion_types_compatible(target, source)
-                && ((!target.qualifiers.is_atomic && !source.qualifiers.is_atomic)
-                    || qualifiers_include(
-                        target.qualifiers.compatibility(),
-                        source.qualifiers.compatibility(),
-                    )))
+            || (self.pointer_conversion_types_compatible(target, source) && atomic_agrees)
+    }
+
+    /// C11 6.3.2.3p3: an integer constant expression of value 0, or one cast
+    /// to `void *`. EvoCC folds a cast of zero to any pointer type as a null
+    /// pointer, but GCC 14 converts `(T *)0` with another `T` as a pointer of
+    /// type `T *` (W0012).
+    fn c11_null_pointer_constant(&self, expression: &CHirExpr<'_>) -> bool {
+        if !self.is_null_pointer_constant(expression) {
+            return false;
+        }
+        let CHirExpr::Cast(target, _, _) = expression else {
+            return true;
+        };
+        self.types.get(*target).is_some_and(|ty| match &ty.kind {
+            TypeKind::Pointer(pointee) => self.types.get(*pointee).is_some_and(|pointee| {
+                pointee.kind == TypeKind::Void && pointee.qualifiers == Qualifiers::default()
+            }),
+            _ => false,
+        })
+    }
+
+    fn points_to_non_atomic_void(&self, pointer: InferredPointerType) -> bool {
+        !pointer.qualifiers.is_atomic
+            && matches!(
+                self.types.get(pointer.pointee).map(|ty| &ty.kind),
+                Some(TypeKind::Void)
+            )
+    }
+
+    /// GCC 14's `-Wincompatible-pointer-types` for a conversion to `target`
+    /// in assignment, initialization, a prototyped argument or `return`
+    /// (EvoIR 10.1.18): the source is a pointer or a string literal, not a
+    /// C11 null pointer constant, and neither pointer target is non-atomic
+    /// `void`. Other refusals, such as `void *` from a pointer to an atomic
+    /// type, keep their codes.
+    fn incompatible_pointer_conversion(&self, target: TypeId, value: &CHirExpr<'_>) -> bool {
+        let OperandTypeClass::Pointer(left) =
+            self.operand_type_class(InferredType::Canonical(target))
+        else {
+            return false;
+        };
+        if self.points_to_non_atomic_void(left) {
+            return false;
+        }
+        let Some(source) = self.converted_expression_type(value) else {
+            return false;
+        };
+        match self.operand_type_class(source.ty) {
+            OperandTypeClass::Pointer(right) => {
+                !self.c11_null_pointer_constant(value)
+                    && !self.points_to_non_atomic_void(right)
+                    && !self.pointer_assignment_compatible(left, right)
+            }
+            OperandTypeClass::StringPointer(prefix) => !self.pointer_accepts_string(left, prefix),
+            _ => false,
+        }
+    }
+
+    /// GCC 14's "pointer type mismatch in conditional expression"
+    /// (`-Wincompatible-pointer-types`, EvoIR 10.1.18): two pointer operands,
+    /// neither a C11 null pointer constant nor a pointer to non-atomic `void`,
+    /// whose targets are not compatible apart from `const`, `volatile` and
+    /// `restrict`. Character types of different signedness are not
+    /// compatible here, unlike in a conversion.
+    fn incompatible_conditional_pointers(
+        &self,
+        first: &CHirExpr<'_>,
+        second: &CHirExpr<'_>,
+    ) -> bool {
+        #[derive(Clone, Copy)]
+        enum Operand {
+            Pointer(InferredPointerType),
+            String(StringPrefix),
+        }
+        let operand = |expression: &CHirExpr<'_>| {
+            if self.c11_null_pointer_constant(expression) {
+                return None;
+            }
+            match self.operand_type_class(self.converted_expression_type(expression)?.ty) {
+                OperandTypeClass::Pointer(pointer) if !self.points_to_non_atomic_void(pointer) => {
+                    Some(Operand::Pointer(pointer))
+                }
+                OperandTypeClass::StringPointer(prefix) => Some(Operand::String(prefix)),
+                _ => None,
+            }
+        };
+        let rank = |prefix: StringPrefix| match prefix {
+            StringPrefix::None | StringPrefix::U8 => None,
+            prefix => Some(prefix.element_rank()),
+        };
+        let string_target = |pointer: InferredPointerType, prefix: StringPrefix| {
+            !pointer.qualifiers.is_atomic
+                && self
+                    .types
+                    .get(pointer.pointee)
+                    .is_some_and(|pointee| match rank(prefix) {
+                        None => matches!(
+                            pointee.kind,
+                            TypeKind::Int(IntRank::Char | IntRank::SignedPlainChar)
+                        ),
+                        Some(rank) => pointee.kind == TypeKind::Int(rank),
+                    })
+        };
+        let (Some(first), Some(second)) = (operand(first), operand(second)) else {
+            return false;
+        };
+        !match (first, second) {
+            (Operand::Pointer(left), Operand::Pointer(right)) => {
+                left.qualifiers.is_atomic == right.qualifiers.is_atomic
+                    && (self
+                        .types
+                        .compatible_ignoring_top_qualifiers(left.pointee, right.pointee)
+                        || self
+                            .types
+                            .compatible_array_pointer_targets(left.pointee, right.pointee))
+            }
+            (Operand::Pointer(pointer), Operand::String(prefix))
+            | (Operand::String(prefix), Operand::Pointer(pointer)) => {
+                string_target(pointer, prefix)
+            }
+            (Operand::String(left), Operand::String(right)) => rank(left) == rank(right),
+        }
+    }
+
+    /// Record `W0012` for the driver's lint policy, which then decides its
+    /// level. Without that policy (the parser library without
+    /// `enable_lints`) the caller keeps the refusal of earlier revisions, as
+    /// an undeclared function does (EvoIR 10.1.18).
+    fn record_incompatible_pointers(&self, span: SourceSpan) -> bool {
+        if self.lint_declarations {
+            // Lint index 11 is `incompatible-pointer-types` (W0012).
+            self.pointer_lint_findings
+                .borrow_mut()
+                .push(evocc_chir::lints::Finding { lint: 11, span });
+        }
+        self.lint_declarations
+    }
+
+    /// The conversion of an explicit cast to `target`, which a warned or
+    /// allowed W0012 conversion is. A cast yields a value, so the target's
+    /// own qualifiers do not apply to it.
+    fn incompatible_pointer_cast(
+        &mut self,
+        target: TypeId,
+        value: &'arena CHirExpr<'arena>,
+    ) -> &'arena CHirExpr<'arena> {
+        let ty = match self.types.get(target) {
+            Some(canonical) if canonical.qualifiers != Qualifiers::default() => {
+                let kind = canonical.kind.clone();
+                self.intern(kind, Qualifiers::default())
+            }
+            _ => target,
+        };
+        self.alloc_node(CHirExpr::Cast(ty, value, value.span()))
+    }
+
+    /// A conditional with incompatible pointer operands has type `void *`
+    /// without qualifiers, as in GCC 14 and Apple clang. Each operand
+    /// converts as an explicit cast to `void *`, and `W0012` is at the `:`.
+    fn convert_incompatible_conditional_pointers(
+        &mut self,
+        first: &'arena CHirExpr<'arena>,
+        second: &'arena CHirExpr<'arena>,
+        colon: SourceSpan,
+    ) -> (&'arena CHirExpr<'arena>, &'arena CHirExpr<'arena>) {
+        if !self.incompatible_conditional_pointers(first, second)
+            || !self.record_incompatible_pointers(colon)
+        {
+            return (first, second);
+        }
+        let void = self.intern(TypeKind::Void, Qualifiers::default());
+        let pointer = self.intern(TypeKind::Pointer(void), Qualifiers::default());
+        (
+            self.alloc_node(CHirExpr::Cast(pointer, first, first.span())),
+            self.alloc_node(CHirExpr::Cast(pointer, second, second.span())),
+        )
     }
 
     fn function_and_void_pointer_pair(
@@ -13694,6 +13906,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             conditional_code,
             conditional_message,
         )?;
+        let elvis_colon = self.span();
         if self.match_kind(TokenKind::Colon) {
             let fallback = self.parse_conditional()?;
             self.require_supported_conditional_promotion(condition, fallback)?;
@@ -13703,11 +13916,13 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 self.merge_span(condition.span(), fallback.span()),
             )?;
             let span = self.merge_span(condition.span(), fallback.span());
+            let (condition, fallback) =
+                self.convert_incompatible_conditional_pointers(condition, fallback, elvis_colon);
             let (condition, fallback) = self.convert_conditional_arms(condition, fallback)?;
             return Some(self.alloc_node(CHirExpr::Elvis(condition, fallback, span)));
         }
         let when_true = self.parse_expression()?;
-        self.expect(TokenKind::Colon)?;
+        let colon = self.expect(TokenKind::Colon)?;
         let when_false = self.parse_conditional()?;
         self.require_supported_conditional_promotion(when_true, when_false)?;
         self.require_one_half_format(
@@ -13716,6 +13931,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             self.merge_span(when_true.span(), when_false.span()),
         )?;
         let span = self.merge_span(condition.span(), when_false.span());
+        let (when_true, when_false) =
+            self.convert_incompatible_conditional_pointers(when_true, when_false, colon.span);
         let (when_true, when_false) = self.convert_conditional_arms(when_true, when_false)?;
         Some(self.alloc_node(CHirExpr::Ternary(condition, when_true, when_false, span)))
     }
@@ -14429,6 +14646,11 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     if let FunctionParameters::Prototype { types, .. } = &parameters {
                         for (argument, parameter) in arguments.iter_mut().zip(types) {
                             *argument = self.resolve_union_argument(*parameter, argument)?;
+                            if self.incompatible_pointer_conversion(*parameter, argument)
+                                && self.record_incompatible_pointers(argument.span())
+                            {
+                                *argument = self.incompatible_pointer_cast(*parameter, argument);
+                            }
                             if self.assignment_constraint(
                                 AssignmentOp::Simple,
                                 *parameter,

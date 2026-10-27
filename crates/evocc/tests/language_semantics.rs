@@ -555,7 +555,7 @@ fn array_pointer_conversion_does_not_erase_bounds_or_nested_pointer_types() {
             .unwrap();
         assert!(!out.status.success(), "case {case}");
         assert!(
-            String::from_utf8_lossy(&out.stderr).contains("E2202"),
+            String::from_utf8_lossy(&out.stderr).contains("W0012"),
             "case {case}: {}",
             String::from_utf8_lossy(&out.stderr)
         );

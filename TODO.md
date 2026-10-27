@@ -6889,6 +6889,29 @@ plan, RED, flag, gates, one-page note, TODO update in the same commit.
   `x86_calling_conventions.rs` embeds ctest `00210`: it prints
   `00210.c.expected` and exits 0 natively on Darwin and in the sealed GCC 14
   image. Calls in both directions with GCC 14 and Apple clang objects agree.
+  October 27 incompatible-pointer repair: W0012 (`incompatible-pointer-types`)
+  reports the assignments, initializations, prototyped arguments, returns and
+  conditional operators that GCC 14 reports with `-Wincompatible-pointer-types`,
+  with GCC 14's levels: an error in C99 and later modes and a warning in C89 and
+  GNU89, lowered to a warning by `-fpermissive` and
+  `-Wno-error=incompatible-pointer-types`, and removed by
+  `-Wno-incompatible-pointer-types`; `-w` removes only the warning. A warned
+  conversion is an explicit cast, and such a conditional has type `void *`.
+  `incompatible_pointer_types.rs` checks the 50 measured sources in four modes
+  with the 37 measured option sets on both targets. With their original
+  arguments, LLVM PolyBench `correlation` and Shootout `methcall` give the
+  reference output and exit 0 in the sealed GCC 14 image. Three forms that
+  EvoCC accepted are now W0012 as in GCC 14: a conditional whose result was
+  discarded or whose operands pointed to character types, `_Atomic T *` from
+  `T *`, and `(T *)0` to another pointer type. A GCC 14 scan of the LLVM,
+  torture and ctest units of the October 25 run finds no such form in a unit
+  that compiled. LLVM `Regression-C-globalrefs` and `Vector-build2` also
+  compile now; their dispositions wait for B10. On Darwin EvoCC is stricter
+  than Apple clang, which only warns for data pointers and conditionals. Two
+  differences from GCC 14 remain: `-fpermissive` lowers only W0012, while
+  GCC 14 also lowers implicit function declarations, implicit `int` and
+  integer-pointer conversions; and `void *` from a pointer to an atomic type
+  stays E2202, while GCC 14 accepts it without a diagnostic.
 
 - [x] **N10 — Keep one-word records and small arrays in registers** — `DONE`, P1, 2026-10-19.
   `pte_t` and `pmd_t` values live in memory: zero-filled, copied from slot to

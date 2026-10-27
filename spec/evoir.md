@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 2.37.0** | **Pinned ground truth** | Ignored x86 calling conventions on 2026-10-27
+**Revision 2.38.0** | **Pinned ground truth** | Incompatible pointer types as in GCC 14 on 2026-10-27
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract of the parser, the C lowering, equality saturation,
@@ -2928,11 +2928,13 @@ for them. Codes `E4xxx` belong to EvoMIR (`spec/evomir.md`).
 | `W0009` | `pointer target discards array element qualifiers` | front-end lint |
 | `W0010` | `warning directive` | preprocessor lint |
 | `W0011` | `x86 calling convention ignored` | front-end lint |
+| `W0012` | `incompatible pointer types` | front-end lint |
 
-The eleven warning names, in code order, are `unused-variable`,
+The twelve warning names, in code order, are `unused-variable`,
 `unused-parameter`, `implicit-function-declaration`, `implicit-int`,
 `return-type`, `pointer-sign`, `pointer-arith`, `discarded-qualifiers`,
-`discarded-array-qualifiers`, `cpp` and `attributes`. The unused warnings
+`discarded-array-qualifiers`, `cpp`, `attributes` and
+`incompatible-pointer-types`. The unused warnings
 default to allow; the
 implicit and return warnings default to warn, except an implicit function
 declaration defaults to deny in C99 and later modes. The pointer sign and
@@ -2947,13 +2949,31 @@ before lowering. An allowed or warned implicit declaration uses the existing
 implicit `int` and unprototyped-function rules. This does not enable old-style
 definitions in a modern language mode.
 
+`incompatible-pointer-types` (`W0012`) reports the pointer conversions and the
+conditional operators of 10.1.18 whose pointer targets are incompatible. Its
+levels follow GCC 14. Its base level is deny in C99 and later modes and warn in
+C89 and GNU89; `-fpermissive` makes the base level warn in every mode, and
+`-fno-permissive` cancels it, so the last of the two wins. The last of
+`-Werror=incompatible-pointer-types` and `-Wno-error=incompatible-pointer-types`
+sets deny or warn, over the base level and over `-Werror`. Without either,
+`-Werror` promotes a warn base level, and `-Wno-error` does not lower a deny base
+level. `-Wno-incompatible-pointer-types` allows the lint until a later
+`-Werror=incompatible-pointer-types`. `-Wincompatible-pointer-types`, `-Wall`,
+`-Wextra` and `-Wpedantic` do not change it. `-w` suppresses it only when its
+base level or its final level is warn: a deny base level that no option lowers
+stays deny under `-w`. In a system header it is reported only when both its base
+level and its final level are deny. `-fpermissive` changes no other diagnostic of
+EvoCC: `W0003`, `W0004` and the integer-pointer `E2202` keep their rules,
+although GCC 14 also lowers them. `--cap-lints` limits it as below.
+
 `-WNAME`, `-Wno-NAME` and `-Werror=NAME` set warn, allow and deny. The last
 setting of the same specificity wins. `-Wall` and `-Wextra` enable the unused
 warnings and `pointer-sign`, but not `pointer-arith`; `-Wpedantic` enables
 `pointer-sign` and `pointer-arith`. An explicit named setting takes priority
 over a group. `-Werror` promotes enabled warnings to errors. `-w` suppresses
-all eleven. `-Wno-error=NAME` only stops `-Werror` from promoting that lint; it
-does not enable or change the lint's own level. `-Werror` promotes only
+the other eleven lints. `-Wno-error=NAME` only stops `-Werror` from promoting
+that lint; it does not enable or change the lint's own level; `W0012` is the
+exception above. `-Werror` promotes only
 EvoCC's lints, so a program that only GCC 14 would warn about stays accepted.
 `--cap-lints=allow|warn|deny` limits the final severity; it never enables a
 lint. A denied lint returns exit 1 before output publication. A warning does
@@ -5021,8 +5041,10 @@ an unreachable one, before inlining, execution or IR construction; falling off
 the end is not this check. A return expression and each fixed prototype
 argument, in direct and function-pointer calls alike, must satisfy the
 simple-assignment compatibility of 10.1.18, after transparent-union member
-selection (10.1.9) and before numeric conversion; an incompatible implicit
-pointer or aggregate conversion there is `E2202`. The check evaluates nothing.
+selection (10.1.9) and before numeric conversion. A conversion between pointers
+to incompatible types there is `W0012` (10.1.18), and every other incompatible
+implicit conversion there, an aggregate one included, is `E2202`. The check
+evaluates nothing.
 Unprototyped arguments and the anonymous variadic tail keep the default
 argument promotions. Signed and unsigned `__int128` count as integer types for
 null pointer constants, pointer arithmetic and conditional pointer typing, and
@@ -7092,7 +7114,7 @@ object keeps them.
 passing, `return`, `==` and `!=`, a pointer to an integer type converts to a pointer to
 the same type with the other signedness, or between `char`, `signed char`
 and `unsigned char`; the conversion is accepted without a diagnostic.
-Pointers to otherwise incompatible types are `E2202`.
+Pointers to otherwise incompatible types are `W0012` (below).
 
 **Function pointers and `void *`.** A pointer to function converts to and
 from `void *` in initialization, assignment, argument passing, `return`,
@@ -7100,6 +7122,30 @@ casts and both arms of the conditional operator; `(fn_t)0` and `(void *)0`
 are null pointer constants there, and `cond ? impl : (void *)0` has the
 function pointer type. Arithmetic on a `void *` operand follows 10.1.3 and
 its result may be converted to a function pointer the same way.
+
+**Incompatible pointer types (`W0012`).** In initialization, assignment, a
+prototyped argument and `return`, a conversion to a pointer from a pointer or
+a string literal is `W0012` unless the source is a null pointer constant of
+C11 6.3.2.3p3 (an integer constant expression of value 0, or one cast to
+`void *`), one pointer target is non-atomic `void`, the targets are compatible
+apart from `const`, `volatile` and `restrict`, or the targets are integer types
+that differ only in signedness. The targets must also agree on `_Atomic`: as in
+GCC 14, `_Atomic int *` from `int *` is `W0012`. A cast of zero to another
+pointer type, such as `(long *)0`, converts as a pointer of that type. A
+conditional operator whose two operands are pointers or string literals, neither
+a null pointer constant and neither a pointer to non-atomic `void`, with targets
+that are not compatible apart from those qualifiers, is `W0012` at the `:`;
+character types of different signedness are not compatible there. Its result has
+type `void *` without qualifiers, as in GCC 14 and Apple clang. The finding of
+a conversion is at the converted value, and at the operator for `=`. When
+`W0012` is a warning or allowed, the front end converts the value as an explicit
+cast to the target type does, and each operand of such a conditional to
+`void *`; a later access keeps every check that follows the cast. Without the
+driver's lint policy, the front end keeps `E2202` (`E2102` in assignment).
+`void *` from a pointer to an atomic type stays `E2202`, although GCC 14
+accepts it, and so does every conversion that 6.3 does not name for `W0012`: an
+integer for a pointer, a pointer for an integer, records, and a
+transparent-union argument without a matching member.
 
 **Qualified `void *` and function pointers.** The conversion between a
 pointer to function and `void *` of 10.1.18 holds for `void *` with any
@@ -7191,7 +7237,7 @@ type through consecutive array layers: `int (*)[4]` converts to
 `const int (*)[4]`. A known extent combines with an incomplete one; different
 known extents stay incompatible. The conversion stops at an intervening pointer,
 keeps atomic distinctions, and changes neither `__builtin_types_compatible_p`,
-mutability nor layout. The excluded forms are `E2202` (`E2102` in assignment).
+mutability nor layout. The excluded forms are `W0012`.
 
 **Parameters.** A function definition can omit a parameter name; the
 parameter keeps its type and call-interface slot and its argument is evaluated
@@ -7465,7 +7511,8 @@ refuse it. An evaluated `.` or `->` that designates a member of an atomic
 record or union is `E2956` (`atomic-member-access`), because C11 6.5.2.3p5
 makes the access undefined. The operand of `sizeof` is not evaluated, so a
 member access there is allowed. A pointer conversion that adds or removes
-`_Atomic` without a cast stays `E2202`.
+`_Atomic` without a cast is `W0012` (10.1.18), except that `void *` from a pointer
+to an atomic type stays `E2202`.
 
 **Layout.** On `aarch64-unknown-linux-gnu` an atomic type keeps the size of
 its non-atomic type. A size of 1, 2, 4, 8 or 16 bytes raises the alignment
@@ -7840,6 +7887,10 @@ on both targets, in any position:
   `-ftrapping-math` names the default contract, so none of them changes code.
   `-ffast-math`, `-ffinite-math-only`, `-funsafe-math-optimizations` and
   `-Ofast` keep their refusals.
+
+`-fpermissive` and `-fno-permissive` set the base level of `W0012` (Section
+6.3) on both targets and change nothing else. Apple clang ignores
+`-fpermissive`.
 
 GCC 14 accepts these options. Apple clang refuses `-finput-charset=utf8`
 without the hyphen. It also warns that `-fexpensive-optimizations` and
@@ -9086,6 +9137,19 @@ to the signature spelling.
 ---
 
 ## Revision
+
+**Revision 2.38.0, 2026-10-27.** The front-end lint `W0012`
+(`incompatible-pointer-types`) reports a conversion between pointers to
+incompatible types and a conditional operator with such operands, where GCC 14
+reports `-Wincompatible-pointer-types` (10.1.18). It is deny by default in C99
+and later modes and warn in C89 and GNU89; `-fpermissive`,
+`-Wno-error=incompatible-pointer-types`, `-Wno-incompatible-pointer-types`,
+`-Werror` and `-w` act as in GCC 14 (6.3). A warned or allowed conversion is that
+of an explicit cast, and such a conditional has type `void *`. These forms were
+`E2202` or `E2102`, except three that the front end accepted: a conditional whose
+result was discarded or whose operands pointed to character types, `_Atomic T *`
+from `T *`, and a cast of zero to another pointer type. No EvoIR operation,
+registry or proved Core domain changes.
 
 **Revision 2.37.0, 2026-10-27.** Section 10.1.9 ignores the x86 calling
 conventions `stdcall`, `fastcall`, `thiscall`, `vectorcall`, `regcall` and

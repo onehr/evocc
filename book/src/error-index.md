@@ -395,6 +395,7 @@ int main(void) { struct Record value = {1}; return subject(value) == 1 ? 0 : 1; 
 
 The supplied value cannot initialize or convert to the required type.
 This code also covers incompatible assignment and return conversions.
+A conversion between pointers to incompatible types is W0012 instead.
 
 C constrains conversions between scalar, pointer, and aggregate types.
 Use a compatible value rather than a cast that hides the type error.
@@ -3035,4 +3036,32 @@ int main(void) { return add(2, 3) != 5; }
 ```
 
 Remove the attribute, or define it only for x86 targets.
+
+### W0012: incompatible pointer types
+
+A conversion joins pointers to incompatible types, or a conditional operator does.
+The conversion is an assignment, an initialization, a prototyped argument or a return.
+
+ISO C refuses such a conversion without a cast (C11 6.5.16.1).
+As in GCC 14, EvoCC denies it by default in C99 and later modes and warns in C89 and GNU89.
+`-fpermissive` and `-Wno-error=incompatible-pointer-types` make it a warning,
+`-Wno-incompatible-pointer-types` suppresses it, and `-w` suppresses only the warning.
+A warned conversion is the conversion of an explicit cast, and such a conditional has
+type `void *`. Each later access keeps its checks.
+
+Flags: -Werror=incompatible-pointer-types
+
+```c
+long value;
+int *pointer = &value;
+int main(void) { return 0; }
+```
+
+```c
+long value;
+long *pointer = &value;
+int main(void) { return 0; }
+```
+
+Use a pointer of the target type, or add an explicit cast when the conversion is intended.
 
