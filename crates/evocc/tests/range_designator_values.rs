@@ -513,18 +513,60 @@ fn constant_values_and_nonconstant_index_rules_do_not_change() {
     }
 }
 
+// Each Linux form whose range has a nonconstant array value, after PREFIX.
+// GCC 14 refuses the automatic forms ("array initialized from non-constant
+// array expression") and the static forms ("initializer element is not
+// constant"). `@` marks the refused value and is not part of the source.
+const ARRAY_VALUES: &[&str] = &[
+    "int main(void) { int a[2][2] = {[0 ... 1] = {[0 ... 1] = @next(1)}}; return 0; }",
+    "int main(void) { int a[2][2] = {[0 ... 1] = {@next(1), next(2)}}; return 0; }",
+    "int main(void) { int a[2][2] = {[0 ... 1] = {@next(1)}}; return 0; }",
+    "int main(void) { int a[2][2] = {[0 ... 1] = {1, @next(1)}}; return 0; }",
+    "int main(void) { struct R { int v[2]; } r[2] = {[0 ... 1].v = {@next(1), 2}}; return 0; }",
+    "int main(void) { struct T { int m[2][2]; } t = {{[0 ... 1] = {@next(1), 2}}}; return 0; }",
+    "int main(void) { int (*p)[2] = (int[2][2]){[0 ... 1] = {@next(1), 2}}; return 0; }",
+    "int main(void) { int a[2][2][2] = {[0 ... 1] = {{@next(1), 2}, {3, 4}}}; return 0; }",
+    "int main(void) { char s[2][2] = {[0 ... 1] = {@(char)next(1), 0}}; return 0; }",
+    "int g = 5; int a[2][2] = {[0 ... 1] = {@g, 1}}; int main(void) { return 0; }",
+    "int main(void) { int g = 5; static int a[2][2] = {[0 ... 1] = {@g, 1}}; return 0; }",
+];
+
+/// E2969 names a range value that must be constant. E2202 names an invalid
+/// initializer type, so a nonconstant array value of a range is E2969 at the
+/// value on both targets.
 #[test]
 fn linux_keeps_the_reference_array_value_refusal() {
     let work = Work::new();
-    let source = work.source(&program(
-        "int a[2][2] = {[0 ... 1] = {[0 ... 1] = next(1)}};",
-        "a[1][1] == 11",
-    ));
-    let output = compile(&source, LINUX, &["--emit=asm"]);
-    assert_eq!(output.status.code(), Some(1));
-    assert!(String::from_utf8_lossy(&output.stderr)
-        .contains("range-designator-array-value-not-constant"));
-    assert!(output.stdout.is_empty());
+    let mut wrong = Vec::new();
+    for case in ARRAY_VALUES {
+        let marked = format!("{PREFIX}{case}\n");
+        let offset = marked.find('@').unwrap();
+        let line = marked[..offset].matches('\n').count() + 1;
+        let column = offset - marked[..offset].rfind('\n').map_or(0, |at| at + 1) + 1;
+        let text = marked.replacen('@', "", 1);
+        let expected =
+            format!("input.c:{line}:{column}: error[E2969]: range-designator-value-not-constant");
+        let source = work.source(&text);
+        for target in [LINUX, DARWIN] {
+            let output = compile(&source, target, &["--emit=asm"]);
+            let diagnostic = String::from_utf8_lossy(&output.stderr);
+            let first = diagnostic.lines().next().unwrap_or("");
+            if output.status.code() != Some(1)
+                || !output.stdout.is_empty()
+                || !first.ends_with(&expected)
+                || diagnostic.contains("E2202")
+            {
+                wrong.push(format!("{target}: {case}\n  {:?} {first}", output.status));
+            }
+        }
+    }
+    assert!(
+        wrong.is_empty(),
+        "{} of {} runs differ:\n{}",
+        wrong.len(),
+        ARRAY_VALUES.len() * 2,
+        wrong.join("\n")
+    );
 }
 
 #[test]

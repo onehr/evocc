@@ -6825,6 +6825,8 @@ plan, RED, flag, gates, one-page note, TODO update in the same commit.
   scalar or record range value once, in destination order, and copies a
   snapshot of a shared record. Fully overwritten values do not execute.
   Darwin now reports E2969 at the value; E2917 remains an index/bound code.
+  A later fix gives E2969, not E2202, to the Linux refusal of a nonconstant
+  array value; 11 forms that GCC 14 refuses are tested on both targets.
   The original c-testsuite `00216.c` and its expected output are embedded
   byte-for-byte in `range_designator_values.rs`. Its native GCC/EvoCC replay
   matches all 43 output lines and exits zero. Eighteen smaller cases cover

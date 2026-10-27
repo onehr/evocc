@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 2.33.0** | **Pinned ground truth** | Shared Linux range initializer values on 2026-10-27
+**Revision 2.33.1** | **Pinned ground truth** | One code for nonconstant range values on 2026-10-27
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract of the parser, the C lowering, equality saturation,
@@ -5708,8 +5708,9 @@ The surviving actions execute in subobject-path order, as in GCC 14. Shared
 values belong to one execution of one object initializer, so loops and
 recursive calls do not reuse earlier executions. A shared aggregate value
 is a snapshot, not a continuing view of mutable source storage. A
-nonconstant array value of a range is refused with `E2202`, named
-`range-designator-array-value-not-constant`, as GCC 14 refuses that form.
+nonconstant array value of a range is `E2969`
+(`range-designator-value-not-constant`) at that value, as GCC 14 refuses
+that form.
 
 On Darwin, each value in a range must remain a static initializer constant:
 an arithmetic constant expression, an address constant or a label
@@ -9002,6 +9003,13 @@ to the signature spelling.
 ---
 
 ## Revision
+
+**Revision 2.33.1, 2026-10-27.** Section 10.1.12 gives the Linux refusal of
+a nonconstant array value of a range the code `E2969`
+(`range-designator-value-not-constant`). Revision 2.33.0 gave it `E2202`
+with a name that is not the registered name of `E2202`. `E2969` now names a
+range value that must be constant on either target. The refused forms do
+not change.
 
 **Revision 2.33.0, 2026-10-27.** Section 10.1.12 admits nonconstant scalar
 and record range values on Linux, with one converted value per written

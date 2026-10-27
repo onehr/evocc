@@ -11,7 +11,9 @@ The first public version.
 
 - GNU range initializers on Linux share each nonconstant scalar or record value across its
   surviving destinations. Fully overwritten values do not run. Values execute in destination
-  order, as in GCC 14. Darwin keeps a named refusal, E2969; E2917 describes an index or bound.
+  order, as in GCC 14. E2969 names a range value that must be constant: each nonconstant value
+  on Darwin, and a nonconstant array value on Linux, which GCC 14 also refuses. E2917 describes
+  an index or bound.
 - `evo check FILE.c --json --form=concise-1` prints one short record: the check result, each
   diagnostic with its location, a one-line explanation and a repair hint, and the plan's repairs.
   `full-1` stays the default. The MCP `check` tool takes the same optional `form`.

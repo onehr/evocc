@@ -5362,8 +5362,10 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         Some(())
     }
 
-    /// Darwin keeps its named value refusal. GCC rejects a nonconstant array
-    /// value too; scalar and record range values use the shared Linux plan.
+    /// EvoIR 10.1.12: a nonconstant range value that must be constant is
+    /// `E2969` at the value. On Darwin, each range value must be constant.
+    /// On Linux, an array value must be constant, as in GCC 14; the shared
+    /// Linux plan takes the scalar and record values.
     fn require_admitted_range_initializer(
         &mut self,
         written: &WrittenInitializer<'arena>,
@@ -5371,23 +5373,15 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     ) -> Option<()> {
         match written {
             WrittenInitializer::Expression(expression) => {
-                if !self.static_initializer_expression_is_constant(expression) {
-                    if self.target_layout.names_clang_extensions() {
-                        self.report(
-                            "E2969",
-                            "range-designator-value-not-constant",
-                            expression.span(),
-                        );
-                        return None;
-                    }
-                    if array_value {
-                        self.report(
-                            "E2202",
-                            "range-designator-array-value-not-constant",
-                            expression.span(),
-                        );
-                        return None;
-                    }
+                if !self.static_initializer_expression_is_constant(expression)
+                    && (array_value || self.target_layout.names_clang_extensions())
+                {
+                    self.report(
+                        "E2969",
+                        "range-designator-value-not-constant",
+                        expression.span(),
+                    );
+                    return None;
                 }
             }
             WrittenInitializer::List { elements, .. } => {
