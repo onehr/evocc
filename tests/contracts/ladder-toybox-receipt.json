@@ -3,7 +3,7 @@
  "rung": "E6",
  "subject": "toybox",
  "authority": "docs/archive/roadmap.md, milestone ladder",
- "run": "20261025T103326Z",
+ "run": "20261027T114817Z",
  "pin": {
   "subject": "toybox",
   "rung": "E6",
@@ -12,7 +12,7 @@
   "origin": "https://github.com/landley/toybox/archive/refs/tags/0.8.14.tar.gz",
   "sha256": "082df8cfd76135ce3c4820c8cf4c0081d61491e0990aff2da48e21fc9bbb24d1"
  },
- "driverSha256": "978a3771912d7b2eafe89228ff2cb3d3c0c996826b2b2875c4cb74932a655ce4",
+ "driverSha256": "ab0c90437192d6824ce884c71d80a028e1d785ae89a11fe58ecb0145d76de525",
  "target": "aarch64-unknown-linux-gnu",
  "baselineTest": {
   "completed": true,
@@ -26,7 +26,7 @@
   "failing": [
    "tar ownership [occurrence 1]"
   ],
-  "logSha256": "ca5f43f1fcd0bf5a66003c6814395d66fb4db00755bfc40c2e69b3e238400a4a",
+  "logSha256": "a02bb14cf177ce05abcc50126d2147a4f7b556c4b574d85cb16440a6c211ab5a",
   "binarySha256": "e4f4fbab0bb2b203ebbc948f14524268a76a4c9d599ae3f1866a932d5f7a9f22",
   "runtimePolicy": {
    "workingDirectory": "ephemeral-container-local",
@@ -51,7 +51,7 @@
   "failing": [
    "tar ownership [occurrence 1]"
   ],
-  "logSha256": "e26c6bb33fc0d9b858de8b5682aafeb94998e3733f65a4c8a3d3c200b47f20ce",
+  "logSha256": "379f8ba5a3ee9d40bfa181f242ecfe97e9c71779b7f78e64fa6af2512257f901",
   "binarySha256": "7b277169908916875ae8da40e1daf95ccbf16e317ce95e46f1b50287a2940cea",
   "runtimePolicy": {
    "workingDirectory": "ephemeral-container-local",
@@ -738,5 +738,5 @@
  "unconsumedGccOptions": {
   "-o": 203
  },
- "evidence": "/Users/onehrxn/dev/30days/c30/.evidence/ladder/toybox/20261025T103326Z"
+ "evidence": "/Users/onehrxn/dev/30days/c30/.evidence/ladder/toybox/20261027T114817Z"
 }

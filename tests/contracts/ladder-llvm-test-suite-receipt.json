@@ -2,16 +2,16 @@
  "schemaVersion": 1,
  "rung": "E9",
  "subject": "llvm-test-suite",
- "run": "20261025T114052Z",
+ "run": "20261027T120426Z",
  "pin": "llvmorg-23.1.0 (2919e55176a572ee085cb46b291c47b7092c363e)",
  "tarballSha256": "415106c9962e07a24326ad9173bbecd4215f6dee49bce9aec5181d75d07db770",
- "driverSha256": "978a3771912d7b2eafe89228ff2cb3d3c0c996826b2b2875c4cb74932a655ce4",
+ "driverSha256": "ab0c90437192d6824ce884c71d80a028e1d785ae89a11fe58ecb0145d76de525",
  "target": "aarch64-unknown-linux-gnu",
  "unitsTotal": 1735,
  "programsTotal": 1735,
- "unitsEvoccCompiled": 1674,
- "unitsSubstituted": 1674,
- "unitsInPassingBuild": 1658,
+ "unitsEvoccCompiled": 1690,
+ "unitsSubstituted": 1690,
+ "unitsInPassingBuild": 1674,
  "substitutedUnits": [
   "build/SingleSource/Benchmarks/BenchmarkGame/CMakeFiles/fannkuch.dir/fannkuch.c.o",
   "build/SingleSource/Benchmarks/BenchmarkGame/CMakeFiles/n-body.dir/n-body.c.o",
@@ -59,6 +59,7 @@
   "build/SingleSource/Benchmarks/Misc/CMakeFiles/whetstone.dir/whetstone.c.o",
   "build/SingleSource/Benchmarks/Misc/CMakeFiles/dt.dir/dt.c.o",
   "build/SingleSource/Benchmarks/Misc/CMakeFiles/aarch64-init-cpu-features.dir/aarch64-init-cpu-features.c.o",
+  "build/SingleSource/Benchmarks/Polybench/datamining/correlation/CMakeFiles/correlation.dir/correlation.c.o",
   "build/SingleSource/Benchmarks/Polybench/datamining/covariance/CMakeFiles/covariance.dir/covariance.c.o",
   "build/SingleSource/Benchmarks/Polybench/linear-algebra/blas/gemm/CMakeFiles/gemm.dir/gemm.c.o",
   "build/SingleSource/Benchmarks/Polybench/linear-algebra/blas/gemver/CMakeFiles/gemver.dir/gemver.c.o",
@@ -95,6 +96,7 @@
   "build/SingleSource/Benchmarks/Shootout/CMakeFiles/Shootout-heapsort.dir/heapsort.c.o",
   "build/SingleSource/Benchmarks/Shootout/CMakeFiles/Shootout-lists.dir/lists.c.o",
   "build/SingleSource/Benchmarks/Shootout/CMakeFiles/Shootout-matrix.dir/matrix.c.o",
+  "build/SingleSource/Benchmarks/Shootout/CMakeFiles/Shootout-methcall.dir/methcall.c.o",
   "build/SingleSource/Benchmarks/Shootout/CMakeFiles/Shootout-nestedloop.dir/nestedloop.c.o",
   "build/SingleSource/Benchmarks/Shootout/CMakeFiles/Shootout-objinst.dir/objinst.c.o",
   "build/SingleSource/Benchmarks/Shootout/CMakeFiles/Shootout-random.dir/random.c.o",
@@ -206,6 +208,7 @@
   "build/SingleSource/UnitTests/Threads/CMakeFiles/2010-12-08-tls.dir/2010-12-08-tls.c.o",
   "build/SingleSource/UnitTests/Threads/CMakeFiles/tls.dir/tls.c.o",
   "build/SingleSource/UnitTests/Vector/CMakeFiles/Vector-build.dir/build.c.o",
+  "build/SingleSource/UnitTests/Vector/CMakeFiles/Vector-build2.dir/build2.c.o",
   "build/SingleSource/UnitTests/Vector/CMakeFiles/Vector-constpool.dir/constpool.c.o",
   "build/SingleSource/UnitTests/Vector/CMakeFiles/Vector-divides.dir/divides.c.o",
   "build/SingleSource/UnitTests/Vector/CMakeFiles/Vector-multiplies.dir/multiplies.c.o",
@@ -254,6 +257,7 @@
   "build/SingleSource/Regression/C/CMakeFiles/Regression-C-casts.dir/casts.c.o",
   "build/SingleSource/Regression/C/CMakeFiles/Regression-C-compare.dir/compare.c.o",
   "build/SingleSource/Regression/C/CMakeFiles/Regression-C-float16-smoke.dir/float16-smoke.c.o",
+  "build/SingleSource/Regression/C/CMakeFiles/Regression-C-globalrefs.dir/globalrefs.c.o",
   "build/SingleSource/Regression/C/CMakeFiles/Regression-C-matrixTranspose.dir/matrixTranspose.c.o",
   "build/SingleSource/Regression/C/CMakeFiles/Regression-C-pointer_arithmetic.dir/pointer_arithmetic.c.o",
   "build/SingleSource/Regression/C/CMakeFiles/Regression-C-sumarray.dir/sumarray.c.o",
@@ -540,6 +544,7 @@
   "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-20040707-1.dir/20040707-1.c.o",
   "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-20040709-1.dir/20040709-1.c.o",
   "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-20040709-2.dir/20040709-2.c.o",
+  "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-20040709-3.dir/20040709-3.c.o",
   "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-20040805-1.dir/20040805-1.c.o",
   "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-20040811-1.dir/20040811-1.c.o",
   "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-20040820-1.dir/20040820-1.c.o",
@@ -583,6 +588,7 @@
   "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-20050826-1.dir/20050826-1.c.o",
   "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-20050826-2.dir/20050826-2.c.o",
   "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-20050929-1.dir/20050929-1.c.o",
+  "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-20051012-1.dir/20051012-1.c.o",
   "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-20051021-1.dir/20051021-1.c.o",
   "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-20051104-1.dir/20051104-1.c.o",
   "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-20051110-1.dir/20051110-1.c.o",
@@ -710,6 +716,7 @@
   "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-920411-1.dir/920411-1.c.o",
   "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-920428-1.dir/920428-1.c.o",
   "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-920429-1.dir/920429-1.c.o",
+  "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-920501-1.dir/920501-1.c.o",
   "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-920501-2.dir/920501-2.c.o",
   "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-920501-4.dir/920501-4.c.o",
   "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-920501-5.dir/920501-5.c.o",
@@ -753,6 +760,7 @@
   "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-921204-1.dir/921204-1.c.o",
   "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-921207-1.dir/921207-1.c.o",
   "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-921208-1.dir/921208-1.c.o",
+  "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-921208-2.dir/921208-2.c.o",
   "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-921218-1.dir/921218-1.c.o",
   "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-921218-2.dir/921218-2.c.o",
   "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-930106-1.dir/930106-1.c.o",
@@ -1368,6 +1376,8 @@
   "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-pr59643.dir/pr59643.c.o",
   "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-pr59747.dir/pr59747.c.o",
   "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-pr60017.dir/pr60017.c.o",
+  "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-pr60062.dir/pr60062.c.o",
+  "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-pr60072.dir/pr60072.c.o",
   "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-pr60454.dir/pr60454.c.o",
   "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-pr60822.dir/pr60822.c.o",
   "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-pr60960.dir/pr60960.c.o",
@@ -1427,7 +1437,10 @@
   "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-pr68328.dir/pr68328.c.o",
   "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-pr68376-1.dir/pr68376-1.c.o",
   "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-pr68376-2.dir/pr68376-2.c.o",
+  "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-pr68381.dir/pr68381.c.o",
   "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-pr68390.dir/pr68390.c.o",
+  "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-pr68506.dir/pr68506.c.o",
+  "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-pr68532.dir/pr68532.c.o",
   "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-pr68624.dir/pr68624.c.o",
   "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-pr68648.dir/pr68648.c.o",
   "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-pr68841.dir/pr68841.c.o",
@@ -1560,6 +1573,7 @@
   "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-stdarg-2.dir/stdarg-2.c.o",
   "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-stdarg-3.dir/stdarg-3.c.o",
   "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-stdarg-4.dir/stdarg-4.c.o",
+  "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-stkalign.dir/stkalign.c.o",
   "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-strcmp-1.dir/strcmp-1.c.o",
   "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-strcpy-1.dir/strcpy-1.c.o",
   "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-strcpy-2.dir/strcpy-2.c.o",
@@ -1624,6 +1638,7 @@
   "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-vrp-5.dir/vrp-5.c.o",
   "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-vrp-6.dir/vrp-6.c.o",
   "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-vrp-7.dir/vrp-7.c.o",
+  "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-wchar_t-1.dir/wchar_t-1.c.o",
   "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-widechar-1.dir/widechar-1.c.o",
   "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-widechar-2.dir/widechar-2.c.o",
   "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-widechar-3.dir/widechar-3.c.o",
@@ -1647,6 +1662,7 @@
   "build/SingleSource/Regression/C/gcc-c-torture/execute/ieee/CMakeFiles/GCC-C-execute-ieee-builtin-nan-1.dir/builtin-nan-1.c.o",
   "build/SingleSource/Regression/C/gcc-c-torture/execute/ieee/CMakeFiles/GCC-C-execute-ieee-compare-fp-1.dir/compare-fp-1.c.o",
   "build/SingleSource/Regression/C/gcc-c-torture/execute/ieee/CMakeFiles/GCC-C-execute-ieee-compare-fp-2.dir/compare-fp-2.c.o",
+  "build/SingleSource/Regression/C/gcc-c-torture/execute/ieee/CMakeFiles/GCC-C-execute-ieee-compare-fp-3.dir/compare-fp-3.c.o",
   "build/SingleSource/Regression/C/gcc-c-torture/execute/ieee/CMakeFiles/GCC-C-execute-ieee-compare-fp-4.dir/compare-fp-4.c.o",
   "build/SingleSource/Regression/C/gcc-c-torture/execute/ieee/CMakeFiles/GCC-C-execute-ieee-copysign1.dir/copysign1.c.o",
   "build/SingleSource/Regression/C/gcc-c-torture/execute/ieee/CMakeFiles/GCC-C-execute-ieee-copysign2.dir/copysign2.c.o",
@@ -3245,53 +3261,38 @@
   }
  ],
  "programOutcomes": {
-  "PASS": 1658,
-  "compiler-refused": 61,
+  "PASS": 1674,
   "oracle-unusable": 2,
   "runtime-failure": 11,
+  "compiler-refused": 45,
   "link-failure": 3
  },
  "dispositionCounts": {
-  "PASS": 1054,
-  "compiler-failure": 11,
-  "FP-deferred": 3,
+  "PASS": 1066,
+  "compiler-failure": 0,
+  "FP-deferred": 2,
   "not-applicable": 665,
   "oracle-unusable": 2
  },
  "outcomes": {
-  "assembled": 1674,
-  "refused": 61
+  "assembled": 1690,
+  "refused": 45
  },
  "refusalsByCode": {
-  "E2202": 4,
   "E1001": 26,
   "E2949": 1,
   "E3050": 1,
   "E2102": 4,
   "E2002": 1,
-  "other": 9,
   "E2903": 3,
-  "E3051": 3,
   "E2931": 1,
   "E1207": 3,
-  "E2952": 2,
+  "other": 2,
   "E2204": 1,
   "E2940": 1,
   "E2929": 1
  },
  "refusals": [
-  {
-   "unit": "build/SingleSource/Benchmarks/Polybench/datamining/correlation/CMakeFiles/correlation.dir/correlation.c.o",
-   "code": "E2202",
-   "message": "invalid-initializer-type",
-   "at": ""
-  },
-  {
-   "unit": "build/SingleSource/Benchmarks/Shootout/CMakeFiles/Shootout-methcall.dir/methcall.c.o",
-   "code": "E2202",
-   "message": "invalid-initializer-type",
-   "at": ""
-  },
   {
    "unit": "build/SingleSource/UnitTests/CMakeFiles/AtomicOps.dir/AtomicOps.c.o",
    "code": "E1001",
@@ -3302,12 +3303,6 @@
    "unit": "build/SingleSource/UnitTests/Float/CMakeFiles/classify.dir/classify.c.o",
    "code": "E2949",
    "message": "unknown-builtin: __builtin_issignaling",
-   "at": ""
-  },
-  {
-   "unit": "build/SingleSource/UnitTests/Vector/CMakeFiles/Vector-build2.dir/build2.c.o",
-   "code": "E2202",
-   "message": "invalid-initializer-type",
    "at": ""
   },
   {
@@ -3323,12 +3318,6 @@
    "at": ""
   },
   {
-   "unit": "build/SingleSource/Regression/C/CMakeFiles/Regression-C-globalrefs.dir/globalrefs.c.o",
-   "code": "E2202",
-   "message": "invalid-initializer-type",
-   "at": ""
-  },
-  {
    "unit": "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-20001111-1.dir/20001111-1.c.o",
    "code": "E2102",
    "message": "invalid-update-operands",
@@ -3338,12 +3327,6 @@
    "unit": "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-20010605-2.dir/20010605-2.c.o",
    "code": "E2002",
    "message": "incompatible-redeclaration: bar",
-   "at": ""
-  },
-  {
-   "unit": "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-20040709-3.dir/20040709-3.c.o",
-   "code": "other",
-   "message": "^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unsupported option `-fno-common`\n   |",
    "at": ""
   },
   {
@@ -3365,12 +3348,6 @@
    "at": ""
   },
   {
-   "unit": "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-20051012-1.dir/20051012-1.c.o",
-   "code": "E3051",
-   "message": "evoir-lowering-failed: malformed function foo: call arity disagrees with the canonical prototype",
-   "at": ""
-  },
-  {
    "unit": "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-20121108-1.dir/20121108-1.c.o",
    "code": "E2931",
    "message": "unprototyped-call-mismatch",
@@ -3380,12 +3357,6 @@
    "unit": "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-920302-1.dir/920302-1.c.o",
    "code": "E1207",
    "message": "invalid-return-value",
-   "at": ""
-  },
-  {
-   "unit": "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-920501-1.dir/920501-1.c.o",
-   "code": "E3051",
-   "message": "evoir-lowering-failed: malformed function x: call arity disagrees with the canonical prototype",
    "at": ""
   },
   {
@@ -3428,12 +3399,6 @@
    "unit": "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-921124-1.dir/921124-1.c.o",
    "code": "E1001",
    "message": "expected-declaration",
-   "at": ""
-  },
-  {
-   "unit": "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-921208-2.dir/921208-2.c.o",
-   "code": "E3051",
-   "message": "evoir-lowering-failed: malformed function g: call arity disagrees with the canonical prototype",
    "at": ""
   },
   {
@@ -3581,36 +3546,6 @@
    "at": ""
   },
   {
-   "unit": "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-pr60062.dir/pr60062.c.o",
-   "code": "E2952",
-   "message": "unsupported-function-attribute: optimize",
-   "at": ""
-  },
-  {
-   "unit": "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-pr60072.dir/pr60072.c.o",
-   "code": "E2952",
-   "message": "unsupported-function-attribute: optimize",
-   "at": ""
-  },
-  {
-   "unit": "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-pr68381.dir/pr68381.c.o",
-   "code": "other",
-   "message": "^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unsupported option `-fexpensive-optimizations`\n   |",
-   "at": ""
-  },
-  {
-   "unit": "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-pr68506.dir/pr68506.c.o",
-   "code": "other",
-   "message": "^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unsupported option `-fno-builtin-abort`\n   |",
-   "at": ""
-  },
-  {
-   "unit": "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-pr68532.dir/pr68532.c.o",
-   "code": "other",
-   "message": "^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unsupported option `-ftree-vectorize`\n   |",
-   "at": ""
-  },
-  {
    "unit": "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-pr86714.dir/pr86714.c.o",
    "code": "E2204",
    "message": "string-initializer-too-long: 4 > 3",
@@ -3623,27 +3558,9 @@
    "at": ""
   },
   {
-   "unit": "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-stkalign.dir/stkalign.c.o",
-   "code": "other",
-   "message": "^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unsupported option `-fno-inline`\n   |",
-   "at": ""
-  },
-  {
    "unit": "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-va-arg-trap-1.dir/va-arg-trap-1.c.o",
    "code": "E2929",
    "message": "unpromoted-va-arg-type",
-   "at": ""
-  },
-  {
-   "unit": "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-wchar_t-1.dir/wchar_t-1.c.o",
-   "code": "other",
-   "message": "^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unsupported option `-finput-charset=utf-8`\n   |",
-   "at": ""
-  },
-  {
-   "unit": "build/SingleSource/Regression/C/gcc-c-torture/execute/ieee/CMakeFiles/GCC-C-execute-ieee-compare-fp-3.dir/compare-fp-3.c.o",
-   "code": "other",
-   "message": "^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unsupported option `-fno-trapping-math`\n   |",
    "at": ""
   }
  ],
@@ -4446,6 +4363,6 @@
    "--rtlib=compiler-rt"
   ]
  },
- "evidence": ".evidence/ladder/llvm-test-suite/20261025T114052Z",
- "summaryLine": "LLVM SingleSource: 1658/1735 C programs compiled by EvoCC and PASS; {'PASS': 1658, 'compiler-refused': 61, 'oracle-unusable': 2, 'runtime-failure': 11, 'link-failure': 3}"
+ "evidence": ".evidence/ladder/llvm-test-suite/20261027T120426Z",
+ "summaryLine": "LLVM SingleSource: 1674/1735 C programs compiled by EvoCC and PASS; {'PASS': 1674, 'oracle-unusable': 2, 'runtime-failure': 11, 'compiler-refused': 45, 'link-failure': 3}"
 }

@@ -3,12 +3,12 @@
  "rung": "E11",
  "subject": "lua",
  "authority": "docs/archive/roadmap.md, milestone ladder",
- "run": "20261025T115409Z",
+ "run": "20261027T121740Z",
  "pin": "5.5.1",
  "url": "https://www.lua.org/ftp/lua-5.5.1.tar.gz",
  "tarballSha256": "1c4b4068d67061f2a2231ad2b5422e77acea1487ea9890f6320af614f4373dce",
  "tarball": "lua-5.5.1.tar.gz",
- "driverSha256": "978a3771912d7b2eafe89228ff2cb3d3c0c996826b2b2875c4cb74932a655ce4",
+ "driverSha256": "ab0c90437192d6824ce884c71d80a028e1d785ae89a11fe58ecb0145d76de525",
  "target": "aarch64-unknown-linux-gnu",
  "unitsTotal": 34,
  "unmeasuredBuildUnits": [],
@@ -90,9 +90,9 @@
   "portableBuildSymlinks": {},
   "sysrootAdjustmentMeaning": {},
   "includeOrder": [
-   "-I/Users/onehrxn/dev/30days/c30/.build/case/ladder-sysroot/usr/lib/gcc/aarch64-linux-gnu/14/include",
-   "-I/Users/onehrxn/dev/30days/c30/.build/case/ladder-sysroot/usr/include/aarch64-linux-gnu",
-   "-I/Users/onehrxn/dev/30days/c30/.build/case/ladder-sysroot/usr/include"
+   "-isystem/Users/onehrxn/dev/30days/c30/.build/case/ladder-sysroot/usr/lib/gcc/aarch64-linux-gnu/14/include",
+   "-isystem/Users/onehrxn/dev/30days/c30/.build/case/ladder-sysroot/usr/include/aarch64-linux-gnu",
+   "-isystem/Users/onehrxn/dev/30days/c30/.build/case/ladder-sysroot/usr/include"
   ],
   "configure": "",
   "subject": [
@@ -108,6 +108,6 @@
  },
  "frontEndGaps": [],
  "defects": [],
- "evidence": ".evidence/ladder/lua/20261025T115409Z",
+ "evidence": ".evidence/ladder/lua/20261027T121740Z",
  "summaryLine": "lua: 34 of 34 units by EvoCC in a passing build; refused by code {}"
 }

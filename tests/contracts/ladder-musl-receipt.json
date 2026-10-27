@@ -3,7 +3,7 @@
  "rung": "E7",
  "subject": "musl",
  "authority": "docs/archive/roadmap.md, milestone ladder",
- "run": "20261025T112904Z",
+ "run": "20261027T114938Z",
  "pin": {
   "subject": "musl",
   "rung": "E7",
@@ -17,7 +17,7 @@
    "originNote": "git.musl-libc.org answered 502 Bad Gateway during this run, so the repo.or.cz mirror was cloned; there are no releases, and this is the HEAD this receipt pins"
   }
  },
- "driverSha256": "978a3771912d7b2eafe89228ff2cb3d3c0c996826b2b2875c4cb74932a655ce4",
+ "driverSha256": "ab0c90437192d6824ce884c71d80a028e1d785ae89a11fe58ecb0145d76de525",
  "target": "aarch64-unknown-linux-gnu",
  "baselineTest": {
   "libcTestFailingCases": 13,
@@ -2851,11 +2851,11 @@
     },
     "libc-relink": {
      "file": "libc-relink-1.log",
-     "sha256": "94119fd93511bf80a7b4035d6d8251a4337949f49f9e0b5c9d7d8f39793413a1"
+     "sha256": "a155dc8f9d138ddbb194ab9b02dea8848442c1b1108edf1612f42e3e28091b8b"
     },
     "tests-relink": {
      "file": "tests-relink-1.log",
-     "sha256": "c86b999a145ebd874561e8c702b67284b1ee6ce1e5dd72304c1f214b106a3e59"
+     "sha256": "3e95151794cdc7b2e78fe58e81280d4d94a47804799a682e18d93fa7a86b802e"
     }
    },
    "archiveSha256": "a90a6df635493161e39debc44661b0197eee39a95a113aee01bf4adea83627fb"
@@ -5571,11 +5571,11 @@
     },
     "libc-relink": {
      "file": "libc-relink-2.log",
-     "sha256": "94119fd93511bf80a7b4035d6d8251a4337949f49f9e0b5c9d7d8f39793413a1"
+     "sha256": "ef9515d1aed2f7874f866e244d7de8599f7bc3cc5a5b8cc1f8c2b25f694d9a30"
     },
     "tests-relink": {
      "file": "tests-relink-2.log",
-     "sha256": "3d75768b436fbfbfef329b9f024d0a5b5250b0a186d69b69260f1073f82adfcc"
+     "sha256": "bc8aa48a3c15b6d62b66f86ccf3d7e74864359a0ced2cce497fd3ae92caef499"
     }
    },
    "archiveSha256": "a90a6df635493161e39debc44661b0197eee39a95a113aee01bf4adea83627fb"
@@ -5584,8 +5584,8 @@
  "sharedLoader": {
   "scope": "five original shared-loader subjects; not full musl",
   "status": "PASS",
-  "compilerSha256": "978a3771912d7b2eafe89228ff2cb3d3c0c996826b2b2875c4cb74932a655ce4",
-  "evidence": "/Users/onehrxn/dev/30days/c30/.evidence/ladder/musl/20261025T112904Z/shared-loader",
+  "compilerSha256": "ab0c90437192d6824ce884c71d80a028e1d785ae89a11fe58ecb0145d76de525",
+  "evidence": "/Users/onehrxn/dev/30days/c30/.evidence/ladder/musl/20261027T114938Z/shared-loader",
   "subjects": [
    "functional/dlopen",
    "functional/tls_align",
@@ -5605,7 +5605,7 @@
      "-pipe",
      "-o"
     ],
-    "command": "/Users/onehrxn/dev/30days/c30/target/frontend/release/evocc --emit=asm --survey --target=aarch64-unknown-linux-gnu -std=c99 -nostdinc -ffreestanding -fexcess-precision=standard -frounding-math -fno-strict-aliasing -D_XOPEN_SOURCE=700 -I/Users/onehrxn/dev/30days/c30/.build/ladder/musl-work/arch/aarch64 -I/Users/onehrxn/dev/30days/c30/.build/ladder/musl-work/arch/generic -I/Users/onehrxn/dev/30days/c30/.build/ladder/musl-work/obj/src/internal -I/Users/onehrxn/dev/30days/c30/.build/ladder/musl-work/src/include -I/Users/onehrxn/dev/30days/c30/.build/ladder/musl-work/src/internal -I/Users/onehrxn/dev/30days/c30/.build/ladder/musl-work/obj/include -I/Users/onehrxn/dev/30days/c30/.build/ladder/musl-work/include -O2 -fno-align-jumps -fno-align-functions -fno-align-loops -fno-align-labels -fira-region=one -fira-hoist-pressure -freorder-blocks-algorithm=simple -fno-prefetch-loop-arrays -fno-tree-ch -fomit-frame-pointer -fno-unwind-tables -fno-asynchronous-unwind-tables -ffunction-sections -fdata-sections -Wno-pointer-to-int-cast -Werror=implicit-function-declaration -Werror=implicit-int -Werror=pointer-sign -Werror=pointer-arith -Werror=int-conversion -Werror=incompatible-pointer-types -Werror=discarded-qualifiers -Werror=discarded-array-qualifiers -Waddress -Warray-bounds -Wchar-subscripts -Wduplicate-decl-specifier -Winit-self -Wreturn-type -Wsequence-point -Wstrict-aliasing -Wunused-function -Wunused-label -Wunused-variable -fno-stack-protector -fno-stack-protector -fPIC /Users/onehrxn/dev/30days/c30/.build/ladder/musl-work/ldso/dlstart.c"
+    "command": "/Users/onehrxn/dev/30days/c30/.build/frozen/08bf09bd/evocc-darwin --emit=asm --survey --target=aarch64-unknown-linux-gnu -std=c99 -nostdinc -ffreestanding -fexcess-precision=standard -frounding-math -fno-strict-aliasing -D_XOPEN_SOURCE=700 -I/Users/onehrxn/dev/30days/c30/.build/ladder/musl-work/arch/aarch64 -I/Users/onehrxn/dev/30days/c30/.build/ladder/musl-work/arch/generic -I/Users/onehrxn/dev/30days/c30/.build/ladder/musl-work/obj/src/internal -I/Users/onehrxn/dev/30days/c30/.build/ladder/musl-work/src/include -I/Users/onehrxn/dev/30days/c30/.build/ladder/musl-work/src/internal -I/Users/onehrxn/dev/30days/c30/.build/ladder/musl-work/obj/include -I/Users/onehrxn/dev/30days/c30/.build/ladder/musl-work/include -O2 -fno-align-jumps -fno-align-functions -fno-align-loops -fno-align-labels -fira-region=one -fira-hoist-pressure -freorder-blocks-algorithm=simple -fno-prefetch-loop-arrays -fno-tree-ch -fomit-frame-pointer -fno-unwind-tables -fno-asynchronous-unwind-tables -ffunction-sections -fdata-sections -Wno-pointer-to-int-cast -Werror=implicit-function-declaration -Werror=implicit-int -Werror=pointer-sign -Werror=pointer-arith -Werror=int-conversion -Werror=incompatible-pointer-types -Werror=discarded-qualifiers -Werror=discarded-array-qualifiers -Waddress -Warray-bounds -Wchar-subscripts -Wduplicate-decl-specifier -Winit-self -Wreturn-type -Wsequence-point -Wstrict-aliasing -Wunused-function -Wunused-label -Wunused-variable -fno-stack-protector -fno-stack-protector -fPIC /Users/onehrxn/dev/30days/c30/.build/ladder/musl-work/ldso/dlstart.c"
    },
    {
     "unit": "obj/ldso/dynlink.lo",
@@ -5617,7 +5617,7 @@
      "-pipe",
      "-o"
     ],
-    "command": "/Users/onehrxn/dev/30days/c30/target/frontend/release/evocc --emit=asm --survey --target=aarch64-unknown-linux-gnu -std=c99 -nostdinc -ffreestanding -fexcess-precision=standard -frounding-math -fno-strict-aliasing -D_XOPEN_SOURCE=700 -I/Users/onehrxn/dev/30days/c30/.build/ladder/musl-work/arch/aarch64 -I/Users/onehrxn/dev/30days/c30/.build/ladder/musl-work/arch/generic -I/Users/onehrxn/dev/30days/c30/.build/ladder/musl-work/obj/src/internal -I/Users/onehrxn/dev/30days/c30/.build/ladder/musl-work/src/include -I/Users/onehrxn/dev/30days/c30/.build/ladder/musl-work/src/internal -I/Users/onehrxn/dev/30days/c30/.build/ladder/musl-work/obj/include -I/Users/onehrxn/dev/30days/c30/.build/ladder/musl-work/include -O2 -fno-align-jumps -fno-align-functions -fno-align-loops -fno-align-labels -fira-region=one -fira-hoist-pressure -freorder-blocks-algorithm=simple -fno-prefetch-loop-arrays -fno-tree-ch -fomit-frame-pointer -fno-unwind-tables -fno-asynchronous-unwind-tables -ffunction-sections -fdata-sections -Wno-pointer-to-int-cast -Werror=implicit-function-declaration -Werror=implicit-int -Werror=pointer-sign -Werror=pointer-arith -Werror=int-conversion -Werror=incompatible-pointer-types -Werror=discarded-qualifiers -Werror=discarded-array-qualifiers -Waddress -Warray-bounds -Wchar-subscripts -Wduplicate-decl-specifier -Winit-self -Wreturn-type -Wsequence-point -Wstrict-aliasing -Wunused-function -Wunused-label -Wunused-variable -fno-stack-protector -fno-stack-protector -fPIC /Users/onehrxn/dev/30days/c30/.build/ladder/musl-work/ldso/dynlink.c"
+    "command": "/Users/onehrxn/dev/30days/c30/.build/frozen/08bf09bd/evocc-darwin --emit=asm --survey --target=aarch64-unknown-linux-gnu -std=c99 -nostdinc -ffreestanding -fexcess-precision=standard -frounding-math -fno-strict-aliasing -D_XOPEN_SOURCE=700 -I/Users/onehrxn/dev/30days/c30/.build/ladder/musl-work/arch/aarch64 -I/Users/onehrxn/dev/30days/c30/.build/ladder/musl-work/arch/generic -I/Users/onehrxn/dev/30days/c30/.build/ladder/musl-work/obj/src/internal -I/Users/onehrxn/dev/30days/c30/.build/ladder/musl-work/src/include -I/Users/onehrxn/dev/30days/c30/.build/ladder/musl-work/src/internal -I/Users/onehrxn/dev/30days/c30/.build/ladder/musl-work/obj/include -I/Users/onehrxn/dev/30days/c30/.build/ladder/musl-work/include -O2 -fno-align-jumps -fno-align-functions -fno-align-loops -fno-align-labels -fira-region=one -fira-hoist-pressure -freorder-blocks-algorithm=simple -fno-prefetch-loop-arrays -fno-tree-ch -fomit-frame-pointer -fno-unwind-tables -fno-asynchronous-unwind-tables -ffunction-sections -fdata-sections -Wno-pointer-to-int-cast -Werror=implicit-function-declaration -Werror=implicit-int -Werror=pointer-sign -Werror=pointer-arith -Werror=int-conversion -Werror=incompatible-pointer-types -Werror=discarded-qualifiers -Werror=discarded-array-qualifiers -Waddress -Warray-bounds -Wchar-subscripts -Wduplicate-decl-specifier -Winit-self -Wreturn-type -Wsequence-point -Wstrict-aliasing -Wunused-function -Wunused-label -Wunused-variable -fno-stack-protector -fno-stack-protector -fPIC /Users/onehrxn/dev/30days/c30/.build/ladder/musl-work/ldso/dynlink.c"
    }
   ],
   "objectCounts": {
@@ -5662,5 +5662,5 @@
   "-o": 1339,
   "-pipe": 1339
  },
- "evidence": "/Users/onehrxn/dev/30days/c30/.evidence/ladder/musl/20261025T112904Z"
+ "evidence": "/Users/onehrxn/dev/30days/c30/.evidence/ladder/musl/20261027T114938Z"
 }

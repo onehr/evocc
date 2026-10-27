@@ -3,9 +3,9 @@
  "rung": "E0",
  "authority": "docs/archive/roadmap.md, milestone ladder",
  "latest": {
-  "run": "20261025T095226Z",
-  "subject": "b2aae0da",
-  "driverSha256": "978a3771912d7b2eafe89228ff2cb3d3c0c996826b2b2875c4cb74932a655ce4",
+  "run": "20261027T110842Z",
+  "subject": "c65f6723",
+  "driverSha256": "ab0c90437192d6824ce884c71d80a028e1d785ae89a11fe58ecb0145d76de525",
   "sourcePreparation": "byte-preserving; no empty-parameter rewriting or encoding replacement",
   "optionPolicy": "target-selected supported options applied to compilation and diagnosis; unsupported options or mismatching selectors are not-applicable with source-bound evidence; unknown applicability is requirement-unresolved, never an exclusion or PASS; all original identities remain",
   "target": "aarch64-unknown-linux-gnu",
@@ -67,14 +67,14 @@
     "programs": 1692,
     "adjustedEmptyParameterLists": 0,
     "outcomes": {
-     "pass": 1545,
+     "pass": 1554,
      "not-applicable": 61,
-     "refused": 80,
+     "refused": 71,
      "fail": 6
     },
     "dispositionCounts": {
-     "PASS": 1538,
-     "compiler-failure": 5,
+     "PASS": 1543,
+     "compiler-failure": 0,
      "FP-deferred": 0,
      "not-applicable": 146,
      "oracle-unusable": 3
@@ -84,10 +84,8 @@
      "E2949": 9,
      "E2203": 8,
      "E2940": 5,
-     "E2202": 5,
      "E2920": 5,
-     "E3051": 4,
-     "E2952": 4,
+     "E2202": 4,
      "E2933": 3,
      "E2903": 3,
      "E1001": 3,
@@ -127,5 +125,5 @@
    }
   }
  },
- "evidence": ".evidence/ladder/e0/20261025T095226Z"
+ "evidence": ".evidence/ladder/e0/20261027T110842Z"
 }

@@ -3,12 +3,12 @@
  "rung": "E12",
  "subject": "sqlite",
  "authority": "docs/archive/roadmap.md, milestone ladder",
- "run": "20261025T115838Z",
+ "run": "20261027T121832Z",
  "pin": "3.53.4 public source + testfixture",
  "url": "https://www.sqlite.org/2026/sqlite-src-3530400.zip",
  "tarballSha256": "d18fa15aec74d8c17e1463f861095adc01b5ad190256acb4f91d22f0368d232b",
  "tarball": "sqlite-src-3530400.zip",
- "driverSha256": "978a3771912d7b2eafe89228ff2cb3d3c0c996826b2b2875c4cb74932a655ce4",
+ "driverSha256": "ab0c90437192d6824ce884c71d80a028e1d785ae89a11fe58ecb0145d76de525",
  "target": "aarch64-unknown-linux-gnu",
  "unitsTotal": 86,
  "unmeasuredBuildUnits": [],
@@ -145,9 +145,9 @@
   "portableBuildSymlinks": {},
   "sysrootAdjustmentMeaning": {},
   "includeOrder": [
-   "-I/Users/onehrxn/dev/30days/c30/.build/case/ladder-sysroot/usr/lib/gcc/aarch64-linux-gnu/14/include",
-   "-I/Users/onehrxn/dev/30days/c30/.build/case/ladder-sysroot/usr/include/aarch64-linux-gnu",
-   "-I/Users/onehrxn/dev/30days/c30/.build/case/ladder-sysroot/usr/include"
+   "-isystem/Users/onehrxn/dev/30days/c30/.build/case/ladder-sysroot/usr/lib/gcc/aarch64-linux-gnu/14/include",
+   "-isystem/Users/onehrxn/dev/30days/c30/.build/case/ladder-sysroot/usr/include/aarch64-linux-gnu",
+   "-isystem/Users/onehrxn/dev/30days/c30/.build/case/ladder-sysroot/usr/include"
   ],
   "configure": "./configure CC=gcc-14 --with-tcl=/work/sqlite/tcl-install/lib --disable-shared LDFLAGS=-no-pie",
   "subject": [
@@ -174,6 +174,6 @@
  },
  "frontEndGaps": [],
  "defects": [],
- "evidence": ".evidence/ladder/sqlite/20261025T115838Z",
+ "evidence": ".evidence/ladder/sqlite/20261027T121832Z",
  "summaryLine": "sqlite: 86 of 86 units by EvoCC in a passing build; refused by code {}"
 }

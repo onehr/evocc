@@ -3,12 +3,12 @@
  "rung": "E10",
  "subject": "jq",
  "authority": "docs/archive/roadmap.md, milestone ladder",
- "run": "20261025T115050Z",
+ "run": "20261027T121424Z",
  "pin": "jq-1.8.2",
  "url": "https://github.com/jqlang/jq/releases/download/jq-1.8.2/jq-1.8.2.tar.gz",
  "tarballSha256": "71b8d6e8f5fe81f6c6d0d110e3892251f6ce76ed095abd315e26e6e1193af3af",
  "tarball": "jq-1.8.2.tar.gz",
- "driverSha256": "978a3771912d7b2eafe89228ff2cb3d3c0c996826b2b2875c4cb74932a655ce4",
+ "driverSha256": "ab0c90437192d6824ce884c71d80a028e1d785ae89a11fe58ecb0145d76de525",
  "target": "aarch64-unknown-linux-gnu",
  "unitsTotal": 70,
  "unmeasuredBuildUnits": [],
@@ -16,8 +16,8 @@
  "unitsSubstituted": 70,
  "unitsRebuiltByMake": [],
  "substitutedUnits": [
-  "vendor/oniguruma/src/regcomp.o",
   "vendor/oniguruma/src/regparse.o",
+  "vendor/oniguruma/src/regcomp.o",
   "vendor/oniguruma/src/regexec.o",
   "vendor/oniguruma/src/regenc.o",
   "vendor/oniguruma/src/regerror.o",
@@ -50,8 +50,8 @@
   "vendor/oniguruma/src/iso8859_6.o",
   "vendor/oniguruma/src/iso8859_7.o",
   "vendor/oniguruma/src/iso8859_8.o",
-  "vendor/oniguruma/src/iso8859_9.o",
   "vendor/oniguruma/src/iso8859_10.o",
+  "vendor/oniguruma/src/iso8859_9.o",
   "vendor/oniguruma/src/iso8859_11.o",
   "vendor/oniguruma/src/iso8859_13.o",
   "vendor/oniguruma/src/iso8859_14.o",
@@ -126,9 +126,9 @@
   "portableBuildSymlinks": {},
   "sysrootAdjustmentMeaning": {},
   "includeOrder": [
-   "-I/Users/onehrxn/dev/30days/c30/.build/case/ladder-sysroot/usr/lib/gcc/aarch64-linux-gnu/14/include",
-   "-I/Users/onehrxn/dev/30days/c30/.build/case/ladder-sysroot/usr/include/aarch64-linux-gnu",
-   "-I/Users/onehrxn/dev/30days/c30/.build/case/ladder-sysroot/usr/include"
+   "-isystem/Users/onehrxn/dev/30days/c30/.build/case/ladder-sysroot/usr/lib/gcc/aarch64-linux-gnu/14/include",
+   "-isystem/Users/onehrxn/dev/30days/c30/.build/case/ladder-sysroot/usr/include/aarch64-linux-gnu",
+   "-isystem/Users/onehrxn/dev/30days/c30/.build/case/ladder-sysroot/usr/include"
   ],
   "configure": "./configure CC=gcc-14 --disable-shared --disable-docs --with-oniguruma=builtin LDFLAGS=-no-pie",
   "subject": [
@@ -288,6 +288,6 @@
  },
  "frontEndGaps": [],
  "defects": [],
- "evidence": ".evidence/ladder/jq/20261025T115050Z",
+ "evidence": ".evidence/ladder/jq/20261027T121424Z",
  "summaryLine": "jq: 70 of 70 units by EvoCC in a passing build; refused by code {}"
 }

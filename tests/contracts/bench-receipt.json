@@ -1,76 +1,102 @@
 {
   "schemaVersion": 1,
-  "run": "20261025T171207.529086Z",
-  "subject": "e7a3408c07e80bdf803a4583d337b7d578ecc72b",
-  "dirty": true,
-  "driver": "/Users/onehrxn/dev/30days/c30/target/frontend/release/evocc",
-  "driverSha256": "9f486dd69fc138128113205330fd58758ffe8e8f09fb5b0caa59f97643c1b29a",
+  "run": "20261027T110816.715722Z",
+  "subject": "c65f67235e16dc8fa480f6c99f883f7dbcc8e1b7",
+  "dirty": false,
+  "driver": "/Users/onehrxn/dev/30days/c30/.build/frozen/08bf09bd/evocc-darwin",
+  "driverSha256": "ab0c90437192d6824ce884c71d80a028e1d785ae89a11fe58ecb0145d76de525",
   "invocation": [
     "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
     "tools/bench.py",
+    "ctest",
+    "torture",
+    "csmith",
+    "zlib",
+    "zstd",
+    "cjson",
+    "tinycc",
+    "toybox",
+    "musl",
     "mbedtls",
+    "polybench",
+    "llvm-test-suite",
+    "jq",
+    "lua",
+    "sqlite",
+    "--evocc",
+    "/Users/onehrxn/dev/30days/c30/.build/frozen/08bf09bd/evocc-darwin",
     "--jobs",
     "2"
   ],
   "execution": "sequential lanes; original per-program watchdogs unchanged",
   "selected": [
-    "mbedtls"
+    "ctest",
+    "torture",
+    "csmith",
+    "zlib",
+    "zstd",
+    "cjson",
+    "tinycc",
+    "toybox",
+    "musl",
+    "mbedtls",
+    "polybench",
+    "llvm-test-suite",
+    "jq",
+    "lua",
+    "sqlite"
   ],
-  "status": "PASS",
+  "status": "INCOMPLETE",
   "benchmarks": {
     "ctest": {
       "rung": "E0b",
       "note": "self-checking programs and expected stdout",
       "outcomes": {
-        "pass": 218,
-        "refused": 2
+        "pass": 220
       },
-      "refusals": {
-        "E2952": 1,
-        "E2917": 1
-      },
+      "refusals": {},
       "baselineFailures": 0,
       "failingUnits": [],
       "total": 220,
-      "passed": 218,
+      "passed": 220,
       "kind": "programs",
       "runtimeDiagnostics": {},
       "dispositions": {
-        "PASS": 218,
-        "compiler-failure": 2,
+        "PASS": 220,
+        "compiler-failure": 0,
         "FP-deferred": 0,
         "not-applicable": 0,
         "oracle-unusable": 0
       },
-      "status": "INCOMPLETE",
-      "run": "20261025T095158Z",
-      "evidence": ".evidence/ladder/e0/20261025T095158Z",
+      "status": "PASS",
+      "run": "20261027T110816Z",
+      "evidence": ".evidence/ladder/e0/20261027T110816Z",
       "receipt": "tests/contracts/ladder-e0-receipt.json",
       "command": [
         "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
         "-u",
         "/Users/onehrxn/dev/30days/c30/tools/ladder/e0.py",
         "--evocc",
-        "/Users/onehrxn/dev/30days/c30/target/frontend/release/evocc",
+        "/Users/onehrxn/dev/30days/c30/.build/frozen/08bf09bd/evocc-darwin",
         "--suite",
         "ctest"
       ],
       "exitCode": 0,
-      "seconds": 27.8,
+      "seconds": 25.2,
       "previous": null,
       "measurement": {
-        "run": "20261025T095157.857401Z",
-        "subject": "b2aae0dabc31de3520ee792d8104dc9303001045",
-        "driverSha256": "978a3771912d7b2eafe89228ff2cb3d3c0c996826b2b2875c4cb74932a655ce4"
+        "run": "20261027T110816.715722Z",
+        "subject": "c65f67235e16dc8fa480f6c99f883f7dbcc8e1b7",
+        "driverSha256": "ab0c90437192d6824ce884c71d80a028e1d785ae89a11fe58ecb0145d76de525"
       }
     },
     "torture": {
       "rung": "E0a",
       "note": "mixed integer/FP suite; selected options consumed, evidenced inapplicability retained, unknown requirements remain unresolved",
       "outcomes": {
-        "pass": 1545,
+        "pass": 1554,
         "not-applicable": 61,
-        "refused": 80,
+        "refused": 71,
         "fail": 6
       },
       "refusals": {
@@ -78,10 +104,8 @@
         "E2949": 9,
         "E2203": 8,
         "E2940": 5,
-        "E2202": 5,
         "E2920": 5,
-        "E3051": 4,
-        "E2952": 4,
+        "E2202": 4,
         "E2933": 3,
         "E2903": 3,
         "E1001": 3,
@@ -98,7 +122,7 @@
       "baselineFailures": 0,
       "failingUnits": [],
       "total": 1692,
-      "passed": 1538,
+      "passed": 1543,
       "kind": "programs",
       "runtimeDiagnostics": {
         "E3008 interpreter-fuel-exhausted": 2,
@@ -107,32 +131,32 @@
         "E3001 read-of-uninitialized-object": 1
       },
       "dispositions": {
-        "PASS": 1538,
-        "compiler-failure": 5,
+        "PASS": 1543,
+        "compiler-failure": 0,
         "FP-deferred": 0,
         "not-applicable": 146,
         "oracle-unusable": 3
       },
-      "status": "INCOMPLETE",
-      "run": "20261025T095226Z",
-      "evidence": ".evidence/ladder/e0/20261025T095226Z",
+      "status": "PROFILE_CLEAN",
+      "run": "20261027T110842Z",
+      "evidence": ".evidence/ladder/e0/20261027T110842Z",
       "receipt": "tests/contracts/ladder-e0-receipt.json",
       "command": [
         "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
         "-u",
         "/Users/onehrxn/dev/30days/c30/tools/ladder/e0.py",
         "--evocc",
-        "/Users/onehrxn/dev/30days/c30/target/frontend/release/evocc",
+        "/Users/onehrxn/dev/30days/c30/.build/frozen/08bf09bd/evocc-darwin",
         "--suite",
         "torture"
       ],
       "exitCode": 0,
-      "seconds": 209.4,
+      "seconds": 189.5,
       "previous": null,
       "measurement": {
-        "run": "20261025T095225.948278Z",
-        "subject": "b2aae0dabc31de3520ee792d8104dc9303001045",
-        "driverSha256": "978a3771912d7b2eafe89228ff2cb3d3c0c996826b2b2875c4cb74932a655ce4"
+        "run": "20261027T110816.715722Z",
+        "subject": "c65f67235e16dc8fa480f6c99f883f7dbcc8e1b7",
+        "driverSha256": "ab0c90437192d6824ce884c71d80a028e1d785ae89a11fe58ecb0145d76de525"
       }
     },
     "csmith": {
@@ -149,15 +173,15 @@
       "passed": 932,
       "kind": "programs",
       "status": "INCOMPLETE",
-      "run": "20261025T162452Z",
-      "evidence": ".evidence/ladder/csmith/20261025T162452Z",
+      "run": "20261027T111151Z",
+      "evidence": ".evidence/ladder/csmith/20261027T111151Z",
       "receipt": "tests/contracts/ladder-csmith-receipt.json",
       "command": [
         "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
         "-u",
         "/Users/onehrxn/dev/30days/c30/tools/ladder/csmith.py",
         "--evocc",
-        "/Users/onehrxn/dev/30days/c30/target/frontend/release/evocc",
+        "/Users/onehrxn/dev/30days/c30/.build/frozen/08bf09bd/evocc-darwin",
         "--campaign",
         "all",
         "--programs",
@@ -166,31 +190,28 @@
         "2"
       ],
       "exitCode": 0,
-      "seconds": 2739.6,
+      "seconds": 2033.3,
       "previous": {
         "rung": "E0c",
         "note": "original seeds; unavailable oracles are not passes",
         "outcomes": {
-          "agree": 916,
-          "oracle-unusable": 68,
-          "refused": 16
+          "agree": 932,
+          "oracle-unusable": 68
         },
-        "refusals": {
-          "E3101": 16
-        },
+        "refusals": {},
         "baselineFailures": 0,
         "failingUnits": [],
         "total": 1000,
-        "passed": 916,
+        "passed": 932,
         "kind": "programs",
         "status": "INCOMPLETE",
-        "run": "20261025T095615Z",
-        "evidence": ".evidence/ladder/csmith/20261025T095615Z"
+        "run": "20261025T162452Z",
+        "evidence": ".evidence/ladder/csmith/20261025T162452Z"
       },
       "measurement": {
-        "run": "20261025T161053.238622Z",
-        "subject": "5fd6ed74955f1b261d6f67dc4c76adb0d5754795",
-        "driverSha256": "a97453ed756d3e19d2f1d790b35a6f4b2a5ef8004edea3b9be435fdd3c59623d"
+        "run": "20261027T110816.715722Z",
+        "subject": "c65f67235e16dc8fa480f6c99f883f7dbcc8e1b7",
+        "driverSha256": "ab0c90437192d6824ce884c71d80a028e1d785ae89a11fe58ecb0145d76de525"
       }
     },
     "zlib": {
@@ -220,9 +241,9 @@
         "portableBuildSymlinks": {},
         "sysrootAdjustmentMeaning": {},
         "includeOrder": [
-          "-I/Users/onehrxn/dev/30days/c30/.build/case/ladder-sysroot/usr/lib/gcc/aarch64-linux-gnu/14/include",
-          "-I/Users/onehrxn/dev/30days/c30/.build/case/ladder-sysroot/usr/include/aarch64-linux-gnu",
-          "-I/Users/onehrxn/dev/30days/c30/.build/case/ladder-sysroot/usr/include"
+          "-isystem/Users/onehrxn/dev/30days/c30/.build/case/ladder-sysroot/usr/lib/gcc/aarch64-linux-gnu/14/include",
+          "-isystem/Users/onehrxn/dev/30days/c30/.build/case/ladder-sysroot/usr/include/aarch64-linux-gnu",
+          "-isystem/Users/onehrxn/dev/30days/c30/.build/case/ladder-sysroot/usr/include"
         ],
         "configure": "CC=gcc ./configure --static",
         "subject": [
@@ -236,15 +257,15 @@
         ]
       },
       "status": "PASS",
-      "run": "20261025T103039Z",
-      "evidence": ".evidence/ladder/zlib/20261025T103039Z",
+      "run": "20261027T114544Z",
+      "evidence": ".evidence/ladder/zlib/20261027T114544Z",
       "receipt": "tests/contracts/ladder-zlib-receipt.json",
       "command": [
         "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
         "-u",
         "/Users/onehrxn/dev/30days/c30/tools/ladder/zlib.py",
         "--evocc",
-        "/Users/onehrxn/dev/30days/c30/target/frontend/release/evocc"
+        "/Users/onehrxn/dev/30days/c30/.build/frozen/08bf09bd/evocc-darwin"
       ],
       "exitCode": 0,
       "seconds": 8.0,
@@ -291,13 +312,13 @@
           ]
         },
         "status": "PASS",
-        "run": "20261025T050551Z",
-        "evidence": ".evidence/ladder/zlib/20261025T050551Z"
+        "run": "20261025T103039Z",
+        "evidence": ".evidence/ladder/zlib/20261025T103039Z"
       },
       "measurement": {
-        "run": "20261025T103039.770186Z",
-        "subject": "b2aae0dabc31de3520ee792d8104dc9303001045",
-        "driverSha256": "978a3771912d7b2eafe89228ff2cb3d3c0c996826b2b2875c4cb74932a655ce4"
+        "run": "20261027T110816.715722Z",
+        "subject": "c65f67235e16dc8fa480f6c99f883f7dbcc8e1b7",
+        "driverSha256": "ab0c90437192d6824ce884c71d80a028e1d785ae89a11fe58ecb0145d76de525"
       }
     },
     "zstd": {
@@ -327,9 +348,9 @@
         "portableBuildSymlinks": {},
         "sysrootAdjustmentMeaning": {},
         "includeOrder": [
-          "-I/Users/onehrxn/dev/30days/c30/.build/case/ladder-sysroot/usr/lib/gcc/aarch64-linux-gnu/14/include",
-          "-I/Users/onehrxn/dev/30days/c30/.build/case/ladder-sysroot/usr/include/aarch64-linux-gnu",
-          "-I/Users/onehrxn/dev/30days/c30/.build/case/ladder-sysroot/usr/include"
+          "-isystem/Users/onehrxn/dev/30days/c30/.build/case/ladder-sysroot/usr/lib/gcc/aarch64-linux-gnu/14/include",
+          "-isystem/Users/onehrxn/dev/30days/c30/.build/case/ladder-sysroot/usr/include/aarch64-linux-gnu",
+          "-isystem/Users/onehrxn/dev/30days/c30/.build/case/ladder-sysroot/usr/include"
         ],
         "configure": "",
         "subject": [
@@ -437,18 +458,18 @@
         ]
       },
       "status": "PASS",
-      "run": "20261025T103048Z",
-      "evidence": ".evidence/ladder/zstd/20261025T103048Z",
+      "run": "20261027T114552Z",
+      "evidence": ".evidence/ladder/zstd/20261027T114552Z",
       "receipt": "tests/contracts/ladder-zstd-receipt.json",
       "command": [
         "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
         "-u",
         "/Users/onehrxn/dev/30days/c30/tools/ladder/zstd.py",
         "--evocc",
-        "/Users/onehrxn/dev/30days/c30/target/frontend/release/evocc"
+        "/Users/onehrxn/dev/30days/c30/.build/frozen/08bf09bd/evocc-darwin"
       ],
       "exitCode": 0,
-      "seconds": 109.3,
+      "seconds": 96.6,
       "previous": {
         "rung": "E2",
         "note": "mixed-link program tests; see recorded source/build adjustments",
@@ -586,13 +607,13 @@
           ]
         },
         "status": "PASS",
-        "run": "20261025T050559Z",
-        "evidence": ".evidence/ladder/zstd/20261025T050559Z"
+        "run": "20261025T103048Z",
+        "evidence": ".evidence/ladder/zstd/20261025T103048Z"
       },
       "measurement": {
-        "run": "20261025T103047.899072Z",
-        "subject": "b2aae0dabc31de3520ee792d8104dc9303001045",
-        "driverSha256": "978a3771912d7b2eafe89228ff2cb3d3c0c996826b2b2875c4cb74932a655ce4"
+        "run": "20261027T110816.715722Z",
+        "subject": "c65f67235e16dc8fa480f6c99f883f7dbcc8e1b7",
+        "driverSha256": "ab0c90437192d6824ce884c71d80a028e1d785ae89a11fe58ecb0145d76de525"
       }
     },
     "cjson": {
@@ -647,9 +668,9 @@
         "portableBuildSymlinks": {},
         "sysrootAdjustmentMeaning": {},
         "includeOrder": [
-          "-I/Users/onehrxn/dev/30days/c30/.build/case/ladder-sysroot/usr/lib/gcc/aarch64-linux-gnu/14/include",
-          "-I/Users/onehrxn/dev/30days/c30/.build/case/ladder-sysroot/usr/include/aarch64-linux-gnu",
-          "-I/Users/onehrxn/dev/30days/c30/.build/case/ladder-sysroot/usr/include"
+          "-isystem/Users/onehrxn/dev/30days/c30/.build/case/ladder-sysroot/usr/lib/gcc/aarch64-linux-gnu/14/include",
+          "-isystem/Users/onehrxn/dev/30days/c30/.build/case/ladder-sysroot/usr/include/aarch64-linux-gnu",
+          "-isystem/Users/onehrxn/dev/30days/c30/.build/case/ladder-sysroot/usr/include"
         ],
         "configure": "",
         "subject": [
@@ -664,18 +685,18 @@
         "omittedFlags": []
       },
       "status": "PASS",
-      "run": "20261025T103237Z",
-      "evidence": ".evidence/ladder/cjson/20261025T103237Z",
+      "run": "20261027T114729Z",
+      "evidence": ".evidence/ladder/cjson/20261027T114729Z",
       "receipt": "tests/contracts/ladder-cjson-receipt.json",
       "command": [
         "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
         "-u",
         "/Users/onehrxn/dev/30days/c30/tools/ladder/cjson.py",
         "--evocc",
-        "/Users/onehrxn/dev/30days/c30/target/frontend/release/evocc"
+        "/Users/onehrxn/dev/30days/c30/.build/frozen/08bf09bd/evocc-darwin"
       ],
       "exitCode": 0,
-      "seconds": 17.5,
+      "seconds": 17.0,
       "previous": {
         "rung": "E3",
         "note": "installed libraries plus all 21 upstream Unity test translation units",
@@ -745,13 +766,13 @@
           "omittedFlags": []
         },
         "status": "PASS",
-        "run": "20261025T050745Z",
-        "evidence": ".evidence/ladder/cjson/20261025T050745Z"
+        "run": "20261025T103237Z",
+        "evidence": ".evidence/ladder/cjson/20261025T103237Z"
       },
       "measurement": {
-        "run": "20261025T103237.329219Z",
-        "subject": "b2aae0dabc31de3520ee792d8104dc9303001045",
-        "driverSha256": "978a3771912d7b2eafe89228ff2cb3d3c0c996826b2b2875c4cb74932a655ce4"
+        "run": "20261027T110816.715722Z",
+        "subject": "c65f67235e16dc8fa480f6c99f883f7dbcc8e1b7",
+        "driverSha256": "ab0c90437192d6824ce884c71d80a028e1d785ae89a11fe58ecb0145d76de525"
       }
     },
     "tinycc": {
@@ -775,20 +796,20 @@
         "defines": []
       },
       "status": "PASS",
-      "run": "20261025T103255Z",
-      "evidence": ".evidence/ladder/tinycc/20261025T103255Z",
+      "run": "20261027T114746Z",
+      "evidence": ".evidence/ladder/tinycc/20261027T114746Z",
       "receipt": "tests/contracts/ladder-tinycc-receipt.json",
       "command": [
         "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
         "-u",
         "/Users/onehrxn/dev/30days/c30/tools/ladder/tinycc.py",
         "--evocc",
-        "/Users/onehrxn/dev/30days/c30/target/frontend/release/evocc",
+        "/Users/onehrxn/dev/30days/c30/.build/frozen/08bf09bd/evocc-darwin",
         "--jobs",
         "2"
       ],
       "exitCode": 0,
-      "seconds": 31.3,
+      "seconds": 30.8,
       "previous": {
         "rung": "E5",
         "note": "mixed-link compiler tests",
@@ -810,13 +831,13 @@
           "defines": []
         },
         "status": "PASS",
-        "run": "20260927T083017Z",
-        "evidence": ".evidence/ladder/tinycc/20260927T083017Z"
+        "run": "20261025T103255Z",
+        "evidence": ".evidence/ladder/tinycc/20261025T103255Z"
       },
       "measurement": {
-        "run": "20261025T103255.036640Z",
-        "subject": "b2aae0dabc31de3520ee792d8104dc9303001045",
-        "driverSha256": "978a3771912d7b2eafe89228ff2cb3d3c0c996826b2b2875c4cb74932a655ce4"
+        "run": "20261027T110816.715722Z",
+        "subject": "c65f67235e16dc8fa480f6c99f883f7dbcc8e1b7",
+        "driverSha256": "ab0c90437192d6824ce884c71d80a028e1d785ae89a11fe58ecb0145d76de525"
       }
     },
     "toybox": {
@@ -855,22 +876,22 @@
         }
       },
       "status": "INCOMPLETE",
-      "run": "20261025T103326Z",
-      "evidence": "/Users/onehrxn/dev/30days/c30/.evidence/ladder/toybox/20261025T103326Z",
+      "run": "20261027T114817Z",
+      "evidence": "/Users/onehrxn/dev/30days/c30/.evidence/ladder/toybox/20261027T114817Z",
       "receipt": "tests/contracts/ladder-toybox-receipt.json",
       "command": [
         "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
         "-u",
         "/Users/onehrxn/dev/30days/c30/tools/ladder/toybox.py",
         "--evocc",
-        "/Users/onehrxn/dev/30days/c30/target/frontend/release/evocc",
+        "/Users/onehrxn/dev/30days/c30/.build/frozen/08bf09bd/evocc-darwin",
         "--jobs",
         "2",
         "--budget",
         "40"
       ],
       "exitCode": 0,
-      "seconds": 84.2,
+      "seconds": 81.5,
       "previous": {
         "rung": "E6",
         "note": "mixed-link tests relative to baseline failures",
@@ -907,13 +928,13 @@
           }
         },
         "status": "INCOMPLETE",
-        "run": "20260927T084656Z",
-        "evidence": "/Users/onehrxn/dev/30days/c30/.evidence/ladder/toybox/20260927T084656Z"
+        "run": "20261025T103326Z",
+        "evidence": "/Users/onehrxn/dev/30days/c30/.evidence/ladder/toybox/20261025T103326Z"
       },
       "measurement": {
-        "run": "20261025T103326.479591Z",
-        "subject": "b2aae0dabc31de3520ee792d8104dc9303001045",
-        "driverSha256": "978a3771912d7b2eafe89228ff2cb3d3c0c996826b2b2875c4cb74932a655ce4"
+        "run": "20261027T110816.715722Z",
+        "subject": "c65f67235e16dc8fa480f6c99f883f7dbcc8e1b7",
+        "driverSha256": "ab0c90437192d6824ce884c71d80a028e1d785ae89a11fe58ecb0145d76de525"
       }
     },
     "musl": {
@@ -956,8 +977,8 @@
       "sharedLoader": {
         "scope": "five original shared-loader subjects; not full musl",
         "status": "PASS",
-        "compilerSha256": "978a3771912d7b2eafe89228ff2cb3d3c0c996826b2b2875c4cb74932a655ce4",
-        "evidence": "/Users/onehrxn/dev/30days/c30/.evidence/ladder/musl/20261025T112904Z/shared-loader",
+        "compilerSha256": "ab0c90437192d6824ce884c71d80a028e1d785ae89a11fe58ecb0145d76de525",
+        "evidence": "/Users/onehrxn/dev/30days/c30/.evidence/ladder/musl/20261027T114938Z/shared-loader",
         "subjects": [
           "functional/dlopen",
           "functional/tls_align",
@@ -977,7 +998,7 @@
               "-pipe",
               "-o"
             ],
-            "command": "/Users/onehrxn/dev/30days/c30/target/frontend/release/evocc --emit=asm --survey --target=aarch64-unknown-linux-gnu -std=c99 -nostdinc -ffreestanding -fexcess-precision=standard -frounding-math -fno-strict-aliasing -D_XOPEN_SOURCE=700 -I/Users/onehrxn/dev/30days/c30/.build/ladder/musl-work/arch/aarch64 -I/Users/onehrxn/dev/30days/c30/.build/ladder/musl-work/arch/generic -I/Users/onehrxn/dev/30days/c30/.build/ladder/musl-work/obj/src/internal -I/Users/onehrxn/dev/30days/c30/.build/ladder/musl-work/src/include -I/Users/onehrxn/dev/30days/c30/.build/ladder/musl-work/src/internal -I/Users/onehrxn/dev/30days/c30/.build/ladder/musl-work/obj/include -I/Users/onehrxn/dev/30days/c30/.build/ladder/musl-work/include -O2 -fno-align-jumps -fno-align-functions -fno-align-loops -fno-align-labels -fira-region=one -fira-hoist-pressure -freorder-blocks-algorithm=simple -fno-prefetch-loop-arrays -fno-tree-ch -fomit-frame-pointer -fno-unwind-tables -fno-asynchronous-unwind-tables -ffunction-sections -fdata-sections -Wno-pointer-to-int-cast -Werror=implicit-function-declaration -Werror=implicit-int -Werror=pointer-sign -Werror=pointer-arith -Werror=int-conversion -Werror=incompatible-pointer-types -Werror=discarded-qualifiers -Werror=discarded-array-qualifiers -Waddress -Warray-bounds -Wchar-subscripts -Wduplicate-decl-specifier -Winit-self -Wreturn-type -Wsequence-point -Wstrict-aliasing -Wunused-function -Wunused-label -Wunused-variable -fno-stack-protector -fno-stack-protector -fPIC /Users/onehrxn/dev/30days/c30/.build/ladder/musl-work/ldso/dlstart.c"
+            "command": "/Users/onehrxn/dev/30days/c30/.build/frozen/08bf09bd/evocc-darwin --emit=asm --survey --target=aarch64-unknown-linux-gnu -std=c99 -nostdinc -ffreestanding -fexcess-precision=standard -frounding-math -fno-strict-aliasing -D_XOPEN_SOURCE=700 -I/Users/onehrxn/dev/30days/c30/.build/ladder/musl-work/arch/aarch64 -I/Users/onehrxn/dev/30days/c30/.build/ladder/musl-work/arch/generic -I/Users/onehrxn/dev/30days/c30/.build/ladder/musl-work/obj/src/internal -I/Users/onehrxn/dev/30days/c30/.build/ladder/musl-work/src/include -I/Users/onehrxn/dev/30days/c30/.build/ladder/musl-work/src/internal -I/Users/onehrxn/dev/30days/c30/.build/ladder/musl-work/obj/include -I/Users/onehrxn/dev/30days/c30/.build/ladder/musl-work/include -O2 -fno-align-jumps -fno-align-functions -fno-align-loops -fno-align-labels -fira-region=one -fira-hoist-pressure -freorder-blocks-algorithm=simple -fno-prefetch-loop-arrays -fno-tree-ch -fomit-frame-pointer -fno-unwind-tables -fno-asynchronous-unwind-tables -ffunction-sections -fdata-sections -Wno-pointer-to-int-cast -Werror=implicit-function-declaration -Werror=implicit-int -Werror=pointer-sign -Werror=pointer-arith -Werror=int-conversion -Werror=incompatible-pointer-types -Werror=discarded-qualifiers -Werror=discarded-array-qualifiers -Waddress -Warray-bounds -Wchar-subscripts -Wduplicate-decl-specifier -Winit-self -Wreturn-type -Wsequence-point -Wstrict-aliasing -Wunused-function -Wunused-label -Wunused-variable -fno-stack-protector -fno-stack-protector -fPIC /Users/onehrxn/dev/30days/c30/.build/ladder/musl-work/ldso/dlstart.c"
           },
           {
             "unit": "obj/ldso/dynlink.lo",
@@ -989,7 +1010,7 @@
               "-pipe",
               "-o"
             ],
-            "command": "/Users/onehrxn/dev/30days/c30/target/frontend/release/evocc --emit=asm --survey --target=aarch64-unknown-linux-gnu -std=c99 -nostdinc -ffreestanding -fexcess-precision=standard -frounding-math -fno-strict-aliasing -D_XOPEN_SOURCE=700 -I/Users/onehrxn/dev/30days/c30/.build/ladder/musl-work/arch/aarch64 -I/Users/onehrxn/dev/30days/c30/.build/ladder/musl-work/arch/generic -I/Users/onehrxn/dev/30days/c30/.build/ladder/musl-work/obj/src/internal -I/Users/onehrxn/dev/30days/c30/.build/ladder/musl-work/src/include -I/Users/onehrxn/dev/30days/c30/.build/ladder/musl-work/src/internal -I/Users/onehrxn/dev/30days/c30/.build/ladder/musl-work/obj/include -I/Users/onehrxn/dev/30days/c30/.build/ladder/musl-work/include -O2 -fno-align-jumps -fno-align-functions -fno-align-loops -fno-align-labels -fira-region=one -fira-hoist-pressure -freorder-blocks-algorithm=simple -fno-prefetch-loop-arrays -fno-tree-ch -fomit-frame-pointer -fno-unwind-tables -fno-asynchronous-unwind-tables -ffunction-sections -fdata-sections -Wno-pointer-to-int-cast -Werror=implicit-function-declaration -Werror=implicit-int -Werror=pointer-sign -Werror=pointer-arith -Werror=int-conversion -Werror=incompatible-pointer-types -Werror=discarded-qualifiers -Werror=discarded-array-qualifiers -Waddress -Warray-bounds -Wchar-subscripts -Wduplicate-decl-specifier -Winit-self -Wreturn-type -Wsequence-point -Wstrict-aliasing -Wunused-function -Wunused-label -Wunused-variable -fno-stack-protector -fno-stack-protector -fPIC /Users/onehrxn/dev/30days/c30/.build/ladder/musl-work/ldso/dynlink.c"
+            "command": "/Users/onehrxn/dev/30days/c30/.build/frozen/08bf09bd/evocc-darwin --emit=asm --survey --target=aarch64-unknown-linux-gnu -std=c99 -nostdinc -ffreestanding -fexcess-precision=standard -frounding-math -fno-strict-aliasing -D_XOPEN_SOURCE=700 -I/Users/onehrxn/dev/30days/c30/.build/ladder/musl-work/arch/aarch64 -I/Users/onehrxn/dev/30days/c30/.build/ladder/musl-work/arch/generic -I/Users/onehrxn/dev/30days/c30/.build/ladder/musl-work/obj/src/internal -I/Users/onehrxn/dev/30days/c30/.build/ladder/musl-work/src/include -I/Users/onehrxn/dev/30days/c30/.build/ladder/musl-work/src/internal -I/Users/onehrxn/dev/30days/c30/.build/ladder/musl-work/obj/include -I/Users/onehrxn/dev/30days/c30/.build/ladder/musl-work/include -O2 -fno-align-jumps -fno-align-functions -fno-align-loops -fno-align-labels -fira-region=one -fira-hoist-pressure -freorder-blocks-algorithm=simple -fno-prefetch-loop-arrays -fno-tree-ch -fomit-frame-pointer -fno-unwind-tables -fno-asynchronous-unwind-tables -ffunction-sections -fdata-sections -Wno-pointer-to-int-cast -Werror=implicit-function-declaration -Werror=implicit-int -Werror=pointer-sign -Werror=pointer-arith -Werror=int-conversion -Werror=incompatible-pointer-types -Werror=discarded-qualifiers -Werror=discarded-array-qualifiers -Waddress -Warray-bounds -Wchar-subscripts -Wduplicate-decl-specifier -Winit-self -Wreturn-type -Wsequence-point -Wstrict-aliasing -Wunused-function -Wunused-label -Wunused-variable -fno-stack-protector -fno-stack-protector -fPIC /Users/onehrxn/dev/30days/c30/.build/ladder/musl-work/ldso/dynlink.c"
           }
         ],
         "objectCounts": {
@@ -1003,35 +1024,33 @@
         },
         "executionsSha256": "d23219d352442bd0327add0bc363037a94317126a7c10cdba262cac8333c495f"
       },
-      "run": "20261025T112904Z",
-      "evidence": "/Users/onehrxn/dev/30days/c30/.evidence/ladder/musl/20261025T112904Z",
+      "run": "20261027T114938Z",
+      "evidence": "/Users/onehrxn/dev/30days/c30/.evidence/ladder/musl/20261027T114938Z",
       "receipt": "tests/contracts/ladder-musl-receipt.json",
       "command": [
         "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
         "-u",
         "/Users/onehrxn/dev/30days/c30/tools/ladder/musl.py",
         "--evocc",
-        "/Users/onehrxn/dev/30days/c30/target/frontend/release/evocc",
+        "/Users/onehrxn/dev/30days/c30/.build/frozen/08bf09bd/evocc-darwin",
         "--jobs",
         "2",
         "--budget",
         "40"
       ],
       "exitCode": 0,
-      "seconds": 85.6,
+      "seconds": 88.0,
       "previous": {
         "rung": "E7",
         "note": "libc-test relative to baseline failures",
         "outcomes": {},
-        "refusals": {
-          "E3049": 68
-        },
-        "baselineFailures": 17,
+        "refusals": {},
+        "baselineFailures": 13,
         "failingUnits": [],
         "total": 1339,
-        "passed": 1271,
+        "passed": 1339,
         "kind": "units",
-        "compiled": 1271,
+        "compiled": 1339,
         "excluded": 0,
         "testVerdict": "libc-test-clean",
         "adjustments": {
@@ -1041,17 +1060,80 @@
           "sysroot": "none: musl is built -nostdinc against its own headers",
           "configure": "--disable-shared, so the library is one set of objects",
           "libcTestConfig": "CC = /work/musl/sysroot/bin/musl-gcc\nCFLAGS += -pipe -std=c99 -D_POSIX_C_SOURCE=200809L -Wall -Wno-unused-function\nCFLAGS += -Wno-missing-braces -Wno-unused -Wno-overflow -Wno-unknown-pragmas\nCFLAGS += -fno-builtin -frounding-math -g\nLDFLAGS += -g -static\n",
-          "testSupervisor": "reference-built runtest retained; only test cases relink against substituted libc; original five-second timeout unchanged"
+          "testSupervisor": "reference-built runtest retained; only test cases relink against substituted libc; original five-second timeout unchanged",
+          "caseEnvironment": {
+            "runnerSha256": "d2b1e8e2c25fd58c2872570f4619a6b8c483c0f5ab6305d4a07c8e5c9c025ad7",
+            "unprivilegedUidGid": 65534,
+            "cases": [
+              "src/regression/pthread_atfork-errno-clobber.exe",
+              "src/regression/pthread_atfork-errno-clobber-static.exe"
+            ],
+            "policy": "drop root before the two RLIMIT_NPROC cases; other identities unchanged; setup failure is not PASS",
+            "guestLocalStdoutCases": [
+              "src/regression/daemon-failure.exe",
+              "src/regression/daemon-failure-static.exe"
+            ],
+            "stdoutPolicy": "only the two descriptor-exhaustion supervisors receive a guest-local regular stdout file; copy exact bytes and propagate status after the unchanged watchdog; no descriptor-limit change"
+          }
         },
         "status": "INCOMPLETE",
-        "sharedLoader": {},
-        "run": "20260927T110110Z",
-        "evidence": "/Users/onehrxn/dev/30days/c30/.evidence/ladder/musl/20260927T110110Z"
+        "sharedLoader": {
+          "scope": "five original shared-loader subjects; not full musl",
+          "status": "PASS",
+          "compilerSha256": "978a3771912d7b2eafe89228ff2cb3d3c0c996826b2b2875c4cb74932a655ce4",
+          "evidence": "/Users/onehrxn/dev/30days/c30/.evidence/ladder/musl/20261025T112904Z/shared-loader",
+          "subjects": [
+            "functional/dlopen",
+            "functional/tls_align",
+            "functional/tls_align_dlopen",
+            "functional/tls_init_dlopen",
+            "regression/tls_get_new-dtv"
+          ],
+          "referenceTestHarness": "GCC-built original subjects/plugins and preserved five-second supervisor",
+          "loaderUnits": [
+            {
+              "unit": "obj/ldso/dlstart.lo",
+              "source": "/work/musl/ldso/dlstart.c",
+              "outcome": "emitted",
+              "assembly": "obj__ldso__dlstart.lo.s",
+              "omitted": [
+                "-Wa,--noexecstack",
+                "-pipe",
+                "-o"
+              ],
+              "command": "/Users/onehrxn/dev/30days/c30/target/frontend/release/evocc --emit=asm --survey --target=aarch64-unknown-linux-gnu -std=c99 -nostdinc -ffreestanding -fexcess-precision=standard -frounding-math -fno-strict-aliasing -D_XOPEN_SOURCE=700 -I/Users/onehrxn/dev/30days/c30/.build/ladder/musl-work/arch/aarch64 -I/Users/onehrxn/dev/30days/c30/.build/ladder/musl-work/arch/generic -I/Users/onehrxn/dev/30days/c30/.build/ladder/musl-work/obj/src/internal -I/Users/onehrxn/dev/30days/c30/.build/ladder/musl-work/src/include -I/Users/onehrxn/dev/30days/c30/.build/ladder/musl-work/src/internal -I/Users/onehrxn/dev/30days/c30/.build/ladder/musl-work/obj/include -I/Users/onehrxn/dev/30days/c30/.build/ladder/musl-work/include -O2 -fno-align-jumps -fno-align-functions -fno-align-loops -fno-align-labels -fira-region=one -fira-hoist-pressure -freorder-blocks-algorithm=simple -fno-prefetch-loop-arrays -fno-tree-ch -fomit-frame-pointer -fno-unwind-tables -fno-asynchronous-unwind-tables -ffunction-sections -fdata-sections -Wno-pointer-to-int-cast -Werror=implicit-function-declaration -Werror=implicit-int -Werror=pointer-sign -Werror=pointer-arith -Werror=int-conversion -Werror=incompatible-pointer-types -Werror=discarded-qualifiers -Werror=discarded-array-qualifiers -Waddress -Warray-bounds -Wchar-subscripts -Wduplicate-decl-specifier -Winit-self -Wreturn-type -Wsequence-point -Wstrict-aliasing -Wunused-function -Wunused-label -Wunused-variable -fno-stack-protector -fno-stack-protector -fPIC /Users/onehrxn/dev/30days/c30/.build/ladder/musl-work/ldso/dlstart.c"
+            },
+            {
+              "unit": "obj/ldso/dynlink.lo",
+              "source": "/work/musl/ldso/dynlink.c",
+              "outcome": "emitted",
+              "assembly": "obj__ldso__dynlink.lo.s",
+              "omitted": [
+                "-Wa,--noexecstack",
+                "-pipe",
+                "-o"
+              ],
+              "command": "/Users/onehrxn/dev/30days/c30/target/frontend/release/evocc --emit=asm --survey --target=aarch64-unknown-linux-gnu -std=c99 -nostdinc -ffreestanding -fexcess-precision=standard -frounding-math -fno-strict-aliasing -D_XOPEN_SOURCE=700 -I/Users/onehrxn/dev/30days/c30/.build/ladder/musl-work/arch/aarch64 -I/Users/onehrxn/dev/30days/c30/.build/ladder/musl-work/arch/generic -I/Users/onehrxn/dev/30days/c30/.build/ladder/musl-work/obj/src/internal -I/Users/onehrxn/dev/30days/c30/.build/ladder/musl-work/src/include -I/Users/onehrxn/dev/30days/c30/.build/ladder/musl-work/src/internal -I/Users/onehrxn/dev/30days/c30/.build/ladder/musl-work/obj/include -I/Users/onehrxn/dev/30days/c30/.build/ladder/musl-work/include -O2 -fno-align-jumps -fno-align-functions -fno-align-loops -fno-align-labels -fira-region=one -fira-hoist-pressure -freorder-blocks-algorithm=simple -fno-prefetch-loop-arrays -fno-tree-ch -fomit-frame-pointer -fno-unwind-tables -fno-asynchronous-unwind-tables -ffunction-sections -fdata-sections -Wno-pointer-to-int-cast -Werror=implicit-function-declaration -Werror=implicit-int -Werror=pointer-sign -Werror=pointer-arith -Werror=int-conversion -Werror=incompatible-pointer-types -Werror=discarded-qualifiers -Werror=discarded-array-qualifiers -Waddress -Warray-bounds -Wchar-subscripts -Wduplicate-decl-specifier -Winit-self -Wreturn-type -Wsequence-point -Wstrict-aliasing -Wunused-function -Wunused-label -Wunused-variable -fno-stack-protector -fno-stack-protector -fPIC /Users/onehrxn/dev/30days/c30/.build/ladder/musl-work/ldso/dynlink.c"
+            }
+          ],
+          "objectCounts": {
+            "evocc": 1338,
+            "reference": 13
+          },
+          "compositionSha256": "084ecb036850e5ea55da675c0c24124c109c2c783ede61177d2af604412c4267",
+          "libraryHashes": {
+            "reference": "d6f868e2370b902c1a27ec8fdca044f655f3bbb722ad9f813cab5844646ea305",
+            "candidate": "9377419287929d5f49d615877e14b01969caabf898d77dd733a802a151ed9db9"
+          },
+          "executionsSha256": "d23219d352442bd0327add0bc363037a94317126a7c10cdba262cac8333c495f"
+        },
+        "run": "20261025T112904Z",
+        "evidence": "/Users/onehrxn/dev/30days/c30/.evidence/ladder/musl/20261025T112904Z"
       },
       "measurement": {
-        "run": "20261025T112904.216761Z",
-        "subject": "b2aae0dabc31de3520ee792d8104dc9303001045",
-        "driverSha256": "978a3771912d7b2eafe89228ff2cb3d3c0c996826b2b2875c4cb74932a655ce4"
+        "run": "20261027T110816.715722Z",
+        "subject": "c65f67235e16dc8fa480f6c99f883f7dbcc8e1b7",
+        "driverSha256": "ab0c90437192d6824ce884c71d80a028e1d785ae89a11fe58ecb0145d76de525"
       }
     },
     "kernel": {
@@ -2129,31 +2211,29 @@
         ]
       },
       "status": "PASS",
-      "run": "20261025T171209Z",
-      "evidence": ".evidence/ladder/mbedtls/20261025T171209Z",
+      "run": "20261027T115108Z",
+      "evidence": ".evidence/ladder/mbedtls/20261027T115108Z",
       "receipt": "tests/contracts/ladder-mbedtls-receipt.json",
       "command": [
         "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
         "-u",
         "/Users/onehrxn/dev/30days/c30/tools/ladder/mbedtls.py",
         "--evocc",
-        "/Users/onehrxn/dev/30days/c30/target/frontend/release/evocc"
+        "/Users/onehrxn/dev/30days/c30/.build/frozen/08bf09bd/evocc-darwin"
       ],
       "exitCode": 0,
-      "seconds": 761.3,
+      "seconds": 781.2,
       "previous": {
         "rung": "E4",
         "note": "default release selftest and CTest against installed objects; mixed-link ramp",
         "outcomes": {},
-        "refusals": {
-          "W0001": 1
-        },
+        "refusals": {},
         "baselineFailures": 0,
         "failingUnits": [],
         "total": 382,
-        "passed": 381,
+        "passed": 382,
         "kind": "units",
-        "compiled": 381,
+        "compiled": 382,
         "excluded": 0,
         "testVerdict": {
           "passed": true,
@@ -3131,14 +3211,14 @@
             "tf-psa-crypto/utilities/CMakeFiles/utilities.dir/pkcs5.c.o"
           ]
         },
-        "status": "INCOMPLETE",
-        "run": "20261025T161055Z",
-        "evidence": ".evidence/ladder/mbedtls/20261025T161055Z"
+        "status": "PASS",
+        "run": "20261025T171209Z",
+        "evidence": ".evidence/ladder/mbedtls/20261025T171209Z"
       },
       "measurement": {
-        "run": "20261025T171207.529086Z",
-        "subject": "e7a3408c07e80bdf803a4583d337b7d578ecc72b",
-        "driverSha256": "9f486dd69fc138128113205330fd58758ffe8e8f09fb5b0caa59f97643c1b29a"
+        "run": "20261027T110816.715722Z",
+        "subject": "c65f67235e16dc8fa480f6c99f883f7dbcc8e1b7",
+        "driverSha256": "ab0c90437192d6824ce884c71d80a028e1d785ae89a11fe58ecb0145d76de525"
       }
     },
     "polybench": {
@@ -3175,18 +3255,18 @@
         "role": "upstream allocation/instrumentation harness; excluded from the 30-kernel denominator"
       },
       "status": "PASS",
-      "run": "20261025T114035Z",
-      "evidence": ".evidence/ladder/polybench/20261025T114035Z",
+      "run": "20261027T120408Z",
+      "evidence": ".evidence/ladder/polybench/20261027T120408Z",
       "receipt": "tests/contracts/ladder-polybench-receipt.json",
       "command": [
         "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
         "-u",
         "/Users/onehrxn/dev/30days/c30/tools/ladder/polybench.py",
         "--evocc",
-        "/Users/onehrxn/dev/30days/c30/target/frontend/release/evocc"
+        "/Users/onehrxn/dev/30days/c30/.build/frozen/08bf09bd/evocc-darwin"
       ],
       "exitCode": 0,
-      "seconds": 15.5,
+      "seconds": 16.6,
       "previous": {
         "rung": "E8",
         "note": "30 original kernels, MINI_DATASET array-output correctness; reference-built allocation utility, not performance",
@@ -3221,38 +3301,35 @@
           "role": "upstream allocation/instrumentation harness; excluded from the 30-kernel denominator"
         },
         "status": "PASS",
-        "run": "20260919T222638Z",
-        "evidence": ".evidence/ladder/polybench/20260919T222638Z"
+        "run": "20261025T114035Z",
+        "evidence": ".evidence/ladder/polybench/20261025T114035Z"
       },
       "measurement": {
-        "run": "20261025T114035.088823Z",
-        "subject": "b2aae0dabc31de3520ee792d8104dc9303001045",
-        "driverSha256": "978a3771912d7b2eafe89228ff2cb3d3c0c996826b2b2875c4cb74932a655ce4"
+        "run": "20261027T110816.715722Z",
+        "subject": "c65f67235e16dc8fa480f6c99f883f7dbcc8e1b7",
+        "driverSha256": "ab0c90437192d6824ce884c71d80a028e1d785ae89a11fe58ecb0145d76de525"
       }
     },
     "llvm-test-suite": {
       "rung": "E9",
       "note": "SingleSource C objects with original lit outputs; C++ excluded by language, mixed ramp",
       "outcomes": {
-        "PASS": 1658,
-        "compiler-refused": 61,
+        "PASS": 1674,
         "oracle-unusable": 2,
         "runtime-failure": 11,
+        "compiler-refused": 45,
         "link-failure": 3
       },
       "refusals": {
-        "E2202": 4,
         "E1001": 26,
         "E2949": 1,
         "E3050": 1,
         "E2102": 4,
         "E2002": 1,
-        "other": 9,
         "E2903": 3,
-        "E3051": 3,
         "E2931": 1,
         "E1207": 3,
-        "E2952": 2,
+        "other": 2,
         "E2204": 1,
         "E2940": 1,
         "E2929": 1
@@ -3766,9 +3843,9 @@
         }
       ],
       "total": 1735,
-      "passed": 1054,
+      "passed": 1066,
       "kind": "programs",
-      "compiled": 1674,
+      "compiled": 1690,
       "excluded": 141,
       "adjustments": {
         "subject": [
@@ -4042,67 +4119,63 @@
         ]
       },
       "dispositions": {
-        "PASS": 1054,
-        "compiler-failure": 11,
-        "FP-deferred": 3,
+        "PASS": 1066,
+        "compiler-failure": 0,
+        "FP-deferred": 2,
         "not-applicable": 665,
         "oracle-unusable": 2
       },
-      "status": "INCOMPLETE",
-      "run": "20261025T114052Z",
-      "evidence": ".evidence/ladder/llvm-test-suite/20261025T114052Z",
+      "status": "PROFILE_CLEAN",
+      "run": "20261027T120426Z",
+      "evidence": ".evidence/ladder/llvm-test-suite/20261027T120426Z",
       "receipt": "tests/contracts/ladder-llvm-test-suite-receipt.json",
       "command": [
         "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
         "-u",
         "/Users/onehrxn/dev/30days/c30/tools/ladder/llvm-test-suite.py",
         "--evocc",
-        "/Users/onehrxn/dev/30days/c30/target/frontend/release/evocc"
+        "/Users/onehrxn/dev/30days/c30/.build/frozen/08bf09bd/evocc-darwin"
       ],
       "exitCode": 0,
-      "seconds": 599.7,
+      "seconds": 599.9,
       "previous": {
         "rung": "E9",
         "note": "SingleSource C objects with original lit outputs; C++ excluded by language, mixed ramp",
         "outcomes": {
-          "PASS": 1039,
-          "compiler-refused": 687,
-          "oracle-unusable": 1,
-          "runtime-failure": 8
+          "PASS": 1658,
+          "compiler-refused": 61,
+          "oracle-unusable": 2,
+          "runtime-failure": 11,
+          "link-failure": 3
         },
         "refusals": {
-          "E3050": 14,
-          "E1001": 345,
-          "E0112": 9,
-          "E2001": 299,
-          "E2202": 2,
-          "E2102": 1,
-          "E1003": 5,
-          "E2913": 1,
+          "E2202": 4,
+          "E1001": 26,
+          "E2949": 1,
+          "E3050": 1,
+          "E2102": 4,
+          "E2002": 1,
+          "other": 9,
           "E2903": 3,
-          "E4002": 2,
-          "E3051": 1,
-          "other": 1,
-          "E2101": 1,
+          "E3051": 3,
+          "E2931": 1,
+          "E1207": 3,
+          "E2952": 2,
           "E2204": 1,
           "E2940": 1,
           "E2929": 1
         },
-        "baselineFailures": 1,
+        "baselineFailures": 2,
         "failingUnits": [
           {
             "unit": "build/SingleSource/Benchmarks/Shootout/CMakeFiles/Shootout-nestedloop.dir/nestedloop.c.o",
             "source": "SingleSource/Benchmarks/Shootout/nestedloop.c",
             "assemblerFlags": [],
-            "omittedFlags": [
-              "-Werror=date-time",
-              "-Wno-error=incompatible-pointer-types",
-              "-w"
-            ],
+            "omittedFlags": [],
             "outcome": "assembled",
             "assembly": "/Users/onehrxn/dev/30days/c30/.build/ladder/llvm-test-suite/evocc-objects/build/SingleSource/Benchmarks/Shootout/CMakeFiles/Shootout-nestedloop.dir/nestedloop.c.s",
-            "assemblySha256": "0dcfb96c74fdadbfaadd0d65ae7ff6ea2c74b00363cf2df7a5b4eebf2334e897",
-            "objectSha256": "3981caf846de79fca257450f46437e4ce0774090fd4102e8efd414bde1e9310e",
+            "assemblySha256": "3034993d44902e1bfdc0a86a891ebd86a6681f484d9ba49475d48d30b428c9fa",
+            "objectSha256": "a1a520deebedbcf4e259db1e93dabbf8915dd6df64b1f2a5396d6a9f4c6bcb9a",
             "program": "SingleSource/Benchmarks/Shootout/Shootout-nestedloop.test",
             "reference": "PASS",
             "native": "FAIL",
@@ -4129,21 +4202,88 @@
             "sourceSha256": "45606b720ba68dc8320bb1ed7a4348a14cfb8db5f0c677d87874cc99f5fc7744"
           },
           {
+            "unit": "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-20030125-1.dir/20030125-1.c.o",
+            "source": "SingleSource/Regression/C/gcc-c-torture/execute/20030125-1.c",
+            "assemblerFlags": [],
+            "omittedFlags": [],
+            "outcome": "assembled",
+            "assembly": "/Users/onehrxn/dev/30days/c30/.build/ladder/llvm-test-suite/evocc-objects/build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-20030125-1.dir/20030125-1.c.s",
+            "assemblySha256": "7be07963daaecbee80ea0e8c36867fc6c32c214428820e9ef3cbf105f3bd6612",
+            "objectSha256": "8ace5f81040465acc36169f616abf9765bb942211269630f3abf8713f60bab00",
+            "program": "SingleSource/Regression/C/gcc-c-torture/execute/GCC-C-execute-20030125-1.test",
+            "reference": "PASS",
+            "native": "FAIL",
+            "programOutcome": "runtime-failure",
+            "originalArguments": [
+              "/usr/bin/clang-19",
+              "-DNDEBUG",
+              "-O3",
+              "-DNDEBUG",
+              "-w",
+              "-Werror=date-time",
+              "-Wno-implicit-int",
+              "-Wno-int-conversion",
+              "-Wno-implicit-function-declaration",
+              "-w",
+              "-Wno-error=incompatible-pointer-types",
+              "-o",
+              "CMakeFiles/GCC-C-execute-20030125-1.dir/20030125-1.c.o",
+              "-c",
+              "/work/llvm-test-suite/llvm-test-suite-2919e55176a572ee085cb46b291c47b7092c363e/SingleSource/Regression/C/gcc-c-torture/execute/20030125-1.c"
+            ],
+            "disposition": "not-applicable",
+            "dispositionReason": "Reviewed F01 GNU11 boundary: implicit declaration or implicit type; both fixed compilers reject the diagnostic-unsuppressed profile probe. Original suppressed-warning reference outcome is unchanged.",
+            "dispositionEvidence": [
+              "tests/fixtures/llvm-declaration-profile.out"
+            ],
+            "sourceSha256": "7aa48c139ccad0caf9d05699bc29276d0d4781b520fd911e7efebfd40db5502a"
+          },
+          {
+            "unit": "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-20030216-1.dir/20030216-1.c.o",
+            "source": "SingleSource/Regression/C/gcc-c-torture/execute/20030216-1.c",
+            "assemblerFlags": [],
+            "omittedFlags": [],
+            "outcome": "assembled",
+            "assembly": "/Users/onehrxn/dev/30days/c30/.build/ladder/llvm-test-suite/evocc-objects/build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-20030216-1.dir/20030216-1.c.s",
+            "assemblySha256": "126ea4e1289876f79cf8b46fd487be8ce9a5d7e81d5281bc3bfd632d5e43d01b",
+            "objectSha256": "37ac9000730ad7ca27b0a96692403e12d28d06322cd6227e43752117a8faf98e",
+            "program": "SingleSource/Regression/C/gcc-c-torture/execute/GCC-C-execute-20030216-1.test",
+            "reference": "PASS",
+            "native": "NOEXE",
+            "programOutcome": "link-failure",
+            "originalArguments": [
+              "/usr/bin/clang-19",
+              "-DNDEBUG",
+              "-O3",
+              "-DNDEBUG",
+              "-w",
+              "-Werror=date-time",
+              "-Wno-implicit-int",
+              "-Wno-int-conversion",
+              "-Wno-implicit-function-declaration",
+              "-w",
+              "-Wno-error=incompatible-pointer-types",
+              "-o",
+              "CMakeFiles/GCC-C-execute-20030216-1.dir/20030216-1.c.o",
+              "-c",
+              "/work/llvm-test-suite/llvm-test-suite-2919e55176a572ee085cb46b291c47b7092c363e/SingleSource/Regression/C/gcc-c-torture/execute/20030216-1.c"
+            ],
+            "disposition": "not-applicable",
+            "dispositionReason": "Reviewed F01 GNU11 boundary: implicit declaration or implicit type; both fixed compilers reject the diagnostic-unsuppressed profile probe. Original suppressed-warning reference outcome is unchanged.",
+            "dispositionEvidence": [
+              "tests/fixtures/llvm-declaration-profile.out"
+            ],
+            "sourceSha256": "c0b60adf9710194af2658a79922b9c7c714e3ec434ae2f372cd249991e659d8d"
+          },
+          {
             "unit": "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-20090113-1.dir/20090113-1.c.o",
             "source": "SingleSource/Regression/C/gcc-c-torture/execute/20090113-1.c",
             "assemblerFlags": [],
-            "omittedFlags": [
-              "-Werror=date-time",
-              "-Wno-error=incompatible-pointer-types",
-              "-Wno-implicit-function-declaration",
-              "-Wno-implicit-int",
-              "-Wno-int-conversion",
-              "-w"
-            ],
+            "omittedFlags": [],
             "outcome": "assembled",
             "assembly": "/Users/onehrxn/dev/30days/c30/.build/ladder/llvm-test-suite/evocc-objects/build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-20090113-1.dir/20090113-1.c.s",
-            "assemblySha256": "d394f4bd70bf32e82e8cd4f6cbcee99f48608cd00aa6c40262ddedfa21df7a4d",
-            "objectSha256": "52a9662010ea78b7c99468e5661712ce18b35fd81adc8923b86437317ff2c03e",
+            "assemblySha256": "31425eee2a4ad39ea74b1587b94d78c2257361be66ac9353469d1e9a2ed19b5d",
+            "objectSha256": "d927b24bcc2b81cf2c9014ceeed229fce888658f1216d3af02797edb3f6f2bda",
             "program": "SingleSource/Regression/C/gcc-c-torture/execute/GCC-C-execute-20090113-1.test",
             "reference": "PASS",
             "native": "FAIL",
@@ -4173,22 +4313,125 @@
             "sourceSha256": "95564445bb0083c9904587014c8d5ec3ef1f61c96c7f498dbf8cc8d7382243b0"
           },
           {
+            "unit": "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-990826-0.dir/990826-0.c.o",
+            "source": "SingleSource/Regression/C/gcc-c-torture/execute/990826-0.c",
+            "assemblerFlags": [],
+            "omittedFlags": [],
+            "outcome": "assembled",
+            "assembly": "/Users/onehrxn/dev/30days/c30/.build/ladder/llvm-test-suite/evocc-objects/build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-990826-0.dir/990826-0.c.s",
+            "assemblySha256": "02fa9038003a0aeae681749f2582d61ec1fd31feaf88186636ea0409a4a3f495",
+            "objectSha256": "f1d85e804770f3312570b54d8ca11d6095ff740fe586fb761f4ba6a708581bf1",
+            "program": "SingleSource/Regression/C/gcc-c-torture/execute/GCC-C-execute-990826-0.test",
+            "reference": "PASS",
+            "native": "NOEXE",
+            "programOutcome": "link-failure",
+            "originalArguments": [
+              "/usr/bin/clang-19",
+              "-DNDEBUG",
+              "-O3",
+              "-DNDEBUG",
+              "-w",
+              "-Werror=date-time",
+              "-Wno-implicit-int",
+              "-Wno-int-conversion",
+              "-Wno-implicit-function-declaration",
+              "-w",
+              "-Wno-error=incompatible-pointer-types",
+              "-o",
+              "CMakeFiles/GCC-C-execute-990826-0.dir/990826-0.c.o",
+              "-c",
+              "/work/llvm-test-suite/llvm-test-suite-2919e55176a572ee085cb46b291c47b7092c363e/SingleSource/Regression/C/gcc-c-torture/execute/990826-0.c"
+            ],
+            "disposition": "not-applicable",
+            "dispositionReason": "Reviewed F01 GNU11 boundary: implicit declaration or implicit type; both fixed compilers reject the diagnostic-unsuppressed profile probe. Original suppressed-warning reference outcome is unchanged.",
+            "dispositionEvidence": [
+              "tests/fixtures/llvm-declaration-profile.out"
+            ],
+            "sourceSha256": "70fc4052073a2a26bd4ecf57501aafd13aefe35b9c4d222b25c3b9c369cdd914"
+          },
+          {
+            "unit": "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-arith-rand.dir/arith-rand.c.o",
+            "source": "SingleSource/Regression/C/gcc-c-torture/execute/arith-rand.c",
+            "assemblerFlags": [],
+            "omittedFlags": [],
+            "outcome": "assembled",
+            "assembly": "/Users/onehrxn/dev/30days/c30/.build/ladder/llvm-test-suite/evocc-objects/build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-arith-rand.dir/arith-rand.c.s",
+            "assemblySha256": "752aa827c9a6017531604327a8768faef328472bf6b182cd7c42d7696014391f",
+            "objectSha256": "c5dc4c76bfa768ca2f6a5dfbb0303c104aa85567710ae5bdc47bfa6386011f94",
+            "program": "SingleSource/Regression/C/gcc-c-torture/execute/GCC-C-execute-arith-rand.test",
+            "reference": "PASS",
+            "native": "FAIL",
+            "programOutcome": "runtime-failure",
+            "originalArguments": [
+              "/usr/bin/clang-19",
+              "-DNDEBUG",
+              "-O3",
+              "-DNDEBUG",
+              "-w",
+              "-Werror=date-time",
+              "-Wno-implicit-int",
+              "-Wno-int-conversion",
+              "-Wno-implicit-function-declaration",
+              "-w",
+              "-Wno-error=incompatible-pointer-types",
+              "-o",
+              "CMakeFiles/GCC-C-execute-arith-rand.dir/arith-rand.c.o",
+              "-c",
+              "/work/llvm-test-suite/llvm-test-suite-2919e55176a572ee085cb46b291c47b7092c363e/SingleSource/Regression/C/gcc-c-torture/execute/arith-rand.c"
+            ],
+            "disposition": "not-applicable",
+            "dispositionReason": "Reviewed F01 GNU11 boundary: implicit declaration or implicit type; both fixed compilers reject the diagnostic-unsuppressed profile probe. Original suppressed-warning reference outcome is unchanged.",
+            "dispositionEvidence": [
+              "tests/fixtures/llvm-declaration-profile.out"
+            ],
+            "sourceSha256": "c5d16c3701336678da599a155724d573f25cfe858ec7ec91664b3ad6786cdf2c"
+          },
+          {
+            "unit": "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-arith-rand-ll.dir/arith-rand-ll.c.o",
+            "source": "SingleSource/Regression/C/gcc-c-torture/execute/arith-rand-ll.c",
+            "assemblerFlags": [],
+            "omittedFlags": [],
+            "outcome": "assembled",
+            "assembly": "/Users/onehrxn/dev/30days/c30/.build/ladder/llvm-test-suite/evocc-objects/build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-arith-rand-ll.dir/arith-rand-ll.c.s",
+            "assemblySha256": "a9181767ccb8edcd4bbeb2a103101b5e514df90c29fbbaf440a2da827aefd9cd",
+            "objectSha256": "216075f9158d78aee472e265bd7e2d57a1584db3a3d54a8e1e11d974ce0e8076",
+            "program": "SingleSource/Regression/C/gcc-c-torture/execute/GCC-C-execute-arith-rand-ll.test",
+            "reference": "PASS",
+            "native": "FAIL",
+            "programOutcome": "runtime-failure",
+            "originalArguments": [
+              "/usr/bin/clang-19",
+              "-DNDEBUG",
+              "-O3",
+              "-DNDEBUG",
+              "-w",
+              "-Werror=date-time",
+              "-Wno-implicit-int",
+              "-Wno-int-conversion",
+              "-Wno-implicit-function-declaration",
+              "-w",
+              "-Wno-error=incompatible-pointer-types",
+              "-o",
+              "CMakeFiles/GCC-C-execute-arith-rand-ll.dir/arith-rand-ll.c.o",
+              "-c",
+              "/work/llvm-test-suite/llvm-test-suite-2919e55176a572ee085cb46b291c47b7092c363e/SingleSource/Regression/C/gcc-c-torture/execute/arith-rand-ll.c"
+            ],
+            "disposition": "not-applicable",
+            "dispositionReason": "Reviewed F01 GNU11 boundary: implicit declaration or implicit type; both fixed compilers reject the diagnostic-unsuppressed profile probe. Original suppressed-warning reference outcome is unchanged.",
+            "dispositionEvidence": [
+              "tests/fixtures/llvm-declaration-profile.out"
+            ],
+            "sourceSha256": "ddacddc09e8c286420e56200d8b966f074f541a161fdb850c07dcaa740845756"
+          },
+          {
             "unit": "build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-pr23135.dir/pr23135.c.o",
             "source": "SingleSource/Regression/C/gcc-c-torture/execute/pr23135.c",
             "assemblerFlags": [],
-            "omittedFlags": [
-              "-Werror=date-time",
-              "-Wno-error=incompatible-pointer-types",
-              "-Wno-implicit-function-declaration",
-              "-Wno-implicit-int",
-              "-Wno-int-conversion",
-              "-Wno-psabi",
-              "-w"
-            ],
+            "omittedFlags": [],
             "outcome": "assembled",
             "assembly": "/Users/onehrxn/dev/30days/c30/.build/ladder/llvm-test-suite/evocc-objects/build/SingleSource/Regression/C/gcc-c-torture/execute/CMakeFiles/GCC-C-execute-pr23135.dir/pr23135.c.s",
-            "assemblySha256": "6d37b3205c8a91797ac4946894ca5974c7306264e1a82194b0e2bc580b14d4c6",
-            "objectSha256": "658615b1e9cbe828616a6ca3cc97262af1dae627ec54cd2aa303c2c29afa2193",
+            "assemblySha256": "8917a414e86ad7902ab1b97988d0b7ffee6805183fcaac32cb107e610a11c821",
+            "objectSha256": "18352ec8635f8201f37d43a8679f2508a6f4d3240387a3c2a4b41a2f4d695c23",
             "program": "SingleSource/Regression/C/gcc-c-torture/execute/GCC-C-execute-pr23135.test",
             "reference": "PASS",
             "native": "FAIL",
@@ -4211,22 +4454,60 @@
               "-c",
               "/work/llvm-test-suite/llvm-test-suite-2919e55176a572ee085cb46b291c47b7092c363e/SingleSource/Regression/C/gcc-c-torture/execute/pr23135.c"
             ],
-            "disposition": "compiler-failure"
+            "disposition": "not-applicable",
+            "dispositionReason": "L10, B01 source-UB rule: the unchanged original executes signed int overflow in GNU vector lane 0 at line 131 (75840000 * 156; lane 1 overflows in the same product), and line 133 expects the wrapped products. GCC-14 UBSan reports this product at 131:25 on the unchanged original at O0, O2 and the recorded O3 options. Clang-19 UBSan is silent: EmitMul checks only signed integer types, not vectors (CGExprScalar.cpp, llvmorg-19.1.7, lines 739-786), and its scalar control reports the same operands. GCC upstream added -fwrapv to its copy to avoid undefined behavior (ca2b8c08). Both EvoCC interpreters report E3004 at 131:7. The -fwrapv runs are labeled controls, not the original's PASS.",
+            "dispositionEvidence": [
+              "tests/fixtures/llvm-pr23135-definedness.out",
+              "tests/fixtures/llvm-vector-overflow-reduction.out",
+              "docs/archive/notebook/rules-20261013/DECISIONS.md"
+            ],
+            "sourceSha256": "55b64d3f85e48564b7275634e277d9c3a86bb9ba9181ebb9aed0e64f64295693"
+          },
+          {
+            "unit": "build/SingleSource/Regression/C/gcc-c-torture/execute/ieee/CMakeFiles/GCC-C-execute-ieee-fp-cmp-6.dir/fp-cmp-6.c.o",
+            "source": "SingleSource/Regression/C/gcc-c-torture/execute/ieee/fp-cmp-6.c",
+            "assemblerFlags": [],
+            "omittedFlags": [],
+            "outcome": "assembled",
+            "assembly": "/Users/onehrxn/dev/30days/c30/.build/ladder/llvm-test-suite/evocc-objects/build/SingleSource/Regression/C/gcc-c-torture/execute/ieee/CMakeFiles/GCC-C-execute-ieee-fp-cmp-6.dir/fp-cmp-6.c.s",
+            "assemblySha256": "bd491a3d2bc171e0a7e59a963b059bff2b9f05dd6c3def5ed334ad0fb48a1e8a",
+            "objectSha256": "3bb0c866ea5b5fff08fc3af294ab693ed7df15d51b3aba43237769ae5902cc0f",
+            "program": "SingleSource/Regression/C/gcc-c-torture/execute/ieee/GCC-C-execute-ieee-fp-cmp-6.test",
+            "reference": "PASS",
+            "native": "NOEXE",
+            "programOutcome": "link-failure",
+            "originalArguments": [
+              "/usr/bin/clang-19",
+              "-DNDEBUG",
+              "-O3",
+              "-DNDEBUG",
+              "-w",
+              "-Werror=date-time",
+              "-Wno-implicit-int",
+              "-Wno-implicit-function-declaration",
+              "-w",
+              "-Wno-error=incompatible-pointer-types",
+              "-o",
+              "CMakeFiles/GCC-C-execute-ieee-fp-cmp-6.dir/fp-cmp-6.c.o",
+              "-c",
+              "/work/llvm-test-suite/llvm-test-suite-2919e55176a572ee085cb46b291c47b7092c363e/SingleSource/Regression/C/gcc-c-torture/execute/ieee/fp-cmp-6.c"
+            ],
+            "disposition": "not-applicable",
+            "dispositionReason": "Reviewed F01 GNU11 boundary: implicit declaration or implicit type; both fixed compilers reject the diagnostic-unsuppressed profile probe. Original suppressed-warning reference outcome is unchanged.",
+            "dispositionEvidence": [
+              "tests/fixtures/llvm-declaration-profile.out"
+            ],
+            "sourceSha256": "4eee016629cc8ff03a88b56ff4f9e04dbdd1f90daaa7f3746cacb4a220f60220"
           },
           {
             "unit": "build/SingleSource/UnitTests/CMakeFiles/2003-05-26-Shorts.dir/2003-05-26-Shorts.c.o",
             "source": "SingleSource/UnitTests/2003-05-26-Shorts.c",
             "assemblerFlags": [],
-            "omittedFlags": [
-              "-Werror=date-time",
-              "-Wno-implicit-function-declaration",
-              "-Wno-implicit-int",
-              "-w"
-            ],
+            "omittedFlags": [],
             "outcome": "assembled",
             "assembly": "/Users/onehrxn/dev/30days/c30/.build/ladder/llvm-test-suite/evocc-objects/build/SingleSource/UnitTests/CMakeFiles/2003-05-26-Shorts.dir/2003-05-26-Shorts.c.s",
-            "assemblySha256": "b462f2e17698aeb1b3533d787f567e343b8d1a7a6f6dc6b41539c793ea5c13ef",
-            "objectSha256": "14f23a6db3fd3ad9fbb4e03657f64a6045336a7900a7249f238a7e7ea760f5fa",
+            "assemblySha256": "1f99d52b120c0e78650852cd5b877a8e847031d62971d8b46a6ed7fc414a311e",
+            "objectSha256": "6c5332d9d5ae847f370cc1d005a14caea1284ad2e815ffdd9a0f7e3d2c384ae0",
             "program": "SingleSource/UnitTests/2003-05-26-Shorts.test",
             "reference": "PASS",
             "native": "FAIL",
@@ -4257,16 +4538,11 @@
             "unit": "build/SingleSource/UnitTests/CMakeFiles/2003-07-06-IntOverflow.dir/2003-07-06-IntOverflow.c.o",
             "source": "SingleSource/UnitTests/2003-07-06-IntOverflow.c",
             "assemblerFlags": [],
-            "omittedFlags": [
-              "-Werror=date-time",
-              "-Wno-implicit-function-declaration",
-              "-Wno-implicit-int",
-              "-w"
-            ],
+            "omittedFlags": [],
             "outcome": "assembled",
             "assembly": "/Users/onehrxn/dev/30days/c30/.build/ladder/llvm-test-suite/evocc-objects/build/SingleSource/UnitTests/CMakeFiles/2003-07-06-IntOverflow.dir/2003-07-06-IntOverflow.c.s",
-            "assemblySha256": "3c3001eb9d11e90d59f94fb311718f974a9cfbcc1b8d088d428342ab075b3b5a",
-            "objectSha256": "2fcc08b84e4a012a8fda882a4f522cddc54e2d6ba4ec4f8c2a0d6d02cf5e81df",
+            "assemblySha256": "a54065f9c3c021909bce1a69a8870d4dd8ea4e52b5525209fb617086d0af8294",
+            "objectSha256": "296a4c40b6570950a3f3d0a04b3a700a8e109d170b673a69688cd319283e5c2d",
             "program": "SingleSource/UnitTests/2003-07-06-IntOverflow.test",
             "reference": "PASS",
             "native": "FAIL",
@@ -4297,16 +4573,11 @@
             "unit": "build/SingleSource/UnitTests/CMakeFiles/2003-07-09-LoadShorts.dir/2003-07-09-LoadShorts.c.o",
             "source": "SingleSource/UnitTests/2003-07-09-LoadShorts.c",
             "assemblerFlags": [],
-            "omittedFlags": [
-              "-Werror=date-time",
-              "-Wno-implicit-function-declaration",
-              "-Wno-implicit-int",
-              "-w"
-            ],
+            "omittedFlags": [],
             "outcome": "assembled",
             "assembly": "/Users/onehrxn/dev/30days/c30/.build/ladder/llvm-test-suite/evocc-objects/build/SingleSource/UnitTests/CMakeFiles/2003-07-09-LoadShorts.dir/2003-07-09-LoadShorts.c.s",
-            "assemblySha256": "71e83b8bf57e66c4e08bc3d259d593e06318e82615f55c7528b6424edbed96c2",
-            "objectSha256": "b85aaa0c651d4f16a9f4177228c38ec75c9bab124a3db6b8d9b9505d75df6485",
+            "assemblySha256": "3f180b4750d0111e14d02d21fabca4b7a9c8b1b91aa0e2c25945b4efe425e866",
+            "objectSha256": "684e78f0d79395ec94dcdf0184a248fb3ebfaa1d03577ee2aefb699307fa3f0a",
             "program": "SingleSource/UnitTests/2003-07-09-LoadShorts.test",
             "reference": "PASS",
             "native": "FAIL",
@@ -4337,16 +4608,11 @@
             "unit": "build/SingleSource/UnitTests/CMakeFiles/2003-07-09-SignedArgs.dir/2003-07-09-SignedArgs.c.o",
             "source": "SingleSource/UnitTests/2003-07-09-SignedArgs.c",
             "assemblerFlags": [],
-            "omittedFlags": [
-              "-Werror=date-time",
-              "-Wno-implicit-function-declaration",
-              "-Wno-implicit-int",
-              "-w"
-            ],
+            "omittedFlags": [],
             "outcome": "assembled",
             "assembly": "/Users/onehrxn/dev/30days/c30/.build/ladder/llvm-test-suite/evocc-objects/build/SingleSource/UnitTests/CMakeFiles/2003-07-09-SignedArgs.dir/2003-07-09-SignedArgs.c.s",
-            "assemblySha256": "2126497dfb1f14a2a0d2c419a48e6e66bd73ec4ddbd08fa501eb198b4b9d7c11",
-            "objectSha256": "a89e3d3685205494018b25650b5bf6a766e1006e2f8307203748c0341b21ec90",
+            "assemblySha256": "8040abe70a044ed73d55f62247b07249ec4f7573e988b5107a74a5b3dc4b5f73",
+            "objectSha256": "346cf48edcd143a369d28d7efc19deacebfff2b5de34b82c9f3a5a47ba7b48d6",
             "program": "SingleSource/UnitTests/2003-07-09-SignedArgs.test",
             "reference": "PASS",
             "native": "FAIL",
@@ -4377,14 +4643,11 @@
             "unit": "build/SingleSource/UnitTests/SignlessTypes/CMakeFiles/shr.dir/shr.c.o",
             "source": "SingleSource/UnitTests/SignlessTypes/shr.c",
             "assemblerFlags": [],
-            "omittedFlags": [
-              "-Werror=date-time",
-              "-w"
-            ],
+            "omittedFlags": [],
             "outcome": "assembled",
             "assembly": "/Users/onehrxn/dev/30days/c30/.build/ladder/llvm-test-suite/evocc-objects/build/SingleSource/UnitTests/SignlessTypes/CMakeFiles/shr.dir/shr.c.s",
-            "assemblySha256": "a15684741e549e91de88c92064429b9141fec9698a2cb538617f5ae2df3700a0",
-            "objectSha256": "e79a66650e2a58fc0cf31ab334a852fa9ce669e364d2bf647a8d9c1db87e9113",
+            "assemblySha256": "2a0b7a1033a29ef15cd583521502ad80d8a935cfdd8206f5dc9265273f6c3612",
+            "objectSha256": "f0337ec83a8ea63e25431e14454fbba1d4bf216e7e52dacb5c8da442660ab316",
             "program": "SingleSource/UnitTests/SignlessTypes/shr.test",
             "reference": "PASS",
             "native": "FAIL",
@@ -4411,9 +4674,9 @@
           }
         ],
         "total": 1735,
-        "passed": 1039,
+        "passed": 1054,
         "kind": "programs",
-        "compiled": 1048,
+        "compiled": 1674,
         "excluded": 141,
         "adjustments": {
           "subject": [
@@ -4535,7 +4798,6 @@
             "build/SingleSource/UnitTests/HashRecognize/crc16.le.data32.reference_output": "../../../../SingleSource/UnitTests/HashRecognize/crc16.le.data32.reference_output",
             "build/SingleSource/UnitTests/HashRecognize/crc16.le.data8.reference_output": "../../../../SingleSource/UnitTests/HashRecognize/crc16.le.data8.reference_output",
             "build/SingleSource/UnitTests/HashRecognize/crc8.be.data16.reference_output": "../../../../SingleSource/UnitTests/HashRecognize/crc8.be.data16.reference_output",
-            "build/SingleSource/UnitTests/AArch64/acle-fmv-features.reference_output": "../../../../SingleSource/UnitTests/AArch64/acle-fmv-features.reference_output",
             "build/SingleSource/UnitTests/Vector/multiplies.reference_output": "../../../../SingleSource/UnitTests/Vector/multiplies.reference_output",
             "build/SingleSource/UnitTests/Vector/sumarray.reference_output": "../../../../SingleSource/UnitTests/Vector/sumarray.reference_output",
             "build/SingleSource/UnitTests/Vector/build2.reference_output": "../../../../SingleSource/UnitTests/Vector/build2.reference_output",
@@ -4684,42 +4946,24 @@
             "build/SingleSource/Regression/C/2003-06-16-InvalidInitializer.reference_output": "../../../../SingleSource/Regression/C/2003-06-16-InvalidInitializer.reference_output"
           },
           "omittedFlags": [
-            "-Werror=date-time",
-            "-Wformat-overflow=2",
-            "-Wno-error=incompatible-pointer-types",
-            "-Wno-implicit-function-declaration",
-            "-Wno-implicit-int",
-            "-Wno-int-conversion",
-            "-Wno-psabi",
-            "-Wno-return-type",
-            "-Wno-shift-overflow",
-            "-fexpensive-optimizations",
-            "-finput-charset=utf-8",
-            "-fno-builtin-abort",
-            "-fno-common",
-            "-fno-inline",
-            "-fno-ipa-cp",
-            "-fno-trapping-math",
-            "-fno-vect-cost-model",
-            "-ftree-vectorize",
-            "-w"
+            "--rtlib=compiler-rt"
           ]
         },
         "dispositions": {
-          "PASS": 1039,
-          "compiler-failure": 1,
-          "FP-deferred": 30,
-          "not-applicable": 664,
-          "oracle-unusable": 1
+          "PASS": 1054,
+          "compiler-failure": 11,
+          "FP-deferred": 3,
+          "not-applicable": 665,
+          "oracle-unusable": 2
         },
         "status": "INCOMPLETE",
-        "run": "20260927T085137Z",
-        "evidence": ".evidence/ladder/llvm-test-suite/20260927T085137Z"
+        "run": "20261025T114052Z",
+        "evidence": ".evidence/ladder/llvm-test-suite/20261025T114052Z"
       },
       "measurement": {
-        "run": "20261025T114050.806136Z",
-        "subject": "b2aae0dabc31de3520ee792d8104dc9303001045",
-        "driverSha256": "978a3771912d7b2eafe89228ff2cb3d3c0c996826b2b2875c4cb74932a655ce4"
+        "run": "20261027T110816.715722Z",
+        "subject": "c65f67235e16dc8fa480f6c99f883f7dbcc8e1b7",
+        "driverSha256": "ab0c90437192d6824ce884c71d80a028e1d785ae89a11fe58ecb0145d76de525"
       }
     },
     "jq": {
@@ -4749,9 +4993,9 @@
         "portableBuildSymlinks": {},
         "sysrootAdjustmentMeaning": {},
         "includeOrder": [
-          "-I/Users/onehrxn/dev/30days/c30/.build/case/ladder-sysroot/usr/lib/gcc/aarch64-linux-gnu/14/include",
-          "-I/Users/onehrxn/dev/30days/c30/.build/case/ladder-sysroot/usr/include/aarch64-linux-gnu",
-          "-I/Users/onehrxn/dev/30days/c30/.build/case/ladder-sysroot/usr/include"
+          "-isystem/Users/onehrxn/dev/30days/c30/.build/case/ladder-sysroot/usr/lib/gcc/aarch64-linux-gnu/14/include",
+          "-isystem/Users/onehrxn/dev/30days/c30/.build/case/ladder-sysroot/usr/include/aarch64-linux-gnu",
+          "-isystem/Users/onehrxn/dev/30days/c30/.build/case/ladder-sysroot/usr/include"
         ],
         "configure": "./configure CC=gcc-14 --disable-shared --disable-docs --with-oniguruma=builtin LDFLAGS=-no-pie",
         "subject": [
@@ -4910,18 +5154,18 @@
         ]
       },
       "status": "PASS",
-      "run": "20261025T115050Z",
-      "evidence": ".evidence/ladder/jq/20261025T115050Z",
+      "run": "20261027T121424Z",
+      "evidence": ".evidence/ladder/jq/20261027T121424Z",
       "receipt": "tests/contracts/ladder-jq-receipt.json",
       "command": [
         "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
         "-u",
         "/Users/onehrxn/dev/30days/c30/tools/ladder/jq.py",
         "--evocc",
-        "/Users/onehrxn/dev/30days/c30/target/frontend/release/evocc"
+        "/Users/onehrxn/dev/30days/c30/.build/frozen/08bf09bd/evocc-darwin"
       ],
       "exitCode": 0,
-      "seconds": 198.9,
+      "seconds": 195.4,
       "previous": {
         "rung": "E10",
         "note": "original make check with bundled Oniguruma; mixed-object ramp",
@@ -5110,13 +5354,13 @@
           ]
         },
         "status": "PASS",
-        "run": "20261025T045819Z",
-        "evidence": ".evidence/ladder/jq/20261025T045819Z"
+        "run": "20261025T115050Z",
+        "evidence": ".evidence/ladder/jq/20261025T115050Z"
       },
       "measurement": {
-        "run": "20261025T115050.649436Z",
-        "subject": "b2aae0dabc31de3520ee792d8104dc9303001045",
-        "driverSha256": "978a3771912d7b2eafe89228ff2cb3d3c0c996826b2b2875c4cb74932a655ce4"
+        "run": "20261027T110816.715722Z",
+        "subject": "c65f67235e16dc8fa480f6c99f883f7dbcc8e1b7",
+        "driverSha256": "ab0c90437192d6824ce884c71d80a028e1d785ae89a11fe58ecb0145d76de525"
       }
     },
     "lua": {
@@ -5146,9 +5390,9 @@
         "portableBuildSymlinks": {},
         "sysrootAdjustmentMeaning": {},
         "includeOrder": [
-          "-I/Users/onehrxn/dev/30days/c30/.build/case/ladder-sysroot/usr/lib/gcc/aarch64-linux-gnu/14/include",
-          "-I/Users/onehrxn/dev/30days/c30/.build/case/ladder-sysroot/usr/include/aarch64-linux-gnu",
-          "-I/Users/onehrxn/dev/30days/c30/.build/case/ladder-sysroot/usr/include"
+          "-isystem/Users/onehrxn/dev/30days/c30/.build/case/ladder-sysroot/usr/lib/gcc/aarch64-linux-gnu/14/include",
+          "-isystem/Users/onehrxn/dev/30days/c30/.build/case/ladder-sysroot/usr/include/aarch64-linux-gnu",
+          "-isystem/Users/onehrxn/dev/30days/c30/.build/case/ladder-sysroot/usr/include"
         ],
         "configure": "",
         "subject": [
@@ -5163,18 +5407,18 @@
         "omittedFlags": []
       },
       "status": "PASS",
-      "run": "20261025T115409Z",
-      "evidence": ".evidence/ladder/lua/20261025T115409Z",
+      "run": "20261027T121740Z",
+      "evidence": ".evidence/ladder/lua/20261027T121740Z",
       "receipt": "tests/contracts/ladder-lua-receipt.json",
       "command": [
         "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
         "-u",
         "/Users/onehrxn/dev/30days/c30/tools/ladder/lua.py",
         "--evocc",
-        "/Users/onehrxn/dev/30days/c30/target/frontend/release/evocc"
+        "/Users/onehrxn/dev/30days/c30/.build/frozen/08bf09bd/evocc-darwin"
       ],
       "exitCode": 0,
-      "seconds": 55.8,
+      "seconds": 52.3,
       "previous": {
         "rung": "E11",
         "note": "matching official all.lua without soft skips; mixed-object ramp",
@@ -5202,9 +5446,9 @@
           "portableBuildSymlinks": {},
           "sysrootAdjustmentMeaning": {},
           "includeOrder": [
-            "-I/Users/onehrxn/dev/30days/c30/.build/k7-coverage/case/ladder-sysroot/usr/lib/gcc/aarch64-linux-gnu/14/include",
-            "-I/Users/onehrxn/dev/30days/c30/.build/k7-coverage/case/ladder-sysroot/usr/include/aarch64-linux-gnu",
-            "-I/Users/onehrxn/dev/30days/c30/.build/k7-coverage/case/ladder-sysroot/usr/include"
+            "-I/Users/onehrxn/dev/30days/c30/.build/case/ladder-sysroot/usr/lib/gcc/aarch64-linux-gnu/14/include",
+            "-I/Users/onehrxn/dev/30days/c30/.build/case/ladder-sysroot/usr/include/aarch64-linux-gnu",
+            "-I/Users/onehrxn/dev/30days/c30/.build/case/ladder-sysroot/usr/include"
           ],
           "configure": "",
           "subject": [
@@ -5216,19 +5460,16 @@
           ],
           "buildCommand": "(make linux CC=\"gcc-14 -std=gnu99\" MYLDFLAGS=-no-pie -j2 && make -C ../lua-5.5.1-tests/libs CC=gcc-14 LUA_DIR=../../lua-5.5.1/src)",
           "optionsTheDriverRejects": [],
-          "omittedFlags": [
-            "-Wall",
-            "-Wextra"
-          ]
+          "omittedFlags": []
         },
         "status": "PASS",
-        "run": "20260919T231634Z",
-        "evidence": ".evidence/ladder/lua/20260919T231634Z"
+        "run": "20261025T115409Z",
+        "evidence": ".evidence/ladder/lua/20261025T115409Z"
       },
       "measurement": {
-        "run": "20261025T115409.740449Z",
-        "subject": "b2aae0dabc31de3520ee792d8104dc9303001045",
-        "driverSha256": "978a3771912d7b2eafe89228ff2cb3d3c0c996826b2b2875c4cb74932a655ce4"
+        "run": "20261027T110816.715722Z",
+        "subject": "c65f67235e16dc8fa480f6c99f883f7dbcc8e1b7",
+        "driverSha256": "ab0c90437192d6824ce884c71d80a028e1d785ae89a11fe58ecb0145d76de525"
       }
     },
     "sqlite": {
@@ -5261,9 +5502,9 @@
         "portableBuildSymlinks": {},
         "sysrootAdjustmentMeaning": {},
         "includeOrder": [
-          "-I/Users/onehrxn/dev/30days/c30/.build/case/ladder-sysroot/usr/lib/gcc/aarch64-linux-gnu/14/include",
-          "-I/Users/onehrxn/dev/30days/c30/.build/case/ladder-sysroot/usr/include/aarch64-linux-gnu",
-          "-I/Users/onehrxn/dev/30days/c30/.build/case/ladder-sysroot/usr/include"
+          "-isystem/Users/onehrxn/dev/30days/c30/.build/case/ladder-sysroot/usr/lib/gcc/aarch64-linux-gnu/14/include",
+          "-isystem/Users/onehrxn/dev/30days/c30/.build/case/ladder-sysroot/usr/include/aarch64-linux-gnu",
+          "-isystem/Users/onehrxn/dev/30days/c30/.build/case/ladder-sysroot/usr/include"
         ],
         "configure": "./configure CC=gcc-14 --with-tcl=/work/sqlite/tcl-install/lib --disable-shared LDFLAGS=-no-pie",
         "subject": [
@@ -5289,18 +5530,18 @@
         ]
       },
       "status": "PASS",
-      "run": "20261025T115838Z",
-      "evidence": ".evidence/ladder/sqlite/20261025T115838Z",
+      "run": "20261027T121832Z",
+      "evidence": ".evidence/ladder/sqlite/20261027T121832Z",
       "receipt": "tests/contracts/ladder-sqlite-receipt.json",
       "command": [
         "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
         "-u",
         "/Users/onehrxn/dev/30days/c30/tools/ladder/sqlite.py",
         "--evocc",
-        "/Users/onehrxn/dev/30days/c30/target/frontend/release/evocc"
+        "/Users/onehrxn/dev/30days/c30/.build/frozen/08bf09bd/evocc-darwin"
       ],
       "exitCode": 0,
-      "seconds": 179.2,
+      "seconds": 221.7,
       "previous": {
         "rung": "E12",
         "note": "public Tcl veryquick suite against installed fixture objects; mixed-object ramp",
@@ -5331,9 +5572,9 @@
           "portableBuildSymlinks": {},
           "sysrootAdjustmentMeaning": {},
           "includeOrder": [
-            "-I/Users/onehrxn/dev/30days/c30/.build/k7-coverage/case/ladder-sysroot/usr/lib/gcc/aarch64-linux-gnu/14/include",
-            "-I/Users/onehrxn/dev/30days/c30/.build/k7-coverage/case/ladder-sysroot/usr/include/aarch64-linux-gnu",
-            "-I/Users/onehrxn/dev/30days/c30/.build/k7-coverage/case/ladder-sysroot/usr/include"
+            "-I/Users/onehrxn/dev/30days/c30/.build/case/ladder-sysroot/usr/lib/gcc/aarch64-linux-gnu/14/include",
+            "-I/Users/onehrxn/dev/30days/c30/.build/case/ladder-sysroot/usr/include/aarch64-linux-gnu",
+            "-I/Users/onehrxn/dev/30days/c30/.build/case/ladder-sysroot/usr/include"
           ],
           "configure": "./configure CC=gcc-14 --with-tcl=/work/sqlite/tcl-install/lib --disable-shared LDFLAGS=-no-pie",
           "subject": [
@@ -5359,13 +5600,13 @@
           ]
         },
         "status": "PASS",
-        "run": "20260919T231713Z",
-        "evidence": ".evidence/ladder/sqlite/20260919T231713Z"
+        "run": "20261025T115838Z",
+        "evidence": ".evidence/ladder/sqlite/20261025T115838Z"
       },
       "measurement": {
-        "run": "20261025T115837.921429Z",
-        "subject": "b2aae0dabc31de3520ee792d8104dc9303001045",
-        "driverSha256": "978a3771912d7b2eafe89228ff2cb3d3c0c996826b2b2875c4cb74932a655ce4"
+        "run": "20261027T110816.715722Z",
+        "subject": "c65f67235e16dc8fa480f6c99f883f7dbcc8e1b7",
+        "driverSha256": "ab0c90437192d6824ce884c71d80a028e1d785ae89a11fe58ecb0145d76de525"
       }
     },
     "kernel-full": {
