@@ -46,10 +46,11 @@ Compile it with proof:
 
 ```console
 $ evo prove abs.c -o abs.s
-checked from typed Core source to final assembly text: /var/folders/q3/pl6qzbdd491g0ydch_kc2v4c0000gn/T/evo-proof-19627-1791318427250745000/checked/record.json
+checked from typed Core source to final assembly text: $TMPDIR/evo-proof-19627-1791318427250745000/checked/record.json
 ```
 
-The temporary path changes on each run. `abs.s` holds the checked assembly.
+`$TMPDIR` stands for the temporary directory of the host. The temporary path
+changes on each run. `abs.s` holds the checked assembly.
 The command selects all defined functions by default. Repeat `--entry NAME`
 to select entries explicitly; the proof contract still requires every output function.
 It uses Linux AArch64, `-O0` and `-fno-builtin`. Put `evoir-sem` next to `evo`,
@@ -57,7 +58,7 @@ or set `EVOCC_PROOF_CHECKER` to its path. Failure keeps and names the proof dire
 For the commands below, link `proof-abs` to the `checked` directory of your run:
 
 ```console
-$ ln -s /var/folders/q3/pl6qzbdd491g0ydch_kc2v4c0000gn/T/evo-proof-19627-1791318427250745000/checked proof-abs
+$ ln -s $TMPDIR/evo-proof-19627-1791318427250745000/checked proof-abs
 ```
 
 The assembly uses `subs` and `b.vs`. For `a` equal to `INT_MIN`, `-a` overflows, so `abs(INT_MIN)`

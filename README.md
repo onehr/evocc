@@ -11,7 +11,7 @@
 
 <p align="center">
   <a href="https://github.com/onehr/evocc/actions/workflows/ci.yml"><img src="https://github.com/onehr/evocc/actions/workflows/ci.yml/badge.svg" alt="CI status"></a>
-  <a href="https://github.com/onehr/evocc/releases"><img src="https://img.shields.io/github/v/release/onehr/evocc?include_prereleases&label=release" alt="Latest release"></a>
+  <a href="https://github.com/onehr/evocc/releases"><img src="https://img.shields.io/github/v/release/onehr/evocc?label=release" alt="Latest release"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue" alt="Apache-2.0 license"></a>
 </p>
 

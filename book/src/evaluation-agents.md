@@ -266,9 +266,9 @@ Use a new output directory outside the repo. The owner supplies the credential.
 A dry run prints the plan; it does not validate execution prerequisites.
 
 ```sh
-python3 tools/experiment/repair.py --out /private/tmp/repair-replay --dry-run
-python3 tools/experiment/repair.py --corpus-tag agent-repair-corpus-2 --out /private/tmp/repair-replay
-python3 tools/experiment/report.py /private/tmp/repair-replay/receipt.json
+python3 tools/experiment/repair.py --out /tmp/repair-replay --dry-run
+python3 tools/experiment/repair.py --corpus-tag agent-repair-corpus-2 --out /tmp/repair-replay
+python3 tools/experiment/report.py /tmp/repair-replay/receipt.json
 ```
 
 We invite reruns with `--model`. First update `models.txt` and the protocol,
@@ -594,9 +594,9 @@ sealed image and a provider key with enough limit for the full plan.
 
 ```sh
 git checkout agent-repair-experiment-2
-python3 tools/experiment/repair.py --protocol tools/experiment/protocol-2.json --dry-run --out /private/tmp/repair-2-replay
-python3 tools/experiment/repair.py --protocol tools/experiment/protocol-2.json --corpus-tag agent-repair-experiment-2 --parallel 6 --out /private/tmp/repair-2-replay
-python3 tools/experiment/report.py /private/tmp/repair-2-replay/receipt.json
+python3 tools/experiment/repair.py --protocol tools/experiment/protocol-2.json --dry-run --out /tmp/repair-2-replay
+python3 tools/experiment/repair.py --protocol tools/experiment/protocol-2.json --corpus-tag agent-repair-experiment-2 --parallel 6 --out /tmp/repair-2-replay
+python3 tools/experiment/report.py /tmp/repair-2-replay/receipt.json
 ```
 
 The tagged harness does not stop on an HTTP 403 key refusal. Watch the key

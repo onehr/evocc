@@ -1,6 +1,6 @@
 # EvoMIR Specification
 
-**Revision 1.14.0** | **Pinned ground truth** | No common symbols under -fno-common on 2026-10-27
+**Revision 1.14.1** | **Pinned ground truth** | Local probe records marked as unpublished on 2026-10-27
 
 ## Status and scope
 
@@ -14,7 +14,8 @@ results.
 normative; "must" states a requirement and "can" a permission. Paragraphs
 that start with "Example" or "Informative", and references to tests,
 fixtures, probes and measurements, are informative: they identify evidence
-and add no requirement.
+and add no requirement. A path under `.evidence/` names a local probe record.
+The repository does not publish these records.
 
 **Formal semantics of the checked subset.** The Lean checkers of Section 9.3
 accept the checked subset `core-v1` (`spec/verification.md`, Section 2):
@@ -2045,6 +2046,11 @@ and the checked UB-check profile; each exporter refuses other forms.
 | `core-asm-v1` | `crates/evocc-mir/src/asm_ast.rs` (`evo-asm-ast`) | `lean/EvoIR/Asm/Reader.lean` | The assembly AST and the frame hints |
 
 ## Revision
+
+**Revision 1.14.1, 2026-10-27.** The paragraph on normative and informative
+text states that a path under `.evidence/` names a local probe record that the
+repository does not publish. The probe notes keep their paths. No rule,
+table or emitted byte changes.
 
 **Revision 1.14.0, 2026-10-27.** Section 6.14 admits `-fno-common`, which
 names the existing emission of Section 8.2: a tentative definition is a
