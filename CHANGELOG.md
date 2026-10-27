@@ -272,6 +272,11 @@ The first public version.
   transfer table has a 60 s SAT timeout, and its rows moved out of `Proofs/Transfer.lean` into
   three modules that `evoir-sem` does not import. A clean `lake build` now peaks at 8.3 GiB
   instead of 17.2 GiB, and a clean `lake build evoir-sem` at 3.9 GiB.
+- The Rust job of `ci.yml` builds what its tests need on a clean runner. A new headers job
+  exports the Linux headers of the sealed image, as `release.yml` does. The Rust job unpacks
+  them and builds `evoir-sem` before `cargo test`. It builds the tests with line tables only,
+  because full debug information needs more than 21 GB of disk. The 37 tests that need the macOS
+  SDK or Apple clang run on the macOS job only. No hosted run has passed yet (see Known limits).
 - `--interpret-c-hir` and `--interpret-evoir` run a `main(int argc, char *argv[])`, as `evo run`
   does: with no program arguments, `argc` is 1 and `argv[0]` is the source path. Before, both
   refused it with E3007.
@@ -396,6 +401,11 @@ The first public version.
 
 ### Results at this version
 
+<!-- after-b10: the results of the frozen acceptance go here, each with its date and the frozen
+compiler 08bf09bd: the kernel-direct receipt, the 15 application lanes and Doom of b10, the size
+measurement, the final gate of t05 and the two archives. Then date or replace the older results
+below, and remove this comment. -->
+
 The gate result below was recorded on 2026-10-20 and the kernel rebuild on 2026-10-19. The other
 results were recorded between 2026-09-13 and 2026-10-07 and were not run again on the final
 commit. [docs/evidence.md](docs/evidence.md) keeps their limits.
@@ -427,3 +437,40 @@ commit. [docs/evidence.md](docs/evidence.md) keeps their limits.
 - Original CMake builds on macOS pass cJSON 1.7.19's 22 tests and zlib 1.3.2's 16 default
   CTest commands. The zlib coverage-summary command reports a missing .gcno file, but Apple's
   gcov returns 0. Its passing exit does not establish coverage support. No test was excluded.
+
+### Known limits
+
+These items are open in this version. Each line names its entry in [TODO.md](TODO.md).
+
+- Kernel runtime acceptance is open: the complete paired kselftest run (K13), the complete
+  expanded KUnit run (K14), the diagnoses K01 to K04 and K10 to K12, KUnit behind the common bench
+  entry point (T02) and the binding of the final kernel claims to the final composition (T04).
+- The EvoIR execution model judges the alignment of an access by the declared alignment of its
+  object, not by its concrete address. Two GCC torture programs therefore report E3012 although
+  their native accesses are aligned (D33).
+- Values that cross a block join move through stack slots. Two transport reductions still run
+  more than twice the instructions of GCC 14, and the original K02 workload times out (N08).
+- The leaf-helper reduction still runs more than twice the instructions of GCC 14 (32 against 9
+  per call), and the code size of the whole ladder has not been measured (N09).
+- Return signing for `-mbranch-protection=pac-ret` has no kernel tracing acceptance: ftrace and
+  kprobes have not run (N11).
+- Floating `_Atomic` updates, accesses of a whole atomic record and 16-byte atomic objects stay
+  refused with E2702 (L11a).
+- In agent experiment P17, three failures spent the response budget after a correct overflow
+  repair. A separate response limit for the overflow feedback is not tested (P17a).
+- The check feedback of the agent interface is long. A shorter form has not been measured (P22).
+- No hosted run of `ci.yml`, `nightly.yml` or `release.yml` has passed. GitHub refuses the jobs
+  because of the billing state of the account (R05m).
+- A clean hosted runner fails seven tests (R05m). Four need inputs that Git does not track:
+  `evo_cli.rs`, `returns_twice_calls.rs` and `interpreter_main_arguments.rs` (`.build/ladder/` and
+  `.evidence/`), and `n03f_frame_native.rs` on macOS (`.evidence/codegen/n03f/`). Three need the
+  macOS 26 SDK: `clang_extension_refusals.rs`, `darwin_availability.rs` and
+  `fixed_enum_underlying_types.rs`.
+- Only a direct call of an old-style definition takes the default argument promotions. A call
+  through a function pointer object keeps the signature check E3019, and `(*f)(...)` and
+  `(&f)(...)` keep the prototype check (N09, open item K4 of the old-style call repair).
+- A call without a prototype of a function whose definition has a prototype is undefined
+  behavior, and EvoCC does not report it (N09, open item K6 of the old-style call repair).
+
+<!-- after-b10: add each old PASS program that b10 still loses, with its cause and its TODO ID
+(REVIEW item 7.3), and each new limit that the frozen acceptance finds. -->
