@@ -138,7 +138,7 @@ was found in the read-only process check at this planning checkpoint.
 | APPLICATION | L11a, P17a, P22 | P21 completed 144 registered sessions: P1-P3 held; P4 and the earlier control penalty did not. P22's pilot of 2026-10-20 failed two go criteria on a false escape record. P01 through P20 retain their completed scope: P20 had no repair-count advantage; P18 stopped at the provider key limit. Existing application tasks keep separate exits. |
 | REVIEW |  | No rule decision is open. The 2026-10-13 decisions for K07, L03 to L10 and L11a to L11c are in docs/archive/notebook/rules-20261013/DECISIONS.md. |
 | AUDIT | D33 | D24 to D28 closed the follow-ups of D22, D23, L04 and L05; D33 changes the alignment model. D01-D15 are closed in their recorded scope. Keep the T03 audit boundary; kernel/application acceptance and deferred proof domains remain separate. |
-| ACCEPTANCE | T04, T02, K13, K14, R05, R05a, R05k | On 2026-10-27 the compiler of `08bf09bd` passed the frozen acceptance (B10 and the direct Kbuild replay), and the public documents cite its receipts. Next: the final gate T05 on a clean tree, both archives (R05a), then the owner's R05k. |
+| ACCEPTANCE | T04, T02, K13, K14, R05, R05k | On 2026-10-27 the compiler of `08bf09bd` passed the frozen acceptance (B10 and the direct Kbuild replay), the final gate T05 passed, and both archives were built (R05a). Next: the owner's R05k: the dating commit, the rebuild of both archives from it, the tag and the publication. |
 | LATER | R05m, R01, R02, R03, R03a, R03b, R03c, R03d, R03e, R03f, R03g, R03h, R04, R04a, R04b, R04c, R04d, R04e, N06, N06a, N06b, N06c, N06d, N06e | S1–S5 and R02e first slice are closed; S6 stays with R01's two G2 builds. R03 V1 negative-admission study is frozen; positive Q3 remains unachieved and R03a/b/c/d NOT_ADMITTED, R03e deferred. No VM timing or audit expansion; x86-64 and release stay separate. The bounded N01–N05/N07 batch is dispositioned, not a complete optimizing compiler: N03b/N03e preflights are negative, N07 E3 has zero SMT proofs, and all five library size targets remain missed. N03d C5 has size/correctness evidence but three compile-cost misses; C2/C5 remain outside the admitted cumulative configuration, and T1's misses stay frozen. All new defaults remain OFF. Retain N02's 70 admitted/187 opaque inputs and source-bridge mismatch. Broader inlining, mid-level and allocator work need newly scoped designs; no paused R activity is automatically reopened. |
 <!-- closure-queues:end -->
 
@@ -4629,11 +4629,21 @@ Reopening any of them needs a new owner decision after the N03 slices land.
   run measured again keeps its date. The three games (2026-09-29) were not built
   again, because their sources and data are not retained offline.
 
-  - [ ] **R05a — Build and check the Linux archive** — `OPEN`, P1.
-    No Linux archive has been built. Exit: `tools/release.sh --target
-    aarch64-unknown-linux-gnu --with-lean` passes the smoke steps of the
-    release workflow and the static-link check, and
-    `tools/tests/test_sysroot.py` passes on that archive.
+  - [x] **R05a — Build and check the Linux archive** — `DONE`, P1, 2026-10-27.
+    Exit: `tools/release.sh --target aarch64-unknown-linux-gnu --with-lean`
+    passes the smoke steps of the release workflow and the static-link check,
+    and `tools/tests/test_sysroot.py` passes on that archive.
+    Closed on 2026-10-27 at `9e83b76a`. Its compiler source is that of the
+    freeze `08bf09bd`: the trees `crates`, `vendor` and `lean` and the three
+    manifests are equal. A fresh checkout in a `debian:13-slim` AArch64
+    container with no network built `evocc-0.1.0-aarch64-unknown-linux-gnu.tar.gz`
+    (SHA-256 `5a86e3fb…356e`). The smoke steps of `release.yml` pass. `evocc`
+    and `evocc-checker` are static; `evoir-sem` links glibc. The nine tests of
+    `test_sysroot.py` pass with `EVOCC_RELEASE_ARCHIVE`. The archive's `evocc`
+    builds and runs the programs of the book with the bundled sysroot and with
+    `--sysroot=/`. The cross object of the macOS archive links and runs there.
+    Two macOS builds at two paths gave one archive (`8a4ed58a…f907`). One
+    `SHA256SUMS` covers both archives.
   - [x] **R05b — Ship the license texts of the runtime code in the binaries** — `DONE`, P1, 2026-10-14.
     Exit: the archives hold the MIT texts of musl and libuv and the LGPL-3.0
     and GPL-3.0 texts for GMP, and `tools/release.sh` refuses an archive

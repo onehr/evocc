@@ -411,7 +411,13 @@ keeps their limits.
   textual grammar, both frozen layout corpora (128 and 22 cases), 13 isolated offline replays,
   the Lean gate, the generated pages, the relative links and the book build.
 
-<!-- after-release-archives: the two archives and SHA256SUMS go here, with their date. -->
+- On 2026-10-27 both release archives were built from the clean commit `9e83b76a`, whose
+  compiler source is that of `08bf09bd`: `evocc-0.1.0-aarch64-apple-darwin.tar.gz` on macOS 26.6,
+  and `evocc-0.1.0-aarch64-unknown-linux-gnu.tar.gz` in an AArch64 Debian 13 container with no
+  network. Both pass the smoke steps of `release.yml`. On Linux, `evocc` and `evocc-checker` are
+  static, and `tools/tests/test_sysroot.py` passes on the archive. A second macOS build from a
+  checkout at another path gave the same bytes. The release assets are built again from the
+  dated commit, and their `SHA256SUMS` is published with them.
 
 - On the clean tree of `08bf09bd` the full offline workspace gate passes 522 suites and 3,928
   tests with zero failures; 62 ignored tests run only on request, such as the sealed Linux lanes.
