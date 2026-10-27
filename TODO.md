@@ -6863,6 +6863,17 @@ plan, RED, flag, gates, one-page note, TODO update in the same commit.
   0 in the sealed GCC 14 image with GCC 14's output
   (`selected_contract_options.rs`). The `driver_cc.rs` warning test now
   uses `-finstrument-functions` as its unsupported option.
+  October 27 permission-option repair: both drivers accept
+  `-fexpensive-optimizations`, `-ftree-vectorize`, `-fno-vect-cost-model`,
+  `-ftrapping-math` and `-fno-trapping-math` on both targets with no change
+  of code. On Linux a final `-fno-trapping-math` defines
+  `__NO_TRAPPING_MATH__`, as in GCC 14; Darwin defines nothing, as Apple
+  clang does not. The fast-math options and `-Ofast` keep their rule.
+  Apple clang warns (`-Wignored-optimization-argument`) for
+  `-fexpensive-optimizations` and `-fno-vect-cost-model` and fails with
+  `-Werror`; EvoCC stays silent. With their original arguments, LLVM
+  `pr68381`, `pr68532` and `compare-fp-3` exit 0 in the sealed GCC 14 image
+  with GCC 14's output (`permission_only_options.rs`).
 
 - [x] **N10 — Keep one-word records and small arrays in registers** — `DONE`, P1, 2026-10-19.
   `pte_t` and `pmd_t` values live in memory: zero-filled, copied from slot to

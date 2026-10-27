@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 2.35.0** | **Pinned ground truth** | Four GCC driver options on 2026-10-27
+**Revision 2.36.0** | **Pinned ground truth** | Options that only permit a transform on 2026-10-27
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract of the parser, the C lowering, equality saturation,
@@ -7782,6 +7782,9 @@ actions, whatever their position:
 - `-mcmodel=tiny` uses short PC-relative symbol addressing, nullable GOT
   references included. Requested unwind tables describe the actual frame, saved
   registers and return-address signing state.
+- On Linux, `__NO_TRAPPING_MATH__=1` is defined when the last of
+  `-ftrapping-math` and `-fno-trapping-math` is `-fno-trapping-math`, as in
+  GCC 14. Darwin defines no such macro, as Apple clang does not.
 
 **Options that select a contract.** Both command lines accept these options
 on both targets, in any position:
@@ -7799,9 +7802,15 @@ on both targets, in any position:
   available.
 - `-fno-inline` limits the substitution of 10.1.9 to `always_inline`
   callees. `-finline` stays unsupported.
+- `-fexpensive-optimizations`, `-ftree-vectorize`, `-fno-vect-cost-model` and
+  `-fno-trapping-math` only permit transforms that EvoCC never makes, and
+  `-ftrapping-math` names the default contract, so none of them changes code.
+  `-ffast-math`, `-ffinite-math-only`, `-funsafe-math-optimizations` and
+  `-Ofast` keep their refusals.
 
 GCC 14 accepts these options. Apple clang refuses `-finput-charset=utf8`
-without the hyphen.
+without the hyphen. It also warns that `-fexpensive-optimizations` and
+`-fno-vect-cost-model` are not supported, and fails with `-Werror`.
 
 **Dynamic macros.** `__FILE__`, `__LINE__`, `__BASE_FILE__`, `__DATE__`,
 `__TIME__` as ISO C; `__COUNTER__` expands to `0`, `1`, `2`, ... per expansion
@@ -9044,6 +9053,14 @@ to the signature spelling.
 ---
 
 ## Revision
+
+**Revision 2.36.0, 2026-10-27.** The driver option text accepts
+`-fexpensive-optimizations`, `-ftree-vectorize`, `-fno-vect-cost-model`,
+`-ftrapping-math` and `-fno-trapping-math` on both targets with no change of
+code. On Linux, a final `-fno-trapping-math` defines `__NO_TRAPPING_MATH__`,
+as in GCC 14; Darwin defines nothing. The fast-math options and `-Ofast`
+keep their refusals. No EvoIR operation, registry or proved Core domain
+changes.
 
 **Revision 2.35.0, 2026-10-27.** The driver option text accepts
 `-fno-common`, `-finput-charset=` with a UTF-8 spelling, `-fno-builtin-NAME`

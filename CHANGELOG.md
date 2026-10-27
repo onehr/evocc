@@ -9,6 +9,10 @@ The first public version.
 
 ### Added
 
+- Both drivers accept `-fexpensive-optimizations`, `-ftree-vectorize`, `-fno-vect-cost-model`,
+  `-ftrapping-math` and `-fno-trapping-math` with no change of code: they only permit transforms
+  that EvoCC does not make. On Linux, a final `-fno-trapping-math` defines `__NO_TRAPPING_MATH__`,
+  as in GCC 14. The fast-math options and `-Ofast` stay refused.
 - Both drivers accept `-fno-common` and `-finput-charset=utf-8` (also `utf8`, in any letter
   case), which name existing contracts. `-fno-builtin-NAME` disables the recognition of one
   library name, and `-fno-inline` substitutes only `always_inline` functions, as in GCC 14.

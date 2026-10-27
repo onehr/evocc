@@ -183,6 +183,8 @@ struct DriverOptions {
     debug_types: bool,
     signed_wrapping: bool,
     dynamic_rounding: bool,
+    /// The last of `-ftrapping-math` (the default) and `-fno-trapping-math`.
+    trapping_math: bool,
     standard_builtins: bool,
     /// `-fno-builtin-NAME`: the names stay disabled after `-fbuiltin`.
     disabled_builtins: std::collections::BTreeSet<String>,
@@ -612,6 +614,7 @@ fn parse_options(args: &[String], lenient: bool) -> Result<DriverOptions, String
     let mut debug_types = false;
     let mut signed_wrapping = false;
     let mut dynamic_rounding = false;
+    let mut trapping_math = true;
     let mut standard_builtins = true;
     let mut disabled_builtins = std::collections::BTreeSet::new();
     let mut optional_inlining = true;
@@ -854,6 +857,12 @@ fn parse_options(args: &[String], lenient: bool) -> Result<DriverOptions, String
             // options select the existing contract on both targets. Explicit
             // vector operations stay as written.
             "-fno-tree-vectorize" | "-fno-tree-loop-vectorize" | "-fno-tree-slp-vectorize" => {}
+            // These options only permit transforms that EvoCC never makes, so
+            // its code meets each of them on both targets. `-ftrapping-math`
+            // is the default; the last trapping option selects the macro.
+            "-fexpensive-optimizations" | "-ftree-vectorize" | "-fno-vect-cost-model" => {}
+            "-ftrapping-math" => trapping_math = true,
+            "-fno-trapping-math" => trapping_math = false,
             // x18 is reserved and never assigned on either target (EvoMIR
             // Section 2.5), so generated code already keeps it fixed. Other
             // `-ffixed-` registers stay unsupported.
@@ -1298,6 +1307,7 @@ fn parse_options(args: &[String], lenient: bool) -> Result<DriverOptions, String
         debug_types,
         signed_wrapping,
         dynamic_rounding,
+        trapping_math,
         standard_builtins,
         disabled_builtins,
         optional_inlining,
@@ -1515,6 +1525,13 @@ fn configured_preprocessor(options: &DriverOptions) -> Result<Preprocessor, Stri
         ("__NO_INLINE__", options.optimization == 0, "1"),
         ("__SSP_STRONG__", options.stack_protector, "3"),
         ("_REENTRANT", options.pthread, "1"),
+        // GCC 14 defines it after a final `-fno-trapping-math`; Apple clang
+        // defines no such macro.
+        (
+            "__NO_TRAPPING_MATH__",
+            !options.trapping_math && !options.target.is_darwin(),
+            "1",
+        ),
         // ACLE: bit 0 is the A key, bit 2 protects leaf functions.
         (
             "__ARM_FEATURE_PAC_DEFAULT",

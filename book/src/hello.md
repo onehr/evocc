@@ -377,6 +377,7 @@ the `evo fix` command uses `-Wall --cap-lints=warn` to collect repair candidates
 | `-g` | For `aarch64-unknown-linux-gnu`, write debug information about C types (DWARF). EvoCC does not write line tables yet. For `aarch64-apple-darwin`, `-g` has no effect. |
 | An unknown `-f` or `-m` option | EvoCC prints one warning and continues. `-Werror` makes this an error so build-system probes do not report unsupported features as available. `-w` turns the warning off. |
 | `-fstack-protector`, `-fstack-protector-strong` | Both enable EvoCC's existing strong stack-protection policy. `-fno-stack-protector` disables it. |
+| `-ftree-vectorize`, `-fno-tree-vectorize`, `-fno-tree-loop-vectorize`, `-fno-tree-slp-vectorize`, `-fexpensive-optimizations`, `-fno-vect-cost-model`, `-ftrapping-math`, `-fno-trapping-math` | EvoCC accepts them with no warning. They only permit or forbid transforms that EvoCC does not make, so the code does not change. On Linux, a final `-fno-trapping-math` defines `__NO_TRAPPING_MATH__`, as in GCC 14. |
 | `-coverage`, `--coverage`, `-fprofile-arcs`, `-ftest-coverage` | Print the unsupported-option warning; `-Werror` makes it an error and `-w` turns it off. No instrumentation or `.gcno`/`.gcda` files are produced. |
 | `--version`, `-dumpmachine`, `--help` | Print the version and the target, the target only, or a summary of the options. |
 

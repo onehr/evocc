@@ -1,6 +1,6 @@
 # EvoMIR Specification
 
-**Revision 1.14.1** | **Pinned ground truth** | Local probe records marked as unpublished on 2026-10-27
+**Revision 1.15.0** | **Pinned ground truth** | Options that only permit a transform on 2026-10-27
 
 ## Status and scope
 
@@ -1278,22 +1278,26 @@ permits omission of an unnecessary leaf record. The independent
 `-mno-omit-leaf-frame-pointer` request prevents that omission. These options name
 existing behavior: `-fno-optimize-sibling-calls`, `-fno-align-functions`,
 `-fno-align-jumps`, `-fno-align-labels`, `-fno-align-loops`,
-`-fno-prefetch-loop-arrays`, `-fno-tree-ch` and
-`-fno-tree-loop-distribute-patterns` forbid transformations and padding that
-the backend does not perform; `-fno-common` names the zero-filled definition
-of a tentative definition (Section 8.2), as emission makes no common symbol;
-`-fira-region=one`, `-fira-hoist-pressure` and
+`-fno-prefetch-loop-arrays`, `-fno-tree-ch`,
+`-fno-tree-loop-distribute-patterns`, `-fno-tree-vectorize`,
+`-fno-tree-loop-vectorize` and `-fno-tree-slp-vectorize` forbid
+transformations and padding that the backend does not perform;
+`-fexpensive-optimizations`, `-ftree-vectorize`, `-fno-vect-cost-model` and
+`-fno-trapping-math` only permit transformations that no part of EvoCC
+performs, and `-ftrapping-math` names the default; `-fno-common` names the
+zero-filled definition of a tentative definition (Section 8.2), as emission
+makes no common symbol; `-fira-region=one`, `-fira-hoist-pressure` and
 `-freorder-blocks-algorithm=simple` name one whole-function allocation, no
 hoisting pass and block placement in allocated order. They change no
 semantics, ABI or output, and a future pass must honor them. Other values,
-positive transformation options, `-fcommon` and `-Ofast` are refused. An
-option that changes the ABI and that the backend does not implement is
-refused at the option on every command line, also under `-w` and
-`--cap-lints=allow`: `-fpack-struct` and `-fpack-struct=N`, `-fshort-enums`,
-`-mbig-endian`, an `-mabi=` value other than `lp64`, an `-ffixed-` register
-other than `x18`, and `-fcall-used-` and `-fcall-saved-`. `-mabi=lp64` names
-the default ABI and `-ffixed-x18` a register that the backend never uses
-(Section 6.7), so both are admitted.
+the other options that request or permit a transformation, `-fcommon` and
+`-Ofast` are refused. An option that changes the ABI and that the backend
+does not implement is refused at the option on every command line, also under
+`-w` and `--cap-lints=allow`: `-fpack-struct` and `-fpack-struct=N`,
+`-fshort-enums`, `-mbig-endian`, an `-mabi=` value other than `lp64`, an
+`-ffixed-` register other than `x18`, and `-fcall-used-` and `-fcall-saved-`.
+`-mabi=lp64` names the default ABI and `-ffixed-x18` a register that the
+backend never uses (Section 6.7), so both are admitted.
 
 *Informative.* `crates/evocc/tests/cc_abi_options.rs` pins the cc command
 line; `crates/evocc/tests/compilation_options.rs` pins `--emit=asm`.
@@ -2046,6 +2050,14 @@ and the checked UB-check profile; each exporter refuses other forms.
 | `core-asm-v1` | `crates/evocc-mir/src/asm_ast.rs` (`evo-asm-ast`) | `lean/EvoIR/Asm/Reader.lean` | The assembly AST and the frame hints |
 
 ## Revision
+
+**Revision 1.15.0, 2026-10-27.** Section 6.14 lists the three disabling
+vectorization options of EvoIR 10.1.9 with the other options that name
+existing behavior. It admits `-fexpensive-optimizations`, `-ftree-vectorize`,
+`-fno-vect-cost-model` and `-fno-trapping-math`, which only permit
+transformations that EvoCC does not perform, and the default
+`-ftrapping-math`. The other options that request or permit a
+transformation stay refused. Native code does not change.
 
 **Revision 1.14.1, 2026-10-27.** The paragraph on normative and informative
 text states that a path under `.evidence/` names a local probe record that the
