@@ -138,7 +138,7 @@ was found in the read-only process check at this planning checkpoint.
 | APPLICATION | L11a, P17a, P22 | P21 completed 144 registered sessions: P1-P3 held; P4 and the earlier control penalty did not. P22's pilot of 2026-10-20 failed two go criteria on a false escape record. P01 through P20 retain their completed scope: P20 had no repair-count advantage; P18 stopped at the provider key limit. Existing application tasks keep separate exits. |
 | REVIEW |  | No rule decision is open. The 2026-10-13 decisions for K07, L03 to L10 and L11a to L11c are in docs/archive/notebook/rules-20261013/DECISIONS.md. |
 | AUDIT | D33 | D24 to D28 closed the follow-ups of D22, D23, L04 and L05; D33 changes the alignment model. D01-D15 are closed in their recorded scope. Keep the T03 audit boundary; kernel/application acceptance and deferred proof domains remain separate. |
-| ACCEPTANCE | T04, T02, K13, K14, B10, T05, R05, R05a, R05k | Independently freeze repaired kernel/application subjects, run their existing paired/serial acceptance and refresh health/docs. |
+| ACCEPTANCE | T04, T02, K13, K14, T05, R05, R05a, R05k | Independently freeze repaired kernel/application subjects, run their existing paired/serial acceptance and refresh health/docs. |
 | LATER | R05m, R01, R02, R03, R03a, R03b, R03c, R03d, R03e, R03f, R03g, R03h, R04, R04a, R04b, R04c, R04d, R04e, N06, N06a, N06b, N06c, N06d, N06e | S1–S5 and R02e first slice are closed; S6 stays with R01's two G2 builds. R03 V1 negative-admission study is frozen; positive Q3 remains unachieved and R03a/b/c/d NOT_ADMITTED, R03e deferred. No VM timing or audit expansion; x86-64 and release stay separate. The bounded N01–N05/N07 batch is dispositioned, not a complete optimizing compiler: N03b/N03e preflights are negative, N07 E3 has zero SMT proofs, and all five library size targets remain missed. N03d C5 has size/correctness evidence but three compile-cost misses; C2/C5 remain outside the admitted cumulative configuration, and T1's misses stay frozen. All new defaults remain OFF. Retain N02's 70 admitted/187 opaque inputs and source-bridge mismatch. Broader inlining, mid-level and allocator work need newly scoped designs; no paused R activity is automatically reopened. |
 <!-- closure-queues:end -->
 
@@ -2929,7 +2929,7 @@ full kselftest or KUnit acceptance.
   It also closes T05f's stale-archive relink regression; compiler identity remains
   in that receipt rather than being inherited from a later driver build.
 
-- [ ] **B10 — One final serial 15-lane application campaign** — `OPEN`, P1, after tailored closure.
+- [x] **B10 — One final serial 15-lane application campaign** — `DONE`, P1, 2026-10-27.
   Freeze the compiler/profile and run the existing `tools/bench.py` lanes without
   reducing populations. Retest passing zlib, zstd, cJSON, Mbed TLS, PolyBench, Lua
   and SQLite as well as repaired lanes. Close with fresh source-bound five-way
@@ -2971,6 +2971,21 @@ full kselftest or KUnit acceptance.
     the tracked citations. 16 FP-deferred rows name no feature that is still
     deferred; the B10 replay decides them.
     [Record](tests/fixtures/disposition-evidence-20261013.out).
+
+  Closed on 2026-10-27 by the frozen acceptance of release 0.1.0 (compiler of `08bf09bd`).
+  `tools/bench.py` ran the 15 lanes in one invocation, in the order of 2026-10-25, and Doom in
+  a second one. Both started on a clean tree (`dirty: false`). No population, budget, timeout,
+  flag or disposition changed. ctest 220/220; torture 1,543/1,692 PROFILE_CLEAN (146
+  not-applicable, 3 oracle-unusable); Csmith 932 agree, 68 oracle-unusable, 0 refusals,
+  0 mismatches; zlib 19/19; zstd 44/44; cJSON 23/23; TinyCC 11/11; Toybox 203/203 units, tests
+  equal to GCC (1,648 PASS, 1 FAIL, 20 SKIP); musl 1,339/1,339 with the 13 libc-test failures of
+  the GCC build; Mbed TLS 382/382; PolyBench 30/30; LLVM 1,066/1,735 PROFILE_CLEAN (665
+  not-applicable, 2 FP-deferred, 2 oracle-unusable); jq 70/70; Lua 34/34; SQLite 86/86;
+  Doom 81/81. No lane has a compiler-failure disposition. Against the PASS identities of the
+  batch-start receipts and of both rows of the 2026-10-25 comparison, every identity passes
+  again, except LLVM `aarch64-acle-fmv-features`, whose loss has a proven reference-side cause
+  (see N09). LLVM `Vector-build2` passes for the first time; it was FP-deferred. No non-PASS
+  identity changed its class. [Aggregate](tests/contracts/bench-receipt.json).
 
 ## Remaining numerical and language contracts
 
@@ -6948,6 +6963,17 @@ plan, RED, flag, gates, one-page note, TODO update in the same commit.
   reported; a call through a function pointer object keeps the E3019 signature
   check and does not get this rule, and `(*f)(...)` and `(&f)(...)` keep the
   prototype check.
+
+  October 27 frozen campaign (B10): 18 of the 19 old PASS programs that the run of 2026-10-25
+  lost pass again with their original commands. `optimize` (`d56d3e5f`): torture `pr60062`,
+  `pr60072`, `alias-1`, `pr79043` and the LLVM copies of `pr60062` and `pr60072`. `stdcall`
+  (`7a79e9b6`): ctest 00210. The strict-driver options (`b37e9499`): LLVM `20040709-3`,
+  `pr68506`, `stkalign` and `wchar_t-1`. The permission-only options (`e424f638`): LLVM
+  `pr68381`, `pr68532` and `compare-fp-3`. Incompatible pointers (`53a9bf31`): LLVM `correlation`
+  and `Shootout-methcall`. The old-style call (`0c953e05`): torture `920302-1`. The range value
+  (`e77966c0`, `5b082542`): ctest 00216. LLVM `acle-fmv-features` keeps its reference-side cause:
+  its reference build finds compiler-rt, enables FMV, and the unchanged Clang 19 rejects its
+  CSSC check. The 2x and whole-ladder size exits stay open.
 
 - [x] **N10 — Keep one-word records and small arrays in registers** — `DONE`, P1, 2026-10-19.
   `pte_t` and `pmd_t` values live in memory: zero-filled, copied from slot to

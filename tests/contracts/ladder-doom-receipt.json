@@ -1,8 +1,8 @@
 {
   "status": "PASS",
   "commit": "dcb7a8dbc7a16ce3dda29382ac9aae9d77d21284",
-  "compilerSha256": "978a3771912d7b2eafe89228ff2cb3d3c0c996826b2b2875c4cb74932a655ce4",
-  "run": "20261025T120137Z",
+  "compilerSha256": "ab0c90437192d6824ce884c71d80a028e1d785ae89a11fe58ecb0145d76de525",
+  "run": "20261027T122636Z",
   "evidence": ".build/ladder/doom",
   "sourceArchiveSha256": "1bd3f7f26220494159a38d71f2847ec81b58d6bbd7c7c8d81b08993018001148",
   "dataArchiveSha256": "3f9b264f3e3ce503b4fb7f6bdcb1f419d93c7b546f4df3e874dd878db9688f59",
@@ -116,7 +116,7 @@
   ],
   "scope": "350 frames each of two bundled demos; two repeats; no audio/window/input acceptance",
   "adapterSha256": "fea53d45adc35af0bbe63be1844b874c357f58f979a684abf76c4e8c0fae209b",
-  "driverSha256": "978a3771912d7b2eafe89228ff2cb3d3c0c996826b2b2875c4cb74932a655ce4",
+  "driverSha256": "ab0c90437192d6824ce884c71d80a028e1d785ae89a11fe58ecb0145d76de525",
   "nativeExitCode": 0,
   "inputAndCompilerStable": true,
   "unitsTotal": 81,
@@ -127,7 +127,7 @@
   "frameAgreement": true,
   "testResult": "PASS",
   "measurement": {
-    "driverSha256": "978a3771912d7b2eafe89228ff2cb3d3c0c996826b2b2875c4cb74932a655ce4"
+    "driverSha256": "ab0c90437192d6824ce884c71d80a028e1d785ae89a11fe58ecb0145d76de525"
   },
   "runtime": [
     {
@@ -135,13 +135,33 @@
       "demo": "demo1",
       "repeat": 0,
       "exitCode": 0,
-      "seconds": 0.187,
+      "seconds": 0.195,
       "uniqueFrames": 344,
       "complete": true,
       "sequenceSha256": "c7d2d86d772b22c060416e233f61786d8017a10fc6ebc39dd91ded2917e40a75"
     },
     {
       "compiler": "gcc-14",
+      "demo": "demo1",
+      "repeat": 1,
+      "exitCode": 0,
+      "seconds": 0.199,
+      "uniqueFrames": 344,
+      "complete": true,
+      "sequenceSha256": "c7d2d86d772b22c060416e233f61786d8017a10fc6ebc39dd91ded2917e40a75"
+    },
+    {
+      "compiler": "clang-19",
+      "demo": "demo1",
+      "repeat": 0,
+      "exitCode": 0,
+      "seconds": 0.188,
+      "uniqueFrames": 344,
+      "complete": true,
+      "sequenceSha256": "c7d2d86d772b22c060416e233f61786d8017a10fc6ebc39dd91ded2917e40a75"
+    },
+    {
+      "compiler": "clang-19",
       "demo": "demo1",
       "repeat": 1,
       "exitCode": 0,
@@ -151,31 +171,11 @@
       "sequenceSha256": "c7d2d86d772b22c060416e233f61786d8017a10fc6ebc39dd91ded2917e40a75"
     },
     {
-      "compiler": "clang-19",
-      "demo": "demo1",
-      "repeat": 0,
-      "exitCode": 0,
-      "seconds": 0.177,
-      "uniqueFrames": 344,
-      "complete": true,
-      "sequenceSha256": "c7d2d86d772b22c060416e233f61786d8017a10fc6ebc39dd91ded2917e40a75"
-    },
-    {
-      "compiler": "clang-19",
-      "demo": "demo1",
-      "repeat": 1,
-      "exitCode": 0,
-      "seconds": 0.177,
-      "uniqueFrames": 344,
-      "complete": true,
-      "sequenceSha256": "c7d2d86d772b22c060416e233f61786d8017a10fc6ebc39dd91ded2917e40a75"
-    },
-    {
       "compiler": "evocc",
       "demo": "demo1",
       "repeat": 0,
       "exitCode": 0,
-      "seconds": 0.27,
+      "seconds": 0.299,
       "uniqueFrames": 344,
       "complete": true,
       "sequenceSha256": "c7d2d86d772b22c060416e233f61786d8017a10fc6ebc39dd91ded2917e40a75"
@@ -185,7 +185,7 @@
       "demo": "demo1",
       "repeat": 1,
       "exitCode": 0,
-      "seconds": 0.268,
+      "seconds": 0.275,
       "uniqueFrames": 344,
       "complete": true,
       "sequenceSha256": "c7d2d86d772b22c060416e233f61786d8017a10fc6ebc39dd91ded2917e40a75"
@@ -194,6 +194,36 @@
       "compiler": "gcc-14",
       "demo": "demo2",
       "repeat": 0,
+      "exitCode": 0,
+      "seconds": 0.199,
+      "uniqueFrames": 347,
+      "complete": true,
+      "sequenceSha256": "957feced8acbaf6a2269b61179488ef05ca5797aed570591ed934704e9aa52a3"
+    },
+    {
+      "compiler": "gcc-14",
+      "demo": "demo2",
+      "repeat": 1,
+      "exitCode": 0,
+      "seconds": 0.208,
+      "uniqueFrames": 347,
+      "complete": true,
+      "sequenceSha256": "957feced8acbaf6a2269b61179488ef05ca5797aed570591ed934704e9aa52a3"
+    },
+    {
+      "compiler": "clang-19",
+      "demo": "demo2",
+      "repeat": 0,
+      "exitCode": 0,
+      "seconds": 0.174,
+      "uniqueFrames": 347,
+      "complete": true,
+      "sequenceSha256": "957feced8acbaf6a2269b61179488ef05ca5797aed570591ed934704e9aa52a3"
+    },
+    {
+      "compiler": "clang-19",
+      "demo": "demo2",
+      "repeat": 1,
       "exitCode": 0,
       "seconds": 0.175,
       "uniqueFrames": 347,
@@ -201,41 +231,11 @@
       "sequenceSha256": "957feced8acbaf6a2269b61179488ef05ca5797aed570591ed934704e9aa52a3"
     },
     {
-      "compiler": "gcc-14",
-      "demo": "demo2",
-      "repeat": 1,
-      "exitCode": 0,
-      "seconds": 0.176,
-      "uniqueFrames": 347,
-      "complete": true,
-      "sequenceSha256": "957feced8acbaf6a2269b61179488ef05ca5797aed570591ed934704e9aa52a3"
-    },
-    {
-      "compiler": "clang-19",
-      "demo": "demo2",
-      "repeat": 0,
-      "exitCode": 0,
-      "seconds": 0.172,
-      "uniqueFrames": 347,
-      "complete": true,
-      "sequenceSha256": "957feced8acbaf6a2269b61179488ef05ca5797aed570591ed934704e9aa52a3"
-    },
-    {
-      "compiler": "clang-19",
-      "demo": "demo2",
-      "repeat": 1,
-      "exitCode": 0,
-      "seconds": 0.172,
-      "uniqueFrames": 347,
-      "complete": true,
-      "sequenceSha256": "957feced8acbaf6a2269b61179488ef05ca5797aed570591ed934704e9aa52a3"
-    },
-    {
       "compiler": "evocc",
       "demo": "demo2",
       "repeat": 0,
       "exitCode": 0,
-      "seconds": 0.254,
+      "seconds": 0.268,
       "uniqueFrames": 347,
       "complete": true,
       "sequenceSha256": "957feced8acbaf6a2269b61179488ef05ca5797aed570591ed934704e9aa52a3"
@@ -245,18 +245,18 @@
       "demo": "demo2",
       "repeat": 1,
       "exitCode": 0,
-      "seconds": 0.255,
+      "seconds": 0.253,
       "uniqueFrames": 347,
       "complete": true,
       "sequenceSha256": "957feced8acbaf6a2269b61179488ef05ca5797aed570591ed934704e9aa52a3"
     }
   ],
   "artifacts": {
-    "summary.json": "5d2769ef795c778b65d5db0074bb9e2fae3ccd7a5f594f3a7e10269f01d07785",
+    "summary.json": "2e92e4231862f13e05e421e579b73cf59e91b722f2598d4a4ee28ae6dac7c840",
     "native-build.json": "554502fdf8b98d81318e347d6b4d4613c72a800e9d4b0ca61d3fbc194f138869",
-    "runtime.json": "aa94fe2828301143b34ccad2c9f4087f2a9540b5d8cf01a94040f64c71bb2d7a",
+    "runtime.json": "fca4441ad013909daa11cde5d050d96cfd8542f87a4d9d5a433908a2f6b8d980",
     "object-audit.json": "8721f18869aa2508bc4499211496d8807033d7e01d02851a14f23c97faca94e7",
     "angle-controls.json": "5a0339ea4bd5d4d346477a23d08df885d9cd2ebac0f07d1d069a6e739753fd30",
-    "native-environment.json": "e8c81c5c5dfba34e9ae69e2a12350b97304b2a463a1e0dd0672c5302256e04e7"
+    "native-environment.json": "2187dc694bfb51f13899efb92851e2f35ecea5ce072d06dc35c9d89b17c8499b"
   }
 }

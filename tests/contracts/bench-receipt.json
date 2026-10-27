@@ -1,28 +1,14 @@
 {
   "schemaVersion": 1,
-  "run": "20261027T110816.715722Z",
-  "subject": "c65f67235e16dc8fa480f6c99f883f7dbcc8e1b7",
+  "run": "20261027T122636.393196Z",
+  "subject": "4975fc5818bb8fab39d7dd4ee54d76b610b4b8b3",
   "dirty": false,
   "driver": "/Users/onehrxn/dev/30days/c30/.build/frozen/08bf09bd/evocc-darwin",
   "driverSha256": "ab0c90437192d6824ce884c71d80a028e1d785ae89a11fe58ecb0145d76de525",
   "invocation": [
-    "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
+    "/opt/homebrew/opt/python@3.13/bin/python3.13",
     "tools/bench.py",
-    "ctest",
-    "torture",
-    "csmith",
-    "zlib",
-    "zstd",
-    "cjson",
-    "tinycc",
-    "toybox",
-    "musl",
-    "mbedtls",
-    "polybench",
-    "llvm-test-suite",
-    "jq",
-    "lua",
-    "sqlite",
+    "doom",
     "--evocc",
     "/Users/onehrxn/dev/30days/c30/.build/frozen/08bf09bd/evocc-darwin",
     "--jobs",
@@ -30,23 +16,9 @@
   ],
   "execution": "sequential lanes; original per-program watchdogs unchanged",
   "selected": [
-    "ctest",
-    "torture",
-    "csmith",
-    "zlib",
-    "zstd",
-    "cjson",
-    "tinycc",
-    "toybox",
-    "musl",
-    "mbedtls",
-    "polybench",
-    "llvm-test-suite",
-    "jq",
-    "lua",
-    "sqlite"
+    "doom"
   ],
-  "status": "INCOMPLETE",
+  "status": "PASS",
   "benchmarks": {
     "ctest": {
       "rung": "E0b",
@@ -6274,7 +6246,7 @@
         "patchSha256": "37ea8e0c3639c9b69f565074fea2ddcb49f6b5a6a48a8b439f187dfc866603cc",
         "reason": "initial melt reads uninitialized prior screen; GCC self-repeats also differ"
       },
-      "run": "20261025T120137Z",
+      "run": "20261027T122636Z",
       "evidence": ".build/ladder/doom",
       "receipt": "tests/contracts/ladder-doom-receipt.json",
       "command": [
@@ -6282,12 +6254,12 @@
         "-u",
         "/Users/onehrxn/dev/30days/c30/tools/ladder/doom.py",
         "--evocc",
-        "/Users/onehrxn/dev/30days/c30/target/frontend/release/evocc",
+        "/Users/onehrxn/dev/30days/c30/.build/frozen/08bf09bd/evocc-darwin",
         "--jobs",
         "2"
       ],
       "exitCode": 0,
-      "seconds": 16.3,
+      "seconds": 17.3,
       "previous": {
         "rung": "R06",
         "note": "pinned headless doomgeneric/Freedoom demos; explicit wrap profile and video-init port repair; not interactive/audio acceptance",
@@ -6296,12 +6268,12 @@
         "baselineFailures": 0,
         "failingUnits": [],
         "total": 81,
-        "passed": 0,
-        "compiled": 0,
+        "passed": 81,
+        "compiled": 81,
         "kind": "units",
-        "status": "INCOMPLETE",
-        "executions": 0,
-        "framesPerExecution": 0,
+        "status": "PASS",
+        "executions": 12,
+        "framesPerExecution": 350,
         "adjustments": [
           "headless platform replaces Xlib; 320x200; sound disabled",
           "explicit gnu11 O2 instead of upstream Os; no debug/Wall request",
@@ -6314,13 +6286,13 @@
           "patchSha256": "37ea8e0c3639c9b69f565074fea2ddcb49f6b5a6a48a8b439f187dfc866603cc",
           "reason": "initial melt reads uninitialized prior screen; GCC self-repeats also differ"
         },
-        "run": "20261025T115533Z",
+        "run": "20261025T120137Z",
         "evidence": ".build/ladder/doom"
       },
       "measurement": {
-        "run": "20261025T120137.291150Z",
-        "subject": "b2aae0dabc31de3520ee792d8104dc9303001045",
-        "driverSha256": "978a3771912d7b2eafe89228ff2cb3d3c0c996826b2b2875c4cb74932a655ce4"
+        "run": "20261027T122636.393196Z",
+        "subject": "4975fc5818bb8fab39d7dd4ee54d76b610b4b8b3",
+        "driverSha256": "ab0c90437192d6824ce884c71d80a028e1d785ae89a11fe58ecb0145d76de525"
       }
     }
   }
