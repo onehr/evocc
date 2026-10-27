@@ -23,8 +23,8 @@ concurrency:
 
 env:
   MDBOOK_VERSION: v0.4.52
-  # Set this to the digest of the release archive to verify the download.
-  MDBOOK_SHA256: ""
+  # The SHA-256 that the mdBook v0.4.52 release lists for the x86_64 Linux archive.
+  MDBOOK_SHA256: c0b903f01dd8f4edc644372ad2b80b1fdddd12552d37b6a098657cbd8eddd768
 
 jobs:
   build:
