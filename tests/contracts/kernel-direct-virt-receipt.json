@@ -1,7 +1,7 @@
 {
   "mode": "direct-kbuild",
   "status": "BUILD_BOOT_SELECTED_SELFTEST_PASS",
-  "recordedAt": "2026-10-19T09:20:06.465358+00:00",
+  "recordedAt": "2026-10-27T11:01:29.730423+00:00",
   "kernelVersion": "6.18.44",
   "configuration": "Retained arm64 virtconfig input, olddefconfig with EvoCC; capability changes disclosed below.",
   "sourceRoot": ".build/case/kbuild-probe/src",
@@ -14,11 +14,11 @@
     "different": [],
     "symlinkDifferences": []
   },
-  "outputRoot": ".build/case/kbuild-probe/out-k16",
+  "outputRoot": ".build/case/kbuild-probe/out-r010-f1",
   "inputConfig": ".toolchain/records/frozen-kernel-gcc.config",
   "inputConfigSha256": "4245f8e651667a992a8b49252f3a40b3748ff56657828ef42e3a7ef39edcaf5d",
-  "subjectConfig": ".evidence/kernel-codegen-replay-20261019/subject.config",
-  "configSha256": "c69a7be8d33dca1d4359a5161d5f976cd29cf9e6b2362fdd17206f0619e32eeb",
+  "subjectConfig": ".evidence/kernel-direct-r010-f1/subject.config",
+  "configSha256": "3247ca8ea655520d067161a253fb0ef143c3a8a9c7ea7ebcd84665e24d72f8f1",
   "configChanges": {
     "CONFIG_ARCH_SUPPORTS_SHADOW_CALL_STACK": {
       "reference": "y",
@@ -54,20 +54,20 @@
     },
     "CONFIG_CC_VERSION_TEXT": {
       "reference": "\"gcc-14 (Debian 14.2.0-19) 14.2.0\"",
-      "subject": "\"evocc 0.1.0 (f6c6f5e15460 2026-10-14)\""
+      "subject": "\"evocc 0.1.0 (08bf09bd7631 2026-10-27)\""
     },
     "CONFIG_HAVE_KCSAN_COMPILER": {
       "reference": "y",
       "subject": "n"
     }
   },
-  "compiler": "EvoCC 0.1.0; one retained dirty-worktree snapshot, identified per object",
-  "compilerCommit": "f6c6f5e1546036eaf5bfc48ca14de63e694a1de4",
+  "compiler": "EvoCC 0.1.0; one frozen release build of 08bf09bd7631, identified per object",
+  "compilerCommit": "08bf09bd7631816efaa035a7f00383a37d90d4a7",
   "compilerSnapshots": {
-    "c16bdb1c61d79a9a3aef03b82e2410194a5e70643c8f785ee3b8a98d11265a6e": "evocc-zero-branch.gz"
+    "3520c267d22f370d1429c7043f8f9c8abc41c5c5797a9a97148dd4beb60a7602": "evocc-linux-musl.gz"
   },
   "targetCObjectsByCompilerSha256": {
-    "c16bdb1c61d79a9a3aef03b82e2410194a5e70643c8f785ee3b8a98d11265a6e": 2799
+    "3520c267d22f370d1429c7043f8f9c8abc41c5c5797a9a97148dd4beb60a7602": 2799
   },
   "compilerUnchangedWithinEachBuildInvocation": true,
   "compilerUnchangedDuringBuild": true,
@@ -77,7 +77,7 @@
   "buildExitCode": 0,
   "buildTimeoutSeconds": 7200,
   "jobs": 2,
-  "buildProvenance": "existing build directory; changed compiler path recompiles every target C unit with one recorded compiler; not a clean build; every final target C command is accounted for in the retained logs. Compiler snapshot files are lossless gzip; their keys hash decompressed bytes.",
+  "buildProvenance": "fresh output tree; one uninterrupted Kbuild run compiles every target C unit with one recorded compiler; every final target C command is accounted for in the retained logs. Compiler snapshot files are lossless gzip; their keys hash decompressed bytes.",
   "counts": {
     "evoccCObjects": 2799,
     "assemblyObjects": 67,
@@ -90,66 +90,64 @@
     "missingRecordedOutputs": 0,
     "unaccountedCurrentCompilerInvocations": 0
   },
-  "objectProvenance": ".evidence/kernel-codegen-replay-20261019/object-provenance-zero-branch.json",
-  "objectProvenanceSha256": "d2c24c1d97c90f5e8acb0250b0c8752d3e0371894be32e19ba0cb26ce795ecd6",
+  "objectProvenance": ".evidence/kernel-direct-r010-f1/object-provenance.json",
+  "objectProvenanceSha256": "5171d4b114d58a87a4b0b9d2e77c6a639262e66aa10acd1ef4f98b11ccd86a90",
   "buildLogs": {
-    "build-zero-branch.log": "03f8d7a42639c3c5150f127dc33bb9df7327d387175425f1e0ae6bf6e1103357"
+    "build.log": "97eae84b1f034f8da7b1407c3844c362ac86fb340c8b4528b615900d6e2c945c"
   },
-  "imageBytes": 40860160,
-  "imageSha256": "63087e1283ac58ba5a8843b924918ece3cda1d09072a932c3519dd1363945853",
-  "vmlinuxBytes": 1126637960,
-  "vmlinuxSha256": "214230c309d2561026468c35778a00c9bf860eb6458f9d345204626f040cc1b1",
+  "imageBytes": 40204800,
+  "imageSha256": "6df1602bbb74eef56d9d35280e0cf17d5100fd7e93c480f0172cc4e03a19706a",
+  "vmlinuxBytes": 1125983264,
+  "vmlinuxSha256": "74a5b9082f5a302835401857e6e4d27e5e72fc4ba3de3e00f3f14952b36b0b48",
   "unsupportedOptions": [
     "-fconserve-stack",
     "-femit-struct-debug-baseonly",
-    "-fno-builtin-wcslen",
-    "-fno-common",
     "-fno-delete-null-pointer-checks",
     "-fno-stack-check",
     "-fno-var-tracking",
     "-fverbose-asm"
   ],
-  "evidence": ".evidence/kernel-codegen-replay-20261019",
+  "evidence": ".evidence/kernel-direct-r010-f1",
   "captureLimitBytes": 524288000,
   "boots": {
     "reference-boot-hvf": {
       "verdict": "PASS",
       "bootLane": "hvf-host",
       "imageSha256": "b6f206dea584b7e28f0c0ab255a9d6e68b30970f7e31f81210571c9929373f35",
-      "nonce": "k1-20261019T090424Z-b00849cb",
-      "serialLogSha256": "39a94e2042d72b4dde004ad6f5a396f3866d41b3c19fd9226151caadcec6ddb4",
-      "flownAt": "2026-10-19T09:04:25Z",
-      "receipt": ".evidence/kernel-codegen-replay-20261019/zero-branch-reference-boot-hvf-host/boot.json",
+      "nonce": "k1-20261027T105119Z-287f13c1",
+      "serialLogSha256": "930e2df43130d6a8a2471c7589a19cc06ed9067d6d07538c78d12768da8a01e9",
+      "flownAt": "2026-10-27T10:51:19Z",
+      "receipt": ".evidence/kernel-direct-r010-f1/reference-boot-hvf-host/boot.json",
       "pointerAuthentication": true
     },
     "reference-boot-tcg": {
       "verdict": "PASS",
       "bootLane": "tcg-cortex-a72",
       "imageSha256": "b6f206dea584b7e28f0c0ab255a9d6e68b30970f7e31f81210571c9929373f35",
-      "nonce": "k1-20261019T090425Z-3137c71c",
-      "serialLogSha256": "593a8838607ec2d20cd8c1b069cf9786fc05263098634170cab552d22bad948b",
-      "flownAt": "2026-10-19T09:04:26Z",
-      "receipt": ".evidence/kernel-codegen-replay-20261019/zero-branch-reference-boot-tcg-cortex-a72/boot.json",
+      "nonce": "k1-20261027T105119Z-6c5a22d3",
+      "serialLogSha256": "4b02302779b8c1c35cae704f29639ab73993b6d94aa61c9a2f6d87bff20830ff",
+      "flownAt": "2026-10-27T10:51:20Z",
+      "receipt": ".evidence/kernel-direct-r010-f1/reference-boot-tcg-cortex-a72/boot.json",
       "pointerAuthentication": false
     },
     "subject-boot-hvf": {
       "verdict": "PASS",
       "bootLane": "hvf-host",
-      "imageSha256": "63087e1283ac58ba5a8843b924918ece3cda1d09072a932c3519dd1363945853",
-      "nonce": "k1-20261019T090426Z-1c694e11",
-      "serialLogSha256": "de5365c0374c8b747625e9c4340f3dd5c24d3a0db9572538b8a2b44da823f406",
-      "flownAt": "2026-10-19T09:04:26Z",
-      "receipt": ".evidence/kernel-codegen-replay-20261019/zero-branch-subject-boot-hvf-host/boot.json",
+      "imageSha256": "6df1602bbb74eef56d9d35280e0cf17d5100fd7e93c480f0172cc4e03a19706a",
+      "nonce": "k1-20261027T105120Z-b91af96b",
+      "serialLogSha256": "e8e8260dbbf89a85b4792ed038ea4d3cdae507a079c421295be7f1d7251f4a37",
+      "flownAt": "2026-10-27T10:51:21Z",
+      "receipt": ".evidence/kernel-direct-r010-f1/subject-boot-hvf-host/boot.json",
       "pointerAuthentication": true
     },
     "subject-boot-tcg": {
       "verdict": "PASS",
       "bootLane": "tcg-cortex-a72",
-      "imageSha256": "63087e1283ac58ba5a8843b924918ece3cda1d09072a932c3519dd1363945853",
-      "nonce": "k1-20261019T090426Z-d5f44fea",
-      "serialLogSha256": "85942ec7aabb228756e22bc0c6c6ddce8894405ea6f3e21ace6838456f7ee539",
-      "flownAt": "2026-10-19T09:04:28Z",
-      "receipt": ".evidence/kernel-codegen-replay-20261019/zero-branch-subject-boot-tcg-cortex-a72/boot.json",
+      "imageSha256": "6df1602bbb74eef56d9d35280e0cf17d5100fd7e93c480f0172cc4e03a19706a",
+      "nonce": "k1-20261027T105121Z-f761d58e",
+      "serialLogSha256": "9cb3bb5d28c6569c237f5c24be98490ab330d4fe353862c4d4d3de1e2172f6b2",
+      "flownAt": "2026-10-27T10:51:23Z",
+      "receipt": ".evidence/kernel-direct-r010-f1/subject-boot-tcg-cortex-a72/boot.json",
       "pointerAuthentication": false
     }
   },
@@ -173,8 +171,8 @@
     "scratchSha256": "fdc5bea1306f5d8582f0763e9f5e4e86b00686cf230ae33818fa301b34b86c09",
     "regressions": [],
     "baselineFailures": [],
-    "summary": ".evidence/kernel-codegen-replay-20261019/zero-branch-selftests/summary.json",
-    "summarySha256": "555baa6436ac985b4817028d13bde3f8ac458d447b19c996a5f95768b728d799",
+    "summary": ".evidence/kernel-direct-r010-f1/selftests/summary.json",
+    "summarySha256": "960ae72b0d324103379b54450aee18c0b44bb453b8f8461f6492573cd241ddbd",
     "programs": [
       {
         "id": "mincore.mincore_selftest",
@@ -313,8 +311,8 @@
       }
     ],
     "serialLogSha256": {
-      "reference": "3945bad22a0ac28edaf90c1d16ca4ef46131331a054c7ff4fb08f67ba7775655",
-      "subject": "95c62f3701ecfda9d1c36e389acff5e90f278fc888228b43f39fdb7f3d9c45b5"
+      "reference": "e810605bd5e5b8ada83b7fbe662ad3d410d3f3fbdb5d38a11a0794881bcbe87a",
+      "subject": "b0bdf27b58632a3ecd8de771246d2534ba7f19c2c288e9d329d9f9c8d3f6e9c2"
     },
     "reference": {
       "programs": {
@@ -334,8 +332,8 @@
     }
   },
   "originalKvm": {
-    "record": ".evidence/kernel-codegen-replay-20261019/zero-branch-original-kvm/runtime.json",
-    "sha256": "e536d57a0936e8300396960715dea10473f52fcf8faac56ac99b306ced0c2711",
+    "record": ".evidence/kernel-direct-r010-f1/original-kvm/runtime.json",
+    "sha256": "a48a2100446891c359d98e4e914f5dbd0c25ddb1470f20250afa1ec910a763dd",
     "results": [
       {
         "side": "gcc",
@@ -356,7 +354,7 @@
           "PA-bits:36,  VA-bits:48, 64K pages",
           "PA-bits:36,  VA-bits:47, 16K pages"
         ],
-        "uptimeBefore": "17:05  up 3 days, 22:05, 13 users, load averages: 4.13 4.58 4.91"
+        "uptimeBefore": "18:52  up 11 days, 23:52, 14 users, load averages: 8.18 6.54 5.75"
       },
       {
         "side": "evocc",
@@ -364,7 +362,7 @@
         "bootExit": 0,
         "testExit": 124,
         "modesStarted": 7,
-        "modesCompleted": 7,
+        "modesCompleted": 6,
         "modes": [
           "PA-bits:48,  VA-bits:48,  4K pages",
           "PA-bits:48,  VA-bits:48, 16K pages",
@@ -374,7 +372,7 @@
           "PA-bits:40,  VA-bits:48, 64K pages",
           "PA-bits:36,  VA-bits:48,  4K pages"
         ],
-        "uptimeBefore": "17:06  up 3 days, 22:07, 13 users, load averages: 4.13 4.56 4.87"
+        "uptimeBefore": "18:53  up 11 days, 23:54, 14 users, load averages: 7.19 6.73 5.91"
       },
       {
         "side": "gcc",
@@ -395,7 +393,7 @@
           "PA-bits:36,  VA-bits:48, 64K pages",
           "PA-bits:36,  VA-bits:47, 16K pages"
         ],
-        "uptimeBefore": "17:08  up 3 days, 22:09, 13 users, load averages: 3.10 4.05 4.63"
+        "uptimeBefore": "18:55  up 11 days, 23:56, 12 users, load averages: 3.81 5.65 5.59"
       },
       {
         "side": "evocc",
@@ -403,7 +401,7 @@
         "bootExit": 0,
         "testExit": 124,
         "modesStarted": 7,
-        "modesCompleted": 7,
+        "modesCompleted": 6,
         "modes": [
           "PA-bits:48,  VA-bits:48,  4K pages",
           "PA-bits:48,  VA-bits:48, 16K pages",
@@ -413,7 +411,7 @@
           "PA-bits:40,  VA-bits:48, 64K pages",
           "PA-bits:36,  VA-bits:48,  4K pages"
         ],
-        "uptimeBefore": "17:10  up 3 days, 22:10, 13 users, load averages: 3.49 3.89 4.51"
+        "uptimeBefore": "18:57  up 11 days, 23:57, 12 users, load averages: 2.97 4.98 5.34"
       }
     ],
     "scope": "Two original KVM programs, unchanged arguments and payload, 120 seconds per program. Boot success is not test success."
@@ -425,74 +423,74 @@
         "snapshot": 7,
         "mode": 3,
         "bytesPerVcpu": 268435456,
-        "attribution": ".evidence/kernel-codegen-replay-20261019/zero-branch-demand256-inline.json",
+        "attribution": ".evidence/kernel-direct-r010-f1/demand256-inline.json",
         "sides": {
           "gcc": {
-            "result": ".evidence/kernel-codegen-replay-20261019/zero-branch-equal-work-gcc-kvm.demand_paging_256m/result.json",
-            "resultSha256": "3f64a11165a26d1cee24b8bdd39ef8890dc26cd184ef6d7b744b915ef1e155b8",
-            "kernelInstructions": 602619606,
-            "userGuestInstructions": 69780453,
-            "totalInstructions": 672400059,
-            "transportRunInstructions": 11821298,
-            "transportFraction": 0.019616517422103255,
+            "result": ".evidence/kernel-direct-r010-f1/equal-work-gcc-kvm.demand_paging_256m/result.json",
+            "resultSha256": "b745f8f88920e4cb714024c2e7ff3a5cdbf8743f7def235858112daaf119830b",
+            "kernelInstructions": 604618823,
+            "userGuestInstructions": 69970638,
+            "totalInstructions": 674589461,
+            "transportRunInstructions": 11885295,
+            "transportFraction": 0.01965750080526355,
             "entries": {
               "__handle_mm_fault": 65682,
               "___pte_offset_map": 327878
             }
           },
           "evocc": {
-            "result": ".evidence/kernel-codegen-replay-20261019/zero-branch-equal-work-evocc-kvm.demand_paging_256m/result.json",
-            "resultSha256": "08a84014239a1f82bf012e393cba35644d16a83b98f77c68d92647512ac4f0b4",
-            "kernelInstructions": 1683998173,
-            "userGuestInstructions": 70087727,
-            "totalInstructions": 1754085900,
-            "transportRunInstructions": 102494358,
-            "transportFraction": 0.060863699048680615,
+            "result": ".evidence/kernel-direct-r010-f1/equal-work-evocc-kvm.demand_paging_256m/result.json",
+            "resultSha256": "1d0196f96b805204e466ed02f2f62327da60ca1790bfb58d0f86a23d7d377e73",
+            "kernelInstructions": 1675958351,
+            "userGuestInstructions": 70177391,
+            "totalInstructions": 1746135742,
+            "transportRunInstructions": 102702917,
+            "transportFraction": 0.0612801129208968,
             "entries": {
               "__handle_mm_fault": 65682,
-              "___pte_offset_map": 327880
+              "___pte_offset_map": 327878
             }
           }
         },
-        "totalInstructionRatio": 2.6086938520033653,
-        "kernelInstructionRatio": 2.794462968401994
+        "totalInstructionRatio": 2.58844207173287,
+        "kernelInstructionRatio": 2.7719255293512424
       },
       {
         "program": "kvm.memslot_256m",
         "snapshot": 7,
         "mode": 3,
         "bytesPerVcpu": 268435456,
-        "attribution": ".evidence/kernel-codegen-replay-20261019/zero-branch-memslot256-inline.json",
+        "attribution": ".evidence/kernel-direct-r010-f1/memslot256-inline.json",
         "sides": {
           "gcc": {
-            "result": ".evidence/kernel-codegen-replay-20261019/zero-branch-equal-work-gcc-kvm.memslot_256m/result.json",
-            "resultSha256": "3b9a00f62e50e78d70861a8a69370da279191e23236d7bc5d607a3bbd7afa4fc",
-            "kernelInstructions": 604819730,
-            "userGuestInstructions": 69826465,
-            "totalInstructions": 674646195,
-            "transportRunInstructions": 11875606,
-            "transportFraction": 0.019634951392872056,
+            "result": ".evidence/kernel-direct-r010-f1/equal-work-gcc-kvm.memslot_256m/result.json",
+            "resultSha256": "c8589a38562ffaf89876488192801f636c8a708bcca423246f153e4f81abf464",
+            "kernelInstructions": 606765847,
+            "userGuestInstructions": 69913001,
+            "totalInstructions": 676678848,
+            "transportRunInstructions": 11910263,
+            "transportFraction": 0.019629092604482073,
             "entries": {
               "__handle_mm_fault": 65679,
               "___pte_offset_map": 327883
             }
           },
           "evocc": {
-            "result": ".evidence/kernel-codegen-replay-20261019/zero-branch-equal-work-evocc-kvm.memslot_256m/result.json",
-            "resultSha256": "fe616b6331aacbcbe5fddc4b4b4719e7c43b330defbfcb37251104e4a17423bf",
-            "kernelInstructions": 1690958878,
-            "userGuestInstructions": 70106556,
-            "totalInstructions": 1761065434,
-            "transportRunInstructions": 102720449,
-            "transportFraction": 0.06074686400505122,
+            "result": ".evidence/kernel-direct-r010-f1/equal-work-evocc-kvm.memslot_256m/result.json",
+            "resultSha256": "b89ce71acd78fcccac4f28a53b059924732350788f72294402f130de67e961be",
+            "kernelInstructions": 1683431529,
+            "userGuestInstructions": 70166998,
+            "totalInstructions": 1753598527,
+            "transportRunInstructions": 103090264,
+            "transportFraction": 0.06123816871912704,
             "entries": {
               "__handle_mm_fault": 65679,
               "___pte_offset_map": 327883
             }
           }
         },
-        "totalInstructionRatio": 2.610354059730523,
-        "kernelInstructionRatio": 2.795806409952929
+        "totalInstructionRatio": 2.5914782650336368,
+        "kernelInstructionRatio": 2.7744335600352272
       }
     ],
     "scope": "Retained fixed-work -m 3 -b 256M payload, four vCPUs, snapshot 7 from VM creation to destruction. Diagnostic timeout is 1200 seconds, not the original 120-second acceptance budget. Counts charge the full translated block on entry, including faulting blocks; concurrent waits and interrupts remain. Long transport means at least six consecutive frame accesses or moves. This is not native timing or causal attribution to an individual repair."
@@ -500,20 +498,20 @@
   "gate": {
     "command": "tools/gate-changed.sh --full-workspace --offline",
     "exitCode": 0,
-    "suites": 458,
-    "passed": 3473,
+    "suites": 522,
+    "passed": 3928,
     "failed": 0,
-    "ignored": 8,
-    "log": ".evidence/kernel-codegen-replay-20261019/full-workspace-zero-branch.log",
-    "logSha256": "0b50eea38d454addaaee4c22a9c775c0a2aa7974440f6f67b73da6742c2b6f79",
-    "cleanTree": false
+    "ignored": 62,
+    "log": ".evidence/kernel-direct-r010-f1/full-workspace-release.log",
+    "logSha256": "4b0e51e100f70d66cc5993abff0df7fba60a8fb5e3e5580164b4de6712287fdd",
+    "cleanTree": true
   },
   "leanGate": {
     "command": "tools/gate-lean.sh",
     "exitCode": 0,
-    "log": ".evidence/kernel-codegen-replay-20261019/lean-zero-branch.log",
-    "logSha256": "554774bb38fa4185634466414eca543bd36754b73bd253fcf6c05aa8dce11660",
-    "cleanTree": false
+    "log": ".evidence/kernel-direct-r010-f1/lean-release.log",
+    "logSha256": "68080189bc9fdb902de141d8c68b97d66fdfbe7d42fce9b6585c2450d2f8f189",
+    "cleanTree": true
   },
   "returnSigning": {
     "scope": "pac-ret omits signing only when the allocated return address stays in x30; any stored return address remains signed. pac-ret+leaf remains distinct. This run checks boot with and without pointer authentication, not ftrace or kprobes.",
@@ -528,22 +526,21 @@
   },
   "toolchainScope": "EvoCC compiles target C. GNU tools build host programs, assemble and link; GCC also preprocesses one device-tree source. Userspace test programs are GCC-built.",
   "storage": {
-    "hostFreeBytes": 76908912640,
-    "caseVolumeFreeBytes": 60265324544,
-    "captureAllocatedKiB": 282856,
-    "retained": "The previous accepted runtime is retained in .build/reference/evocc-retained-20261019.tar.gz; its Image, vmlinux and config hashes match result.json. The October 13 runtime, GCC reference, current output tree, exact payloads and compressed compiler snapshots also remain.",
+    "hostFreeBytes": 46237876224,
+    "caseVolumeFreeBytes": 46237876224,
+    "captureAllocatedKiB": 99808,
+    "retained": "The October 19 output tree (out-k16) and its runtime, the GCC reference, the exact payloads and the compressed frozen compiler remain.",
     "removed": "No runtime, source tree or sealed fixture removed. Compiler snapshots were losslessly compressed."
   },
   "notRun": [
     "Historical 7008-unit configuration: raw config and runtime pair remain unavailable.",
     "Full 970-program kselftest acceptance.",
-    "KUnit, ftrace, kprobes, sched_ext and ublk: disabled in this configuration.",
-    "Clean single-compiler release build."
+    "KUnit, ftrace, kprobes, sched_ext and ublk: disabled in this configuration."
   ],
-  "claimCeiling": "Every target C unit was rebuilt with one identified compiler in the existing build directory. Two boot lanes and nine paired upstream programs are checked. Original KVM and pidfd outcomes are separate; a timeout is not PASS. No full Linux acceptance, clean release or formal kernel-correctness claim.",
+  "claimCeiling": "Every target C unit was built with one identified compiler in a fresh output tree, in one uninterrupted Kbuild run. Two boot lanes and nine paired upstream programs are checked. Original KVM and pidfd outcomes are separate; a timeout is not PASS. No full Linux acceptance or formal kernel-correctness claim.",
   "originalPidfd": {
-    "record": ".evidence/kernel-codegen-replay-20261019/zero-branch-original-pidfd/summary.json",
-    "sha256": "8c0fc4b1ea81bf53974f5e7e7e0e1fdb56299b9a79bb9ed7c454e66ed960cdc1",
+    "record": ".evidence/kernel-direct-r010-f1/original-pidfd/summary.json",
+    "sha256": "f344d20fdc44a290b28c8206a41028452e6d0d61063ff5f3d09022ae6e7092b6",
     "status": "INCOMPLETE",
     "scope": "One unchanged upstream pidfd program on the retained virtconfig pair; 45-second program and 105-second boot limits. Not the deleted 7008-unit composition or full kselftest acceptance.",
     "protocol": {

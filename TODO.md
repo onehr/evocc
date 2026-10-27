@@ -1433,6 +1433,17 @@ not the missing 7,008-unit configuration, full 970-program acceptance or
 KUnit, and it closes none of those separate tasks.
 [Receipt](tests/contracts/kernel-direct-virt-receipt.json) and [details][kernel].
 
+Frozen release replay (2026-10-27): the frozen compiler of `08bf09bd` builds the retained
+arm64 virtconfig input in a fresh output tree, in one uninterrupted Kbuild run (5,084 s of
+the 7,200 s limit). All 2,799 target C objects and the 5 C-to-assembly helpers come from one
+compiler, `3520c267…`; no target C comes from GCC and no object is seeded. The GCC reference
+and the EvoCC Image boot on HVF with pointer authentication and on TCG, with fresh nonces.
+The nine selected programs pass on both kernels with 125/125 subtests. QEMU 11.1.2 stays a
+disclosed drift. The original KVM programs still reach their 120-second limit on EvoCC after
+6 of 10 modes (GCC 10/10), so K02 and K03 stay open. This is not the 7,008-unit composition,
+full kselftest or KUnit acceptance.
+[Receipt](tests/contracts/kernel-direct-virt-receipt.json).
+
 - [ ] **K01 — Diagnose the intermittent sched_ext kernel NULL fault** — `OPEN`, P1.
   `hotplug` → `reload_loop` reproduces the fault on both EvoCC and GCC; an outer
   runner exit of zero can conceal inner failures. Reduce/trace the static-key and
