@@ -9,6 +9,7 @@ the recorded test logs of accepted runs verbatim; it needs the local .evidence t
 from __future__ import annotations
 
 import argparse
+import base64
 from datetime import datetime, timezone
 import hashlib
 import importlib.util
@@ -29,7 +30,8 @@ APPS = {
     "zstd": ("zstd/zstd-1.5.7", "programs/zstd"),
     "zlib": ("zlib/zlib-1.3.2", "minigzip"),
     "mbedtls": ("mbedtls/mbedtls-4.2.0", "build/programs/test/selftest"),
-    "polybench": ("polybench", "native/20260919T222638Z/evocc/fdtd-2d.exe"),
+    # Each PolyBench run keeps its executables under its own run ID; see app_binary.
+    "polybench": ("polybench", "native/{run}/evocc/fdtd-2d.exe"),
 }
 # Gallery cards that quote the recorded logs of accepted runs. Each segment is
 # (pattern of one line, number of lines) or (pattern, number of lines, lines before
@@ -110,6 +112,25 @@ def boot_facts(log, nonce):
     return facts
 
 
+def app_binary(name):
+    """Return the build tree and the program of a lane, as its current receipt names them."""
+    relative, exe = APPS[name]
+    if "{run}" in exe:
+        exe = exe.format(run=read_json(ROOT / f"tests/contracts/ladder-{name}-receipt.json")["run"])
+    tree = ROOT / ".build/ladder" / relative
+    return tree, tree / exe
+
+
+def doom_png(ppm):
+    """The Doom lane keeps PPM frames. Encode the gallery PNG of one frame losslessly, once."""
+    png = ppm.with_suffix(".png")
+    if not png.exists():
+        header, rgb = ppm.read_bytes().split(b"\n255\n", 1)
+        width, height = map(int, header.split(b"\n")[1].split())
+        png.write_bytes(base64.b64decode(visualizer().png_uri(width, height, rgb).split(",", 1)[1]))
+    return png
+
+
 def run(argv, *, cwd, input_data=None, expected_exit=0, stage=None):
     result = subprocess.run([str(a) for a in argv], cwd=cwd, input=input_data,
                             capture_output=True, timeout=30)
@@ -175,9 +196,8 @@ def capture():
                "programs": {}}
     with tempfile.TemporaryDirectory(prefix="evocc-showcase-") as tmp:
         work = Path(tmp)
-        for name, (relative, exe) in APPS.items():
-            tree = ROOT / ".build/ladder" / relative
-            binary = tree / exe
+        for name in APPS:
+            tree, binary = app_binary(name)
             record = audit(name, tree, binary)
             commands = []
             if name == "tinycc":
@@ -225,7 +245,7 @@ def capture():
                 record["generatedExecutableSha256"] = digest(work / "seal")
             elif name == "polybench":
                 commands.append(run([binary], cwd=work))
-                reference = tree / "native/20260919T222638Z/gcc/fdtd-2d.stderr"
+                reference = binary.parent.parent / "gcc/fdtd-2d.stderr"
                 if commands[-1]["stderr"] != reference.read_text():
                     raise ValueError("FDTD output differs from retained GCC control")
                 record["referenceDumpSha256"] = digest(reference)
@@ -254,7 +274,7 @@ def render():
             raise ValueError(f"capture text changed: {name}")
         (OUT / f"{name}.svg").write_text(visuals.draw(name, records["programs"][name], records["programs"]))
     render_logs(records)
-    source = ROOT / ".build/ladder/doom/evocc-demo1-0/frame-350.png"
+    source = doom_png(ROOT / ".build/ladder/doom/evocc-demo1-0/frame-350.ppm")
     doom_receipt = read_json(ROOT / "tests/contracts/ladder-doom-receipt.json")
     runtime = ROOT / ".build/ladder/doom/runtime.json"
     if doom_receipt["status"] != "PASS" or digest(runtime) != doom_receipt["artifacts"]["runtime.json"]:

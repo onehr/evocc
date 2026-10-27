@@ -39,7 +39,8 @@ from typed Core source to final assembly text.
 - **Proof-carrying compilation.** For the supported `core-v1` subset, `evo prove` writes assembly
   only when Lean 4 checks every stage from typed Core source to final assembly text.
 - **Made for agents.** JSON output, safe automatic repairs and an MCP server. On bugs that GCC and
-  UBSan miss, a coding agent needs about a third fewer steps with EvoCC.
+  UBSan miss, a coding agent needed about a third fewer steps with EvoCC in an experiment of
+  2026-10-09.
 
 ## Install
 
@@ -137,7 +138,7 @@ fails, `evo prove` writes no output. `abs(INT_MIN)` has no valid result in C, so
 assembly traps instead of returning a wrong value:
 
 ```asm
-    subs w0, w2, w0
+    subs w0, w1, w0
     b.vs .Labs_block4
     ...
 .Labs_block4:
@@ -153,9 +154,10 @@ $ claude mcp add evo -- evo mcp
 ```
 
 The `evo` commands also write JSON with `--json`. In a
-[registered experiment](book/src/evaluation-agents.md#experiment-5-repair-effort-and-program-size),
-a coding agent fixed bugs that GCC's warnings and UBSan miss with about a third fewer steps and
-tokens when it used EvoCC. [Agents](book/src/agents.md) shows the setup for Claude Code and Codex.
+[registered experiment](book/src/evaluation-agents.md#experiment-5-repair-effort-and-program-size)
+on 2026-10-09, with the EvoCC of commit `9672d2d9`, a coding agent fixed bugs that GCC's warnings
+and UBSan miss with about a third fewer steps and tokens when it used EvoCC.
+[Agents](book/src/agents.md) shows the setup for Claude Code and Codex.
 
 ## What it compiles correctly
 
@@ -212,7 +214,7 @@ Each image is real program output, a plot of it, or an excerpt of a recorded tes
 - **Lean 4** proves the 62 rewrite rules of the optimizer. For `core-v1` on AArch64 Linux, five
   Lean checkers compare the input and output of each stage, and one theorem covers that chain.
 
-AI agents wrote EvoCC in about two months, under the direction of one engineer.
+AI agents wrote EvoCC in under three months, under the direction of one engineer.
 [The paper](docs/paper.md) tells that story and describes the design and the evaluation.
 
 ## Build your first optimization
@@ -417,7 +419,8 @@ remove the temporary directory printed by `echo "$out"`; no generated files belo
 EvoCC 0.1.0 is experimental.
 
 - It targets AArch64 only, on Linux and macOS.
-- Its code is 2 to 2.7 times the size of GCC `-O2` output, and it is not tuned for speed.
+- Its code is 1.8 to 2.3 times the size of GCC `-O2` output on five library files, and it is
+  not tuned for speed.
 - `evo check` runs programs that do not call the C library.
 - Proofs cover `core-v1`: integer functions without pointers, arrays or recursion. See the
   [exact profile and trust boundary](spec/verification.md), including the typed Core input and

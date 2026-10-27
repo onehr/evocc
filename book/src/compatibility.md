@@ -20,99 +20,99 @@ from recorded UTC run identifiers; they are not source-release or regeneration d
 
 | Receipt / lane | Input version / ref / commit | EvoCC checkout | Retained result | Passing / total | Run date |
 |---|---|---|---|---|---|
-| [cjson](https://github.com/onehr/evocc/blob/main/tests/contracts/ladder-cjson-receipt.json) | v1.7.19 (2025-09-09, github.com/DaveGamble/cJSON) | not recorded | PASS | 23/23 units | 2026-10-25 10:32:37 UTC |
-| [csmith](https://github.com/onehr/evocc/blob/main/tests/contracts/ladder-csmith-receipt.json) | commit 0cdc710315cfee9035e22ef4363ca479270d1934 | e7a3408c | INCOMPLETE | 932/1000 programs | 2026-10-25 16:24:52 UTC |
-| [doom](https://github.com/onehr/evocc/blob/main/tests/contracts/ladder-doom-receipt.json) | commit dcb7a8dbc7a16ce3dda29382ac9aae9d77d21284 | not recorded | PASS | 81/81 units | 2026-10-25 12:01:37 UTC |
-| [torture](https://github.com/onehr/evocc/blob/main/tests/contracts/ladder-e0-receipt.json) | releases/gcc-16.2.0 | b2aae0da | INCOMPLETE | 1538/1692 programs | 2026-10-25 09:52:26 UTC |
-| [jq](https://github.com/onehr/evocc/blob/main/tests/contracts/ladder-jq-receipt.json) | jq-1.8.2 | not recorded | PASS | 70/70 units | 2026-10-25 11:50:50 UTC |
-| [llvm-test-suite](https://github.com/onehr/evocc/blob/main/tests/contracts/ladder-llvm-test-suite-receipt.json) | llvmorg-23.1.0 (2919e55176a572ee085cb46b291c47b7092c363e) | not recorded | INCOMPLETE | 1054/1735 programs | 2026-10-25 11:40:52 UTC |
-| [lua](https://github.com/onehr/evocc/blob/main/tests/contracts/ladder-lua-receipt.json) | 5.5.1 | not recorded | PASS | 34/34 units | 2026-10-25 11:54:09 UTC |
-| [mbedtls](https://github.com/onehr/evocc/blob/main/tests/contracts/ladder-mbedtls-receipt.json) | 4.2.0 (2026-07-07, github.com/Mbed-TLS/mbedtls) | not recorded | PASS | 382/382 units | 2026-10-25 17:12:09 UTC |
-| [musl](https://github.com/onehr/evocc/blob/main/tests/contracts/ladder-musl-receipt.json) | musl 1.2.6 (2026-03-20, musl.libc.org/releases.html) | not recorded | INCOMPLETE | 1339/1339 units | 2026-10-25 11:29:04 UTC |
-| [polybench](https://github.com/onehr/evocc/blob/main/tests/contracts/ladder-polybench-receipt.json) | 4.2.1-beta (2016-05-20) | not recorded | PASS | 30/30 programs | 2026-10-25 11:40:35 UTC |
-| [sqlite](https://github.com/onehr/evocc/blob/main/tests/contracts/ladder-sqlite-receipt.json) | 3.53.4 public source + testfixture | not recorded | PASS | 86/86 units | 2026-10-25 11:58:38 UTC |
-| [tinycc](https://github.com/onehr/evocc/blob/main/tests/contracts/ladder-tinycc-receipt.json) | mob 0fb54300b565 | not recorded | PASS | 11/11 units | 2026-10-25 10:32:55 UTC |
-| [toybox](https://github.com/onehr/evocc/blob/main/tests/contracts/ladder-toybox-receipt.json) | 0.8.14 (2026-06-22, github.com/landley/toybox) | not recorded | INCOMPLETE | 203/203 units | 2026-10-25 10:33:26 UTC |
-| [zlib](https://github.com/onehr/evocc/blob/main/tests/contracts/ladder-zlib-receipt.json) | 1.3.2 (2026-02-17, zlib.net) | not recorded | PASS | 19/19 units | 2026-10-25 10:30:39 UTC |
-| [zstd](https://github.com/onehr/evocc/blob/main/tests/contracts/ladder-zstd-receipt.json) | v1.5.7 (2025-02-19, github.com/facebook/zstd) | not recorded | PASS | 44/44 units | 2026-10-25 10:30:48 UTC |
+| [cjson](https://github.com/onehr/evocc/blob/main/tests/contracts/ladder-cjson-receipt.json) | v1.7.19 (2025-09-09, github.com/DaveGamble/cJSON) | not recorded | PASS | 23/23 units | 2026-10-27 11:47:29 UTC |
+| [csmith](https://github.com/onehr/evocc/blob/main/tests/contracts/ladder-csmith-receipt.json) | commit 0cdc710315cfee9035e22ef4363ca479270d1934 | c65f6723 | INCOMPLETE | 932/1000 programs | 2026-10-27 11:11:51 UTC |
+| [doom](https://github.com/onehr/evocc/blob/main/tests/contracts/ladder-doom-receipt.json) | commit dcb7a8dbc7a16ce3dda29382ac9aae9d77d21284 | not recorded | PASS | 81/81 units | 2026-10-27 12:26:36 UTC |
+| [torture](https://github.com/onehr/evocc/blob/main/tests/contracts/ladder-e0-receipt.json) | releases/gcc-16.2.0 | c65f6723 | PROFILE_CLEAN | 1543/1692 programs | 2026-10-27 11:08:42 UTC |
+| [jq](https://github.com/onehr/evocc/blob/main/tests/contracts/ladder-jq-receipt.json) | jq-1.8.2 | not recorded | PASS | 70/70 units | 2026-10-27 12:14:24 UTC |
+| [llvm-test-suite](https://github.com/onehr/evocc/blob/main/tests/contracts/ladder-llvm-test-suite-receipt.json) | llvmorg-23.1.0 (2919e55176a572ee085cb46b291c47b7092c363e) | not recorded | PROFILE_CLEAN | 1066/1735 programs | 2026-10-27 12:04:26 UTC |
+| [lua](https://github.com/onehr/evocc/blob/main/tests/contracts/ladder-lua-receipt.json) | 5.5.1 | not recorded | PASS | 34/34 units | 2026-10-27 12:17:40 UTC |
+| [mbedtls](https://github.com/onehr/evocc/blob/main/tests/contracts/ladder-mbedtls-receipt.json) | 4.2.0 (2026-07-07, github.com/Mbed-TLS/mbedtls) | not recorded | PASS | 382/382 units | 2026-10-27 11:51:08 UTC |
+| [musl](https://github.com/onehr/evocc/blob/main/tests/contracts/ladder-musl-receipt.json) | musl 1.2.6 (2026-03-20, musl.libc.org/releases.html) | not recorded | INCOMPLETE | 1339/1339 units | 2026-10-27 11:49:38 UTC |
+| [polybench](https://github.com/onehr/evocc/blob/main/tests/contracts/ladder-polybench-receipt.json) | 4.2.1-beta (2016-05-20) | not recorded | PASS | 30/30 programs | 2026-10-27 12:04:08 UTC |
+| [sqlite](https://github.com/onehr/evocc/blob/main/tests/contracts/ladder-sqlite-receipt.json) | 3.53.4 public source + testfixture | not recorded | PASS | 86/86 units | 2026-10-27 12:18:32 UTC |
+| [tinycc](https://github.com/onehr/evocc/blob/main/tests/contracts/ladder-tinycc-receipt.json) | mob 0fb54300b565 | not recorded | PASS | 11/11 units | 2026-10-27 11:47:46 UTC |
+| [toybox](https://github.com/onehr/evocc/blob/main/tests/contracts/ladder-toybox-receipt.json) | 0.8.14 (2026-06-22, github.com/landley/toybox) | not recorded | INCOMPLETE | 203/203 units | 2026-10-27 11:48:17 UTC |
+| [zlib](https://github.com/onehr/evocc/blob/main/tests/contracts/ladder-zlib-receipt.json) | 1.3.2 (2026-02-17, zlib.net) | not recorded | PASS | 19/19 units | 2026-10-27 11:45:44 UTC |
+| [zstd](https://github.com/onehr/evocc/blob/main/tests/contracts/ladder-zstd-receipt.json) | v1.5.7 (2025-02-19, github.com/facebook/zstd) | not recorded | PASS | 44/44 units | 2026-10-27 11:45:52 UTC |
 
 ## Provenance and scope
 
 ### cjson
 
 Input commit: unknown. Target: aarch64-unknown-linux-gnu.
-Recorded checkout: not recorded; run: 20261025T103237Z.
-Compiler SHA-256: 978a3771912d7b2eafe89228ff2cb3d3c0c996826b2b2875c4cb74932a655ce4.
+Recorded checkout: not recorded; run: 20261027T114729Z.
+Compiler SHA-256: ab0c90437192d6824ce884c71d80a028e1d785ae89a11fe58ecb0145d76de525.
 Scope: installed libraries plus all 21 upstream Unity test translation units.
 Compiled: 23.
 
 ### csmith
 
 Input commit: 0cdc710315cfee9035e22ef4363ca479270d1934. Target: aarch64-unknown-linux-gnu.
-Recorded checkout: e7a3408c; run: 20261025T162452Z.
-Compiler SHA-256: a97453ed756d3e19d2f1d790b35a6f4b2a5ef8004edea3b9be435fdd3c59623d.
+Recorded checkout: c65f6723; run: 20261027T111151Z.
+Compiler SHA-256: ab0c90437192d6824ce884c71d80a028e1d785ae89a11fe58ecb0145d76de525.
 Scope: original seeds; unavailable oracles are not passes.
 Raw outcomes: agree=932, oracle-unusable=68.
 
 ### doom
 
 Input commit: dcb7a8dbc7a16ce3dda29382ac9aae9d77d21284. Target: unknown.
-Recorded checkout: not recorded; run: 20261025T120137Z.
-Compiler SHA-256: 978a3771912d7b2eafe89228ff2cb3d3c0c996826b2b2875c4cb74932a655ce4.
+Recorded checkout: not recorded; run: 20261027T122636Z.
+Compiler SHA-256: ab0c90437192d6824ce884c71d80a028e1d785ae89a11fe58ecb0145d76de525.
 Scope: pinned headless doomgeneric/Freedoom demos; explicit wrap profile and video-init port repair; not interactive/audio acceptance. 350 frames each of two bundled demos; two repeats; no audio/window/input acceptance.
 Compiled: 81.
 
 ### torture
 
 Input commit: 78d4ac73dd391005b895a6148cd9831e28e1208b. Target: aarch64-unknown-linux-gnu.
-Recorded checkout: b2aae0da; run: 20261025T095226Z.
-Compiler SHA-256: 978a3771912d7b2eafe89228ff2cb3d3c0c996826b2b2875c4cb74932a655ce4.
+Recorded checkout: c65f6723; run: 20261027T110842Z.
+Compiler SHA-256: ab0c90437192d6824ce884c71d80a028e1d785ae89a11fe58ecb0145d76de525.
 Scope: mixed integer/FP suite; selected options consumed, evidenced inapplicability retained, unknown requirements remain unresolved.
-Raw outcomes: fail=6, not-applicable=61, pass=1545, refused=80.
-Reviewed dispositions: FP-deferred=0, PASS=1538, compiler-failure=5, not-applicable=146, oracle-unusable=3.
-Refusals: E0112=1, E1001=3, E1205=17, E1207=3, E2102=2, E2202=5, E2203=8, E2204=1, E2903=3, E2920=5, E2929=1, E2933=3, E2935=1, E2939=2, E2940=5, E2949=9, E2952=4, E3051=4, E3101=1, other=2.
+Raw outcomes: fail=6, not-applicable=61, pass=1554, refused=71.
+Reviewed dispositions: FP-deferred=0, PASS=1543, compiler-failure=0, not-applicable=146, oracle-unusable=3.
+Refusals: E0112=1, E1001=3, E1205=17, E1207=3, E2102=2, E2202=4, E2203=8, E2204=1, E2903=3, E2920=5, E2929=1, E2933=3, E2935=1, E2939=2, E2940=5, E2949=9, E3101=1, other=2.
 
 ### jq
 
 Input commit: unknown. Target: aarch64-unknown-linux-gnu.
-Recorded checkout: not recorded; run: 20261025T115050Z.
-Compiler SHA-256: 978a3771912d7b2eafe89228ff2cb3d3c0c996826b2b2875c4cb74932a655ce4.
+Recorded checkout: not recorded; run: 20261027T121424Z.
+Compiler SHA-256: ab0c90437192d6824ce884c71d80a028e1d785ae89a11fe58ecb0145d76de525.
 Scope: original make check with bundled Oniguruma; mixed-object ramp.
 Compiled: 70.
 
 ### llvm-test-suite
 
 Input commit: 2919e55176a572ee085cb46b291c47b7092c363e. Target: aarch64-unknown-linux-gnu.
-Recorded checkout: not recorded; run: 20261025T114052Z.
-Compiler SHA-256: 978a3771912d7b2eafe89228ff2cb3d3c0c996826b2b2875c4cb74932a655ce4.
+Recorded checkout: not recorded; run: 20261027T120426Z.
+Compiler SHA-256: ab0c90437192d6824ce884c71d80a028e1d785ae89a11fe58ecb0145d76de525.
 Scope: SingleSource C objects with original lit outputs; C++ excluded by language, mixed ramp.
-Compiled: 1674.
+Compiled: 1690.
 Baseline failures: 2.
-Raw outcomes: PASS=1658, compiler-refused=61, link-failure=3, oracle-unusable=2, runtime-failure=11.
-Reviewed dispositions: FP-deferred=3, PASS=1054, compiler-failure=11, not-applicable=665, oracle-unusable=2.
-Refusals: E1001=26, E1207=3, E2002=1, E2102=4, E2202=4, E2204=1, E2903=3, E2929=1, E2931=1, E2940=1, E2949=1, E2952=2, E3050=1, E3051=3, other=9.
+Raw outcomes: PASS=1674, compiler-refused=45, link-failure=3, oracle-unusable=2, runtime-failure=11.
+Reviewed dispositions: FP-deferred=2, PASS=1066, compiler-failure=0, not-applicable=665, oracle-unusable=2.
+Refusals: E1001=26, E1207=3, E2002=1, E2102=4, E2204=1, E2903=3, E2929=1, E2931=1, E2940=1, E2949=1, E3050=1, other=2.
 
 ### lua
 
 Input commit: unknown. Target: aarch64-unknown-linux-gnu.
-Recorded checkout: not recorded; run: 20261025T115409Z.
-Compiler SHA-256: 978a3771912d7b2eafe89228ff2cb3d3c0c996826b2b2875c4cb74932a655ce4.
+Recorded checkout: not recorded; run: 20261027T121740Z.
+Compiler SHA-256: ab0c90437192d6824ce884c71d80a028e1d785ae89a11fe58ecb0145d76de525.
 Scope: matching official all.lua without soft skips; mixed-object ramp.
 Compiled: 34.
 
 ### mbedtls
 
 Input commit: unknown. Target: aarch64-unknown-linux-gnu.
-Recorded checkout: not recorded; run: 20261025T171209Z.
-Compiler SHA-256: 9f486dd69fc138128113205330fd58758ffe8e8f09fb5b0caa59f97643c1b29a.
+Recorded checkout: not recorded; run: 20261027T115108Z.
+Compiler SHA-256: ab0c90437192d6824ce884c71d80a028e1d785ae89a11fe58ecb0145d76de525.
 Scope: default release selftest and CTest against installed objects; mixed-link ramp.
 Compiled: 382.
 
 ### musl
 
 Input commit: unknown. Target: aarch64-unknown-linux-gnu.
-Recorded checkout: not recorded; run: 20261025T112904Z.
-Compiler SHA-256: 978a3771912d7b2eafe89228ff2cb3d3c0c996826b2b2875c4cb74932a655ce4.
+Recorded checkout: not recorded; run: 20261027T114938Z.
+Compiler SHA-256: ab0c90437192d6824ce884c71d80a028e1d785ae89a11fe58ecb0145d76de525.
 Scope: libc-test relative to baseline failures.
 Compiled: 1339.
 Baseline failures: 13.
@@ -120,8 +120,8 @@ Baseline failures: 13.
 ### polybench
 
 Input commit: unknown. Target: unknown.
-Recorded checkout: not recorded; run: 20261025T114035Z.
-Compiler SHA-256: 978a3771912d7b2eafe89228ff2cb3d3c0c996826b2b2875c4cb74932a655ce4.
+Recorded checkout: not recorded; run: 20261027T120408Z.
+Compiler SHA-256: ab0c90437192d6824ce884c71d80a028e1d785ae89a11fe58ecb0145d76de525.
 Scope: 30 original kernels, MINI_DATASET array-output correctness; reference-built allocation utility, not performance.
 Compiled: 30.
 Raw outcomes: PASS=30.
@@ -129,24 +129,24 @@ Raw outcomes: PASS=30.
 ### sqlite
 
 Input commit: unknown. Target: aarch64-unknown-linux-gnu.
-Recorded checkout: not recorded; run: 20261025T115838Z.
-Compiler SHA-256: 978a3771912d7b2eafe89228ff2cb3d3c0c996826b2b2875c4cb74932a655ce4.
+Recorded checkout: not recorded; run: 20261027T121832Z.
+Compiler SHA-256: ab0c90437192d6824ce884c71d80a028e1d785ae89a11fe58ecb0145d76de525.
 Scope: public Tcl veryquick suite against installed fixture objects; mixed-object ramp.
 Compiled: 86.
 
 ### tinycc
 
 Input commit: 0fb54300b56512754221d80adda85ddb9815bceb. Target: aarch64-unknown-linux-gnu.
-Recorded checkout: not recorded; run: 20261025T103255Z.
-Compiler SHA-256: 978a3771912d7b2eafe89228ff2cb3d3c0c996826b2b2875c4cb74932a655ce4.
+Recorded checkout: not recorded; run: 20261027T114746Z.
+Compiler SHA-256: ab0c90437192d6824ce884c71d80a028e1d785ae89a11fe58ecb0145d76de525.
 Scope: mixed-link compiler tests.
 Compiled: 11.
 
 ### toybox
 
 Input commit: unknown. Target: aarch64-unknown-linux-gnu.
-Recorded checkout: not recorded; run: 20261025T103326Z.
-Compiler SHA-256: 978a3771912d7b2eafe89228ff2cb3d3c0c996826b2b2875c4cb74932a655ce4.
+Recorded checkout: not recorded; run: 20261027T114817Z.
+Compiler SHA-256: ab0c90437192d6824ce884c71d80a028e1d785ae89a11fe58ecb0145d76de525.
 Scope: mixed-link tests relative to baseline failures.
 Compiled: 203.
 Baseline failures: 1.
@@ -156,16 +156,16 @@ subject test outcomes: FAIL=1, PASS=1648, SKIP=20.
 ### zlib
 
 Input commit: unknown. Target: aarch64-unknown-linux-gnu.
-Recorded checkout: not recorded; run: 20261025T103039Z.
-Compiler SHA-256: 978a3771912d7b2eafe89228ff2cb3d3c0c996826b2b2875c4cb74932a655ce4.
+Recorded checkout: not recorded; run: 20261027T114544Z.
+Compiler SHA-256: ab0c90437192d6824ce884c71d80a028e1d785ae89a11fe58ecb0145d76de525.
 Scope: mixed-link program tests.
 Compiled: 19.
 
 ### zstd
 
 Input commit: unknown. Target: aarch64-unknown-linux-gnu.
-Recorded checkout: not recorded; run: 20261025T103048Z.
-Compiler SHA-256: 978a3771912d7b2eafe89228ff2cb3d3c0c996826b2b2875c4cb74932a655ce4.
+Recorded checkout: not recorded; run: 20261027T114552Z.
+Compiler SHA-256: ab0c90437192d6824ce884c71d80a028e1d785ae89a11fe58ecb0145d76de525.
 Scope: mixed-link program tests; see recorded source/build adjustments.
 Compiled: 44.
 

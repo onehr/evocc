@@ -18,17 +18,17 @@ gave none. No other date is added.
 
 | Block | When the numbers were measured |
 |---|---|
-| [Status — 2026-09-28](#status--2026-09-28): application benchmarks | Audit of existing measurements on 2026-09-28. Unchanged-program replays on September 27 cover torture, c-testsuite, TinyCC, toybox, LLVM SingleSource, jq, cJSON and musl. The other lanes keep their earlier measurements. |
-| [Linux boot, kselftest and KUnit](#linux-boot-kselftest-and-kunit) | Last full 970-program pair: September 22. One-program BPF replay: September 23. The latest and the preceding uniform compositions: September 28. The other rows give no date. |
+| [Status — 2026-10-27](#status--2026-10-27): application benchmarks | One serial campaign on 2026-10-27: all 15 lanes and Doom, with the release compiler of commit `08bf09bd`. |
+| [Linux boot, kselftest and KUnit](#linux-boot-kselftest-and-kunit) | Direct Kbuild replay and its diagnostics: 2026-10-27, with the release compiler of commit `08bf09bd`. Last full 970-program pair: September 22. One-program BPF replay: September 23. The latest and the preceding uniform compositions: September 28. The other rows give no date. |
 | [Language and research boundaries](#language-and-research-boundaries) | musl replay: September 27. The other items give no date. |
-| [Doom integration](#doom-integration) | Part of the status of 2026-09-28. The text gives no separate run date. |
+| [Doom integration](#doom-integration) | 2026-10-27, in the campaign of the application lanes. |
 | [Checked EqSat measurements](#checked-eqsat-measurements) | One date for each row, from 2026-09-09 to 2026-10-01. |
 | [Other implementation gates](#other-implementation-gates) | Rust–Lean correspondence: rerun on 2026-10-01. The 21,000-program gates and the 384/384 corpora: the text gives no date. |
 | [Recorded acceptance evidence](#recorded-acceptance-evidence) | V01 and V02 completion on 2026-10-05 (from [TODO.md](../TODO.md#first-public-release-verification)). |
 | [Acceptance sweep](#acceptance-sweep-2026-10-06) | 2026-10-06, at implementation commit `8770b186`; repeated at `e657709b`. |
 | [Native run of the checked output](#native-run-of-the-checked-output) | 2026-10-06, subject `e657709b` (the receipt date). |
-| [Showcase](#showcase-notes) | The text gives no date. See the capture notes. |
-| [Verification details and limits](#verification-details-and-limits) | Moved from the README of commit `3b0f18fc`; the V00 to V08 state is that of 2026-10-06. The README examples ran at the same commit. |
+| [Showcase](#showcase-notes) | 2026-10-27: the six demo captures, the Doom frame and the five log cards come from that campaign and the kernel replay. The three games: 2026-09-29. See the capture notes. |
+| [Verification details and limits](#verification-details-and-limits) | Moved from the README of commit `3b0f18fc`; the V00 to V08 state is that of 2026-10-06. The README examples ran again on 2026-10-27 with the release binaries of commit `08bf09bd`. |
 
 ## Showcase notes
 
@@ -41,7 +41,7 @@ The README keeps short captions. These are the full caption facts of each image:
 | Lua explores a fractal | Floating-point iteration → RGB pixels. |
 | SQLite | Its own `veryquick` suite: 0 errors in 329,803 tests. |
 | jq | `make check`: 9 of 9 jq test programs pass; 70 of 70 C units by EvoCC. |
-| cJSON | `cJSON_test` prints the example JSON; 216 unit tests, 0 failures. |
+| cJSON | `cJSON_test` prints the example JSON; 216 unit tests, 0 failures (lane log of run `20261027T114729Z`). |
 | Linux 6.18 | `make CC=evocc` builds 2,799 EvoCC C units; boots on 4 CPUs, runs init, powers down. |
 | Toybox | 1,669 tests; PASS, FAIL and SKIP lines identical to the GCC build. |
 | Mbed TLS seals pixels | Encrypt → restore → reject tampering. |
@@ -60,21 +60,23 @@ libraries. Their screenshots are bounded native runs, not full-game acceptance o
 compilation. The [capture notes, exact commands and limitations](images/showcase/README.md) keep
 these small examples separate from full benchmark acceptance.
 
-## Status — 2026-09-28
+<a id="status--2026-09-28"></a>
 
-**Full kernel boot works. Full kernel testing and the complete application ladder are not yet
-closed.** The latest recorded application lanes have **10 PASS, 1 PROFILE_CLEAN and 4
-INCOMPLETE**.
+## Status — 2026-10-27
 
-The application rows are an audit of existing measurements. They are not a new run of the checkout
-of that day. The unchanged-program replays of September 27 cover torture, c-testsuite, TinyCC,
-toybox, LLVM SingleSource, jq, cJSON and musl. The other lanes keep their earlier measurements.
-This is not a completed fresh 15-lane campaign and not a kernel-test rerun. Each receipt keeps its
-compiler and input identity. See the generated [status dashboard](status.md), the
-[archived roadmap](archive/roadmap.md), the [application ledger](archive/notebook/benchmark-evaluation-20260915.md)
-and the [kernel issue ledger](archive/notebook/kernel-selftest-gaps-20260914.md). The Git-tracked
-[TODO list](../TODO.md) gives each remaining task a stable ID, a priority, a next action and an
-evidence-based closure condition.
+**Full kernel boot works. Full kernel testing is not yet closed.** On 2026-10-27 one release
+compiler, built from commit `08bf09bd` (`ab0c9043…` on macOS, `3520c267…` for Linux), ran all 15
+application lanes and Doom in one serial campaign, and built and booted the direct Kbuild kernel.
+The application lanes have **10 PASS, 2 PROFILE_CLEAN and 3 INCOMPLETE**, and no lane has a
+compiler failure.
+
+Each invocation started on a clean tree. No population, budget, timeout, flag or disposition rule
+changed. This is not a kernel-test rerun. Each receipt keeps its compiler and input identity. See
+the generated [status dashboard](status.md), the [archived roadmap](archive/roadmap.md), the
+[application ledger](archive/notebook/benchmark-evaluation-20260915.md) and the [kernel issue
+ledger](archive/notebook/kernel-selftest-gaps-20260914.md). The Git-tracked [TODO list](../TODO.md)
+gives each remaining task a stable ID, a priority, a next action and an evidence-based closure
+condition.
 
 ### Application benchmarks
 
@@ -86,29 +88,29 @@ reference-built code.
 
 | Benchmark | Status | Recorded result | Scope or remaining issue |
 |---|---|---:|---|
-| GCC torture | PROFILE_CLEAN | 1,522/1,692 programs PASS | 0 compiler failures; 21 FP-deferred, 146 not applicable, 3 oracle-unusable; September 27 full replay |
-| c-testsuite | PASS | 220/220 programs PASS | Fresh full population, zero exclusions or deferrals |
-| Csmith | INCOMPLETE | 932/1,000 checksum agreements | All 1,000 compile; 0 mismatches; 68 unusable-oracle cases are not passes |
+| GCC torture | PROFILE_CLEAN | 1,543/1,692 programs PASS | 0 compiler failures; 146 not applicable, 3 oracle-unusable |
+| c-testsuite | PASS | 220/220 programs PASS | Full population, zero exclusions or deferrals |
+| Csmith | INCOMPLETE | 932/1,000 checksum agreements | All 1,000 compile; 0 refusals, 0 mismatches; 68 unusable-oracle cases are not passes |
 | zlib | PASS | 19/19 TU | Recorded original program tests |
 | zstd | PASS | 44/44 TU | Recorded original tests; build adjustments remain in the receipt |
-| cJSON | PASS | 23/23 TU | Both libraries + all 21 Unity/private-helper programs; 161 cases PASS, 1 upstream IGNORE; public-API controls also pass |
+| cJSON | PASS | 23/23 TU | Both libraries; `cJSON_test` and 26 Unity test programs: 216 tests, 0 failures, 1 upstream IGNORE (lane log of run `20261027T114729Z`; the receipt records the 23 units) |
 | Mbed TLS | PASS | 382/382 TU | Default configuration selftest and 148/148 CTest |
 | TinyCC | PASS | 11/11 TU | Original `make test`; relink/test exits and installed objects audited |
-| toybox | INCOMPLETE (shared test FAIL retained) | 203/203 TU installed; all 1,669 test occurrences complete | Both builds: 1,648 PASS / 1 FAIL / 20 SKIP; tar expected-hash contradiction reproduced; zero EvoCC regressions |
-| musl + libc-test | INCOMPLETE | 1,271/1,339 TU retained in the mixed build | Two complete runtime replays: zero added failures or replaced objects; 68 floating-complex refusals and 17 shared reference failures remain, with option omissions separately recorded |
+| toybox | INCOMPLETE (shared test FAIL retained) | 203/203 TU installed; all 1,669 test occurrences complete | Both builds: 1,648 PASS / 1 FAIL / 20 SKIP; the failing `tar ownership` test also fails with GCC; zero EvoCC regressions |
+| musl + libc-test | INCOMPLETE | 1,339/1,339 TU in the mixed build | libc-test: the 13 failures of the GCC build, and no added failure |
 | PolyBench/C | PASS | 30/30 kernels | MINI_DATASET array-output correctness, not performance; reference-built allocation utility |
-| LLVM test-suite | INCOMPLETE | 1,039/1,735 programs PASS | Fresh full run: 1 unresolved compiler failure, 30 FP-deferred, 664 not applicable, 1 oracle-unusable; no installed object rebuilt |
+| LLVM test-suite | PROFILE_CLEAN | 1,066/1,735 programs PASS | 0 compiler failures; 665 not applicable, 2 FP-deferred, 2 oracle-unusable |
 | jq | PASS | 70/70 TU; original `make check` PASS | Real binary128 interface; original `-pthread` preserved; no object fallback |
 | Lua | PASS | 34/34 TU | Matching official `all.lua`, without soft skips |
 | SQLite | PASS | 86/86 TU | Public Tcl `veryquick`: 329,803 assertions; not proprietary TH3 |
 
 The [benchmark receipt](../tests/contracts/bench-receipt.json) and the individual
-`ladder-*-receipt.json` files bind these results to their measured subjects. The complete LLVM
-replay of September 27 adds 25 original-program passes over the old full run. These include the
-earlier targeted FP repairs and all three LARGE `lu`, `ludcmp` and `floyd-warshall` workloads under
-the unchanged 60-second limit. All 1,048 installed objects survive the final build unchanged. The
-remaining compiler-failure classification is `pr23135` (L10 in TODO). It waits for its
-integer-vector source-definedness ruling. It is not FP-deferred.
+`ladder-*-receipt.json` files bind these results to their measured subjects. Every program or unit
+that passed in the receipts at the start of the release batch passes again, except LLVM
+`aarch64-acle-fmv-features`: its reference build finds compiler-rt and enables FMV, and the
+unchanged Clang 19 rejects its CSSC check, so its cause is on the reference side (N09 in TODO).
+LLVM `UnitTests/Vector/Vector-build2` passes for the first time; it was FP-deferred. `pr23135` is
+not applicable: its unchanged original executes a signed overflow (L10 in TODO).
 
 ### Linux boot, kselftest and KUnit
 
@@ -118,8 +120,8 @@ counted separately.
 
 | Scope | Verified result | Limit |
 |---|---|---|
-| Direct Kbuild, retained virtconfig, October 19 | **2,799/2,799 target-C** compiled through `make CC=evocc`; the banner names EvoCC; stored return addresses signed (`-mbranch-protection=pac-ret`); boot PASS on HVF with pointer authentication and on TCG; 9/9 programs and 125/125 subtests PASS on both kernels | Incremental build with two identified dirty-worktree compiler snapshots, not a clean release build. GNU tools assemble, link and build host programs; eight options have no effect; QEMU drift recorded. Original demand-paging: GCC PASS, EvoCC TIMEOUT. Original memslot-stress: both TIMEOUT. Full kselftest and KUnit not rerun |
-| Same kernels, fixed 256 MiB diagnostics | Demand paging: 65,682 page-fault handler entries on each side, EvoCC/GCC total instructions **2.79x**, kernel instructions **2.99x**. Memslot stress: 65,679 entries each, **2.80x** total and **3.00x** kernel. Both complete; no dropped or irregular records | Diagnostic 1,200-second budget, not the original 120-second exit. Full translated blocks are charged at entry; concurrent waits remain. Not native timing or attribution to an individual change. [Recorded counts](../tests/contracts/kernel-direct-virt-receipt.json) |
+| Direct Kbuild, retained virtconfig, October 27 | **2,799/2,799 target-C** and 5 C-to-assembly helpers from one release compiler (`3520c267…`, commit `08bf09bd`), compiled through `make CC=evocc` in one full build in a fresh output tree; the banner names EvoCC; stored return addresses signed (`-mbranch-protection=pac-ret`); boot PASS on HVF with pointer authentication and on TCG; 9/9 programs and 125/125 subtests PASS on both kernels | GNU tools assemble, link and build host programs; six options have no effect; QEMU drift recorded. The original KVM programs pass 10 of 10 modes on GCC; on EvoCC, demand paging and memslot stress both reach the 120-second limit after 6 of 10 modes. Full kselftest and KUnit not rerun |
+| Same kernels, fixed 256 MiB diagnostics | Demand paging: 65,682 page-fault handler entries on each side, EvoCC/GCC total instructions **2.59x**, kernel instructions **2.77x**. Memslot stress: 65,679 entries each, **2.59x** total and **2.77x** kernel. All four runs complete with verdict PASS | Diagnostic 1,200-second budget, not the original 120-second exit. Full translated blocks are charged at entry; concurrent waits remain. Not native timing or attribution to an individual change. [Recorded counts](../tests/contracts/kernel-direct-virt-receipt.json) |
 | K6 locked configuration | **2,799/2,799 target-C**, complete link, real boot and normal shutdown PASS; uniform EvoCC rebuild, zero GCC target-C fallback | Not every Linux configuration or subsystem |
 | BPF/module configuration | **7,008/7,008 target-C**, pinned current compiler, generated-input fixed point, complete link/boot PASS; 848 modules linked/BTF/signed/installed | Not all installed modules runtime-tested; fresh full kselftest/KUnit still pending; QEMU drift explicitly recorded |
 | Current FPU and connector follow-up | Both kernels: FPU **1/1 + 4,000/4,000 workers PASS**; bounded connector controls **20/20 each** | Actual signed FPU module loaded; unchanged persistent connector listener still times out under its original 45-second runner, not counted PASS |
@@ -617,11 +619,17 @@ ABI, and the native C corpora run on both systems ([other gates](#other-implemen
 
 ### README examples and reproduction rows
 
-The quick-start results of the README (13 from both interpreters, the `--check` record, the
-`-Oeq-scalar` EvoIR of `f` and the `abs` excerpt with `CHECKED_TO_FINAL_ASSEMBLY`) were reproduced
-on macOS with the existing debug driver at commit `3b0f18fc`; no Rust source was newer than that
-binary. The emitted `demo.s` assembles for `aarch64-linux-gnu` and defines only `main`; the native
-`gcc demo.s` step was not run for that revision.
+On 2026-10-27 the README quick start, the tutorial of its section 4 and the first-program pages
+of the book ran again on macOS with the release binaries of commit `08bf09bd` (`evocc`
+`ab0c9043…`). Each output equals the text, after three text updates: the checked `abs` keeps its
+zero operand in `w1`, the interpreter reports `shout.c` with a rendered diagnostic, and the first
+24 assembly lines of `sum.c` changed. The Lean command of the tutorial did not run in this replay.
+On the same day, GCC 14 in `evo-nexlab:sealed` compiled `first_bad.c` with `-O2 -Wall -Wextra`
+and gave no warning, and the program did not finish within 10 seconds. Apple clang gave no warning,
+and its program stopped with a trap (exit status 133). GCC 14 with `-Wall -Wextra
+-fsanitize=undefined` compiled `mean.c` with no warning, and the program gave no report. It
+returned 0 at `-O0`, and 34, 226, 188, 87 and 178 in five runs at `-O2`. With the CMake toolchain
+file, cJSON 1.7.19 passed 22 of 22 CTest tests and zlib 1.3.2 passed 16 of 16.
 
 The Linux row of the README reproduction table gives the `kernel-full` lane, which builds and boots
 the locked configuration. The FPU image comes from the separate 7,008-object BPF/module

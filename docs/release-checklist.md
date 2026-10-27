@@ -5,9 +5,9 @@ archives, checksums, notices, install and build instructions, reproducibility, v
 the changelog, the hosted workflows and the proof-claim boundary. The audit ran on 2026-10-13 on
 macOS (AArch64), at commit `366fd796` with the release-hygiene changes of the same day. It was
 updated on 2026-10-20 at commit `537e745a`, and on 2026-10-27 at commit `08bf09bd`, whose compiler
-the release acceptance uses. Each row names the date of its last check. Hosted CI is paused by the
-owner since 2026-10-20 (TODO R05m). The Linux archive and the merged checksum file come from a
-local release build (R05a) or from the release workflow.
+passed the frozen release acceptance on the same day. Each row names the date of its last check.
+Hosted CI is paused by the owner since 2026-10-20 (TODO R05m). The Linux archive and the merged
+checksum file come from a local release build (R05a) or from the release workflow.
 
 **Done** means that this audit checked it. **Partial** means that a part works, and the row names
 the rest. **Open** means that it is missing. **Not verified** means that the check needs a host or
@@ -62,7 +62,7 @@ and the hosted runs (R05m). **Nothing** means that no step of this release check
 | Version of `evocc-checker` and `evoir-sem` | Done on 2026-10-19 and committed in `f81a13d4`. Both print their binary name and `0.1.0`, exit zero and leave stderr empty. Tests run both from an empty directory and compare with Cargo's version. This does not certify a release archive. | Final gate (T05) | [`crates/evocc/tests/evo_cli.rs`](../crates/evocc/tests/evo_cli.rs); full workspace: 3,475 passed, zero failed, eight ignored; all six Lean steps passed |
 | Version policy | Done at `08bf09bd` (2026-10-27). `tools/release.sh` accepts only a `0.y.z` version with a matching heading in `CHANGELOG.md`. | Nothing | [`tools/release.sh`](../tools/release.sh) |
 | Package description | Done at `08bf09bd` (2026-10-27). It describes the compiler without internal lab names. | Nothing | [`crates/evocc/Cargo.toml`](../crates/evocc/Cargo.toml) |
-| Changelog and tag | Partial on 2026-10-27. The heading `## [0.1.0] - Unreleased` has no date. No `v0.1.0` tag exists. The section lists the changes of the release and its known limits. Its results wait for the frozen acceptance. The owner dates the heading and tags the commit as the last step of the release (R05k). | Frozen acceptance (kernel replay, B10); date and tag: Owner (R05k) | [`CHANGELOG.md`](../CHANGELOG.md) |
+| Changelog and tag | Partial on 2026-10-27. The heading `## [0.1.0] - Unreleased` has no date. No `v0.1.0` tag exists. The section lists the changes of the release, its known limits and the results of the frozen acceptance of 2026-10-27; the results of the final gate and of the archives follow. The owner dates the heading and tags the commit as the last step of the release (R05k). | Final gate (T05); release-archive build (R05a); date and tag: Owner (R05k) | [`CHANGELOG.md`](../CHANGELOG.md) |
 
 ## Hosted workflows
 

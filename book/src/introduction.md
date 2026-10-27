@@ -49,7 +49,7 @@ divide.c: error[E3002]: integer-division-by-zero
 ## What EvoCC does not do yet
 
 EvoCC is young, and we want you to know its limits. On the library code that we measured, its
-code is 2.0 to 2.7 times the size of the code that GCC 14 makes at `-O2`. The proofs cover small
+code is 1.8 to 2.3 times the size of the code that GCC 14 makes at `-O2`. The proofs cover small
 integer functions only. A program outside that subset is checked by tests, not by the theorem.
 [Chapter 8](evaluate.md) gives the numbers.
 

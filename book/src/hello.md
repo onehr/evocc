@@ -245,7 +245,13 @@ The interpreter stops at the call, because it cannot run `puts`:
 
 ```console
 $ evocc --interpret-c-hir shout.c
-shout.c:4:5: error[E3039]: external-call-not-executable
+error[E3039]: external-call-not-executable
+  --> shout.c:4:5
+   |
+ 4 |     puts("Hello, world!");
+   |     ^^^^^^^^^^^^^^^^^^^^^ external-call-not-executable
+   |
+   = note: execution is not supported for this operation; absence of undefined behavior is not established
 ```
 
 This is why the interpreters are tools for checking code, not a way to run whole programs.
@@ -272,14 +278,14 @@ sum_to:
     b.le .Lsum_to_block3
     b .Lsum_to_block4
 .Lsum_to_block2:
-    movz w3, #1
-    adds w3, w1, w3
+    movz w2, #1
+    adds w1, w1, w2
     b.vs .Lsum_to_block8
 .Lsum_to_block6:
-    mov w1, w3
-    mov w0, w2
     b .Lsum_to_block1
 .Lsum_to_block3:
+    adds w0, w0, w1
+    b.vs .Lsum_to_block9
 ```
 
 Look at `adds` and `b.vs`. The addition `i++` sets the overflow flag, and `b.vs` jumps away if the

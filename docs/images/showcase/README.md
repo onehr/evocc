@@ -6,6 +6,11 @@ are not invented application windows. Rendering a chart does not imply the CLI
 program has a GUI. No benchmark verdict is changed by these small examples, and
 no kernel rebuild or large disk image is needed.
 
+The six demo captures, the Doom frame and the five log cards were taken on
+2026-10-27. They use the builds and the logs of the release campaign and the
+kernel replay of that day, with the release compiler of commit `08bf09bd`. The
+three games are older captures (see below).
+
 | Demo | What actually executes | Scope / results |
 |---|---|---|
 | Doom / Freedoom | Recorded demo1, repetition 0, frame 350 | [81 C units; paired headless demos](../../../tests/contracts/ladder-doom-receipt.json); no live input or audio |
@@ -26,7 +31,11 @@ no kernel rebuild or large disk image is needed.
 
 ## Three native C games
 
-The new row was captured on September 29, 2026. All game C objects were emitted
+The new row was captured on September 29, 2026. The EvoCC build that emitted
+the game objects has the SHA-256 `5785fa7b1ba0…` ([`games.json`](games.json)).
+No record names its source commit; the capture commit is `91fce9c8`. The games
+were not built again for release 0.1.0, because their pinned sources and data
+are not retained offline. All game C objects were emitted
 by EvoCC, assembled/linked with the reference GNU toolchain, and run as AArch64
 Linux executables. SDL2, Mesa **llvmpipe**, libc/libm, image/font/audio libraries,
 Xvfb and the framebuffer observation adapter are reference-built dependencies.
@@ -157,7 +166,7 @@ exists, it also compares the excerpt with the log.
   `testfixture test/testrunner.tcl --jobs 2 veryquick` as an unprivileged user.
   All 86 C units of `testfixture` come from EvoCC. The Tcl library is
   reference-built.
-- **jq.** Run `20261010T094547Z`: all 70 C units come from EvoCC, and the
+- **jq.** Run `20261027T121424Z`: all 70 C units come from EvoCC, and the
   original `make check V=1` passes 30 test programs, 9 from jq and 21 from
   Oniguruma. The relink and test logs contain no compile command. The earlier
   run counted only 69 units. Automake prints the compile rule for
@@ -171,13 +180,13 @@ exists, it also compares the excerpt with the log.
   Unity test programs run 216 tests: none fails, and upstream marks one as
   ignored. The Unity framework itself is GCC-built.
 - **Linux.** The serial log comes from a kernel that Kbuild built directly
-  with `make ARCH=arm64 HOSTCC=gcc-14 CC=evocc`, Image `4543b721a0b69fe8…`, on
-  the host boot lane. Its version banner names `evocc 0.1.0`. All 2,799 target
-  C objects come from EvoCC. The receipt ties each object to its compile
-  command and compiler hash in the build log. This incremental build uses two
-  retained dirty-worktree compiler snapshots: 1,158 C objects from the first
-  and 1,641 from the second. It is not a clean single-compiler release build.
-  No GCC target C object remains. GNU tools
+  with `make ARCH=arm64 HOSTCC=gcc-14 CC=evocc`, Image `6df1602bbb74eef5…`, on
+  the host boot lane, on 2026-10-27. Its version banner names
+  `evocc 0.1.0 (08bf09bd7631 2026-10-27)`. All 2,799 target C objects and the
+  five C-to-assembly helpers come from one release compiler (`3520c267…`, the
+  Linux build of commit `08bf09bd`), in one full build in a fresh output tree.
+  The receipt ties each object to its compile command and compiler hash in the
+  build log. No GCC target C object remains. GNU tools
   assemble the 67 assembly files, link the kernel, build the host programs and
   preprocess one device-tree source. The configuration is the frozen GCC
   kernel configuration after `olddefconfig` with EvoCC. Only compiler
@@ -186,7 +195,7 @@ exists, it also compares the excerpt with the log.
   signing. Kbuild passes `-mbranch-protection=pac-ret` to every target C
   object. EvoCC signs a return address that leaves `x30`; an allocated leaf
   that keeps it in `x30` does not need a signature. The host lane enables pointer
-  authentication, so this boot runs the signed code. Eight compiler options
+  authentication, so this boot runs the signed code. Six compiler options
   have no effect, and the receipt lists them. The kernel also boots on the TCG
   lane, whose CPU model has no pointer authentication. Nine paired upstream
   kselftest programs, with 125 subtests, pass on both the GCC and the EvoCC
@@ -194,9 +203,10 @@ exists, it also compares the excerpt with the log.
   QEMU contract; the receipt allows and records this drift. The console prints
   the kernel's earlier messages late, so the `EVO_*` lines of the test init
   program appear before `Run /init` in the log. The card leaves them out. The
-  unchanged original KVM tests are reported separately: demand-paging passes
-  on GCC and times out on EvoCC; memslot-stress times out on both. These are
-  not part of the 125 passing subtests. The older 7,008-unit build used object
+  unchanged original KVM tests are reported separately: demand-paging and
+  memslot-stress pass all 10 modes on GCC, and on EvoCC both reach their
+  120-second limit after 6 of 10 modes. These are not part of the 125 passing
+  subtests. The older 7,008-unit build used object
   substitution after a GCC Kbuild run; it
   keeps its own receipt, but its raw configuration is no longer available.
   Full kselftest and KUnit runs remain open.

@@ -25,6 +25,9 @@ EXAMPLES = ROOT / "examples"
 BIN = ROOT / "target" / "frontend" / "release"
 ZLIB = ROOT / ".build" / "ladder" / "zlib" / "zlib-1.3.2.tar.gz"
 GCC_IMAGE = "evo-nexlab:sealed"
+# The lines that `grep -E 'subs|b\.vs|brk'` prints from the checked abs.s. The README and the
+# paper show them; tools/tests/test_render_readme.py keeps the three in agreement.
+PROVE_ASSEMBLY = "    subs w0, w1, w0\n    b.vs .Labs_block4\n    brk #3004\n"
 
 MONO = "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"
 SANS = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif"
@@ -116,7 +119,7 @@ def prove(work):
     steps = session(["cat abs.c", "evo prove abs.c -o abs.s --json | jq -r .result",
                      r"grep -E 'subs|b\.vs|brk' abs.s"], work)
     expect(steps, 1, "CHECKED_TO_FINAL_ASSEMBLY\n")
-    expect(steps, 2, "    subs w0, w2, w0\n    b.vs .Labs_block4\n    brk #3004\n")
+    expect(steps, 2, PROVE_ASSEMBLY)
     return steps
 
 

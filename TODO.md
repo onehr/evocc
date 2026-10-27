@@ -1,13 +1,13 @@
 # EvoCC remaining work
 
-Updated **2026-10-18**, initially audited against `a83d803`; current clauses are
-EvoIR **2.6.7** and EvoMIR **1.3.7** (pinned in `spec/`). This is the Git-tracked execution backlog,
-not a new test run.
+Updated **2026-10-27**, initially audited against `a83d803`; current clauses are
+EvoIR **2.39.0** and EvoMIR **1.16.0** (pinned in `spec/`). This is the Git-tracked execution
+backlog, not a new test run.
 Task IDs are stable: update or split an item with cross-references; do not recycle
 IDs or silently delete unresolved work. Historical review IDs remain in their
 original ledgers; the IDs below belong to this tracker.
 
-The [evidence document](docs/evidence.md#status--2026-09-28) summarizes measured capability;
+The [evidence document](docs/evidence.md#status--2026-10-27) summarizes measured capability;
 [docs/status.md](docs/status.md) is generated from receipts. This file answers
 **what remains, what to do next, and what evidence closes it**. Detailed sources,
 commands and measurements stay in the [kernel ledger][kernel],
@@ -138,7 +138,7 @@ was found in the read-only process check at this planning checkpoint.
 | APPLICATION | L11a, P17a, P22 | P21 completed 144 registered sessions: P1-P3 held; P4 and the earlier control penalty did not. P22's pilot of 2026-10-20 failed two go criteria on a false escape record. P01 through P20 retain their completed scope: P20 had no repair-count advantage; P18 stopped at the provider key limit. Existing application tasks keep separate exits. |
 | REVIEW |  | No rule decision is open. The 2026-10-13 decisions for K07, L03 to L10 and L11a to L11c are in docs/archive/notebook/rules-20261013/DECISIONS.md. |
 | AUDIT | D33 | D24 to D28 closed the follow-ups of D22, D23, L04 and L05; D33 changes the alignment model. D01-D15 are closed in their recorded scope. Keep the T03 audit boundary; kernel/application acceptance and deferred proof domains remain separate. |
-| ACCEPTANCE | T04, T02, K13, K14, T05, R05, R05a, R05k | Independently freeze repaired kernel/application subjects, run their existing paired/serial acceptance and refresh health/docs. |
+| ACCEPTANCE | T04, T02, K13, K14, T05, R05, R05a, R05k | On 2026-10-27 the compiler of `08bf09bd` passed the frozen acceptance (B10 and the direct Kbuild replay), and the public documents cite its receipts. Next: the final gate T05 on a clean tree, both archives (R05a), then the owner's R05k. |
 | LATER | R05m, R01, R02, R03, R03a, R03b, R03c, R03d, R03e, R03f, R03g, R03h, R04, R04a, R04b, R04c, R04d, R04e, N06, N06a, N06b, N06c, N06d, N06e | S1–S5 and R02e first slice are closed; S6 stays with R01's two G2 builds. R03 V1 negative-admission study is frozen; positive Q3 remains unachieved and R03a/b/c/d NOT_ADMITTED, R03e deferred. No VM timing or audit expansion; x86-64 and release stay separate. The bounded N01–N05/N07 batch is dispositioned, not a complete optimizing compiler: N03b/N03e preflights are negative, N07 E3 has zero SMT proofs, and all five library size targets remain missed. N03d C5 has size/correctness evidence but three compile-cost misses; C2/C5 remain outside the admitted cumulative configuration, and T1's misses stay frozen. All new defaults remain OFF. Retain N02's 70 admitted/187 opaque inputs and source-bridge mismatch. Broader inlining, mid-level and allocator work need newly scoped designs; no paused R activity is automatically reopened. |
 <!-- closure-queues:end -->
 
@@ -4598,6 +4598,15 @@ Reopening any of them needs a new owner decision after the N03 slices land.
   active. The 2026-10-13 audit is in `docs/release-checklist.md`. The archives
   now carry the license texts of the bundled Linux headers, and the sysroot
   contract pins them. The children R05a to R05l hold the missing deliverables.
+  October 27 claims refresh: the README, the book, the paper, the evidence
+  document, the gallery and `CHANGELOG.md` cite the receipts of the frozen
+  acceptance of `08bf09bd`. With that compiler the code is 1.8 to 2.3 times
+  the size of GCC 14 `-O2` code on five library files
+  ([default receipt](tests/contracts/application-size-default-20261027-receipt.json),
+  [EqSat receipt](tests/contracts/application-size-eqsat-20261027-receipt.json)).
+  The gallery captures and log cards come from the same runs. A number that no
+  run measured again keeps its date. The three games (2026-09-29) were not built
+  again, because their sources and data are not retained offline.
 
   - [ ] **R05a — Build and check the Linux archive** — `OPEN`, P1.
     No Linux archive has been built. Exit: `tools/release.sh --target

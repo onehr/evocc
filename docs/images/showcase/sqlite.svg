@@ -6,14 +6,14 @@
 <text x="400" y="38" fill="#e6edf3" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="24" font-weight="600" text-anchor="middle">SQLite 3.53.4: testrunner.tcl veryquick</text>
 <g clip-path="url(#body)">
 <text x="34" y="100" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="26" xml:space="preserve"><tspan fill="#e6edf3">splitting work across 2 cores</tspan></text>
-<text x="34" y="135" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="26" xml:space="preserve"><tspan fill="#e6edf3">built testset in 100ms..</tspan></text>
+<text x="34" y="135" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="26" xml:space="preserve"><tspan fill="#e6edf3">built testset in 83ms..</tspan></text>
 <text x="34" y="170" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="26" xml:space="preserve"><tspan fill="#7d8590">…</tspan></text>
-<text x="34" y="205" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="26" xml:space="preserve"><tspan fill="#7d8590">02:13 tcl(1108/1238) r2 ETC 00:12</tspan></text>
-<text x="34" y="240" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="26" xml:space="preserve"><tspan fill="#7d8590">02:15 tcl(1182/1238) r2 ETC 00:06</tspan></text>
-<text x="34" y="275" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="26" xml:space="preserve"><tspan fill="#7d8590">02:16 tcl(1238/1238) ETC 00:00</tspan></text>
+<text x="34" y="205" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="26" xml:space="preserve"><tspan fill="#7d8590">01:32 tcl(1128/1238) r2 ETC 00:06</tspan></text>
+<text x="34" y="240" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="26" xml:space="preserve"><tspan fill="#7d8590">01:34 tcl(1163/1238) r2 ETC 00:03</tspan></text>
+<text x="34" y="275" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="26" xml:space="preserve"><tspan fill="#7d8590">01:36 tcl(1238/1238) ETC 00:00</tspan></text>
 <text x="34" y="310" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="26" xml:space="preserve"><tspan fill="#e6edf3">Test database is /tmp/sqlite-test/testrunner.db</tspan></text>
 <text x="34" y="345" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="26" xml:space="preserve"><tspan fill="#e6edf3">Test log is /tmp/sqlite-test/testrunner.log</tspan></text>
-<text x="34" y="380" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="26" xml:space="preserve"><tspan fill="#7ee787" font-weight="700">0 errors out of 329803 tests</tspan><tspan fill="#e6edf3"> in 02:16 on 4dc872e9-8b4a-455b-887d-d4cf24e99c13 Linux 64-bit</tspan></text>
+<text x="34" y="380" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="26" xml:space="preserve"><tspan fill="#7ee787" font-weight="700">0 errors out of 329803 tests</tspan><tspan fill="#e6edf3"> in 01:36 on d0a79f7d-2e29-43ed-a34c-34410ea5996c Linux 64-bit</tspan></text>
 </g>
 <rect x="736" y="56" width="40" height="420" fill="url(#fade)"/>
 </svg>

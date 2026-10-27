@@ -85,6 +85,29 @@ class ShowcaseTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "missing or ambiguous"):
                 showcase.excerpt(text, segments)
 
+    def test_polybench_capture_uses_the_run_of_its_receipt(self):
+        receipt = {"run": "20261027T120408Z"}
+        with patch.object(showcase, "read_json", return_value=receipt):
+            tree, binary = showcase.app_binary("polybench")
+        self.assertEqual(tree, showcase.ROOT / ".build/ladder/polybench")
+        self.assertEqual(binary, tree / "native/20261027T120408Z/evocc/fdtd-2d.exe")
+        tree, binary = showcase.app_binary("lua")
+        self.assertEqual(binary, showcase.ROOT / ".build/ladder/lua/lua-5.5.1/src/lua")
+
+    def test_doom_png_is_encoded_once_from_its_frame(self):
+        rgb = bytes((i * 7) % 256 for i in range(320 * 200 * 3))
+        with tempfile.TemporaryDirectory() as directory:
+            ppm = Path(directory) / "frame-350.ppm"
+            ppm.write_bytes(b"P6\n320 200\n255\n" + rgb)
+            png = showcase.doom_png(ppm)
+            self.assertEqual(png, ppm.with_suffix(".png"))
+            games = importlib.util.spec_from_file_location("games_for_doom", SCRIPT.with_name("showcase_games.py"))
+            module = importlib.util.module_from_spec(games)
+            games.loader.exec_module(module)
+            self.assertEqual(module.captured_ppm(png), ppm.read_bytes())
+            png.write_bytes(b"kept")
+            self.assertEqual(showcase.doom_png(ppm).read_bytes(), b"kept")
+
     def test_log_excerpt_can_end_at_its_matched_line(self):
         text = "a\nPASS: one\nPASS: two\nend\n"
         self.assertEqual(showcase.excerpt(text, [(r"^end$", 2, 1)]),

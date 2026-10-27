@@ -6,15 +6,15 @@ Haoran Wang · NexRidge
 
 AI agents write code fast, and they are often wrong with confidence. A compiler is the last place
 where that is acceptable: its bugs are silent, and its users cannot inspect its output. We report on
-EvoCC, a C compiler for AArch64 that AI agents wrote in about two months under the direction of one
+EvoCC, a C compiler for AArch64 that AI agents wrote in under three months under the direction of one
 engineer. One rule governs every part of it: an untrusted component proposes, and a small checker
 decides. Agents propose code, and tests against sealed GCC and Clang oracles decide. The optimizer
 proposes rewrites, and a separate checker replays each one against rules that Lean 4 proves. For a
 subset of C, each compiler stage proposes its output, five Lean checkers decide, and one theorem
 covers the chain. The same checks serve the compiler's users. EvoCC's intermediate representation
 keeps C's undefined behavior explicit, so `evo check` reports the exact operation that breaks a
-rule. EvoCC builds a Linux kernel that boots, Doom, SQLite and Lua. Its code is 2 to 2.7 times the
-size of GCC's. In a registered experiment, a coding agent fixed bugs that GCC's warnings and UBSan
+rule. EvoCC builds a Linux kernel that boots, Doom, SQLite and Lua. Its code is 1.8 to 2.3 times
+the size of GCC's. In a registered experiment, a coding agent fixed bugs that GCC's warnings and UBSan
 miss with about a third fewer steps when it used EvoCC's evidence.
 
 ## 1 Introduction
@@ -30,8 +30,8 @@ Another described a check as "independent" while the check read its answers from
 agents are to build software that other people must trust, a compiler is a hard test: it is large,
 its bugs are silent, and its output is machine code.
 
-This paper reports on EvoCC, a C compiler for AArch64 Linux and macOS that AI agents wrote in about
-two months, under the direction of one engineer. EvoCC has its own preprocessor, parser, three
+This paper reports on EvoCC, a C compiler for AArch64 Linux and macOS that AI agents wrote in under
+three months, under the direction of one engineer. EvoCC has its own preprocessor, parser, three
 intermediate representations, optimizer, register allocator and assembly emitter. It builds a Linux
 kernel that boots, and it runs Doom, SQLite and Lua.
 
@@ -76,16 +76,19 @@ and a stable code faster than on a crash.
    of what its evidence saves a coding agent (§7).
 5. An account of how agents built the compiler, with the lessons from the process (§8).
 
-**Results at a glance.**
+**Results at a glance.** The release compiler of commit `08bf09bd` measured the first and third
+items on 2026-10-27. The other items give their dates.
 
 - EvoCC compiles all 2,799 target C files of a Linux 6.18 kernel, and the kernel boots. Ten of
   fifteen application suites pass completely.
 - For a subset of C, 107 of 107 functions pass all five checkers, from typed source to final
-  assembly text. 14,194 native runs of the checked code agree with the source semantics.
-- EvoCC's code is 2.0 to 2.7 times the size of GCC `-O2` output. The proved rewrites shrink it by
-  only 0.8 to 2.4 percent.
+  assembly text. 14,194 native runs of the checked code agree with the source semantics. Both
+  results are from 2026-10-06 (commit `e657709b`).
+- EvoCC's code is 1.8 to 2.3 times the size of GCC `-O2` output. On 2026-10-01, the proved
+  rewrites shrank it by only 0.8 to 2.4 percent.
 - On bugs that GCC's warnings and UBSan miss, a coding agent with EvoCC's evidence used 35 to 37
-  percent fewer steps (p < 0.001). Its repair rate did not change.
+  percent fewer steps (p < 0.001). Its repair rate did not change. The experiment ran on
+  2026-10-09 (UTC).
 
 ## 2 Propose, then check
 
@@ -191,8 +194,9 @@ authorize its own rules. Its report called the replays "independent". A review f
 
 The proofs were cheap. Agents proved all 62 rules, and a fixed set of proof templates proved 1,174
 of 1,222 candidate rules. The gains were small. On zlib, Zstandard and cJSON, the proved rewrites
-reduced code size by 0.8 to 2.4 percent. The large opportunities were in instruction selection,
-register allocation and calls, not in the algebra that the rules describe.
+reduced code size by 0.8 to 2.4 percent (2026-10-01, commit `e625b89c`). The large opportunities
+were in instruction selection, register allocation and calls, not in the algebra that the rules
+describe.
 
 ## 5 Compiling with proof
 
@@ -238,7 +242,7 @@ of them accept. For `abs`, the checked assembly traps on `abs(INT_MIN)`, which h
 C, instead of returning a wrong value:
 
 ```asm
-    subs w0, w2, w0
+    subs w0, w1, w0
     b.vs .Labs_block4
     ...
 .Labs_block4:
@@ -267,15 +271,16 @@ carries no proof, and what does EvoCC cost.
 
 | Software | Result |
 |---|---|
-| Linux 6.18 (ARM64) | all 2,799 target C files of one configuration, and all 7,008 of a second with 848 modules; both kernels boot and shut down |
-| Linux tests | KUnit: 1,432 of 1,504 built-in cases pass (GCC's kernel: 1,438); kselftest: 529 of 970 programs pass (GCC's kernel: 532) |
+| Linux 6.18 (ARM64) | all 2,799 target C files of one configuration, and all 7,008 of a second with 848 modules (2026-09-28); both kernels boot and shut down |
+| Linux tests | KUnit: 1,432 of 1,504 built-in cases pass (GCC's kernel: 1,438); kselftest: 529 of 970 programs pass (GCC's kernel: 532); both on 2026-09-22 |
 | SQLite, Lua, jq, Mbed TLS, zlib, Zstandard, cJSON, TinyCC | their own test suites pass; for SQLite, 329,803 assertions |
 | Doom | 12 replays of 350 frames each give the same frame hashes as GCC and Clang builds |
-| OpenTyrian, Neverball, Quakespasm | bounded native replays run |
-| Conformance suites | c-testsuite 220 of 220; GCC torture 1,522 of 1,692; LLVM test-suite 1,039 of 1,735 |
+| OpenTyrian, Neverball, Quakespasm | bounded native replays run (2026-09-29) |
+| Conformance suites | c-testsuite 220 of 220; GCC torture 1,543 of 1,692; LLVM test-suite 1,066 of 1,735 |
 
-*Table 3. Real software. Ten of fifteen application suites pass completely; the others are
-incomplete, as the conformance row shows.*
+*Table 3. Real software. The release compiler of commit `08bf09bd` measured each row on
+2026-10-27, except where the row gives another date. Ten of fifteen application suites pass
+completely, and none of the other five has a compiler failure.*
 
 **Evidence without proof.** Ordinary compilations carry no proof. Their evidence is differential.
 Two randomized gates each ran 21,000 generated programs before and after optimization and lowering,
@@ -284,20 +289,21 @@ Csmith programs gave no checksum mismatch against GCC and Clang. 1.49 million ve
 results in the Rust implementation of the rewrite rules and in their Lean model. Agreement with GCC and Clang
 cannot reveal a bug that all three compilers share.
 
-**Cost.** EvoCC's code is 2.0 to 2.7 times the size of GCC `-O2` output.
+**Cost.** EvoCC's code is 1.8 to 2.3 times the size of GCC `-O2` output.
 
 | File | EvoCC | GCC 14 `-O2` | Ratio |
 |---|---:|---:|---:|
-| zlib `deflate.c` | 28,668 | 14,432 | 1.99 |
-| zlib `inflate.c` | 26,520 | 9,940 | 2.67 |
-| Zstandard `zstd_compress.c` | 120,592 | 48,760 | 2.47 |
-| Zstandard `zstd_decompress.c` | 33,052 | 14,492 | 2.28 |
-| cJSON `cJSON.c` | 29,384 | 14,400 | 2.04 |
+| zlib `deflate.c` | 25,924 | 14,432 | 1.80 |
+| zlib `inflate.c` | 20,080 | 9,940 | 2.02 |
+| Zstandard `zstd_compress.c` | 109,944 | 48,760 | 2.25 |
+| Zstandard `zstd_decompress.c` | 31,252 | 14,492 | 2.16 |
+| cJSON `cJSON.c` | 26,484 | 14,400 | 1.84 |
 
-*Table 4. Bytes of machine code.*
+*Table 4. Bytes of machine code: the checked `.text` of the release compiler on 2026-10-27,
+against GCC 14 `-O2`.*
 
 The gap comes from prologues and epilogues, constant materialization, memory access and register
-moves, and EvoCC has no optimizing inliner. The checked undefined-behavior traps take 0.4 to 5.5
+moves, and EvoCC has no optimizing inliner. The checked undefined-behavior traps take 0.7 to 5.3
 percent of the code. We did not measure run time on a quiet machine, and we make no speed claim. We
 have not yet measured the compile time of `evo prove`.
 
@@ -400,7 +406,7 @@ wrote the trusted parts, and review found some of their defects late. Others may
 - The semantics at the two ends of the theorem, for C and for AArch64, are written by hand. Tests
   compare them with real compilers and hardware. No proof relates them to the C standard or to Arm's
   architecture model.
-- EvoCC's code is 2 to 2.7 times larger than GCC's, and we make no speed claim.
+- EvoCC's code is 1.8 to 2.3 times larger than GCC's, and we make no speed claim.
 - `evo check` runs only code that does not call the C library.
 - The agent results come from one agent and one model, on programs that we built.
 

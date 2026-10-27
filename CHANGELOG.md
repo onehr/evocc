@@ -204,8 +204,8 @@ The first public version.
   checkers in `evoir-sem` check each stage of the actual compilation, and the theorem
   `checkPipeline_sound` covers the chain from typed Core source to the final assembly text. A
   refusal writes no output.
-- Five pinned specifications in `spec/`: EvoIR 2.5.0, EvoMIR 1.2.1, the target description 1.0.1,
-  the verification contract 1.1.1 and the diagnostic format 1.3.0.
+- Five pinned specifications in `spec/`: EvoIR 2.39.0, EvoMIR 1.16.0, the target description
+  1.1.0, the verification contract 1.1.3 and the diagnostic format 1.4.1.
 - The evaluation ladder, `tools/bench.py`: conformance suites, fifteen application lanes and Linux
   build, boot, kselftest and KUnit lanes. Each lane writes a receipt.
 - The EvoCC Book in `book/`: installation, a first program, undefined behavior, compiling with
@@ -401,42 +401,48 @@ The first public version.
 
 ### Results at this version
 
-<!-- after-b10: the results of the frozen acceptance go here, each with its date and the frozen
-compiler 08bf09bd: the kernel-direct receipt, the 15 application lanes and Doom of b10, the size
-measurement, the final gate of t05 and the two archives. Then date or replace the older results
-below, and remove this comment. -->
+The gates, the kernel replay, the 15 application lanes, Doom, the size measurement and the CMake
+builds below ran on 2026-10-27 with the release compiler of commit `08bf09bd`. The other results
+give their dates and were not run again on the final commit. [docs/evidence.md](docs/evidence.md)
+keeps their limits.
 
-The gate result below was recorded on 2026-10-20 and the kernel rebuild on 2026-10-19. The other
-results were recorded between 2026-09-13 and 2026-10-07 and were not run again on the final
-commit. [docs/evidence.md](docs/evidence.md) keeps their limits.
+<!-- after-t05: the final gate of t05 and the two archives go here, with their dates. -->
 
-- On 2026-10-20 the full offline workspace gate on clean `537e745a` passes 466 suites and 3,526
-  tests with zero failures; 14 ignored tests run only on request, such as the sealed Linux lanes.
-  Clippy and formatting pass. The Lean gate passes all six steps on the same day: 62 rule
-  theorems against EvoIR 2.11.1. Neither gate expands the verified language subset.
-- The recorded agent repair loop reaches checked assembly in 12.41 seconds in the final
+- On the clean tree of `08bf09bd` the full offline workspace gate passes 522 suites and 3,928
+  tests with zero failures; 62 ignored tests run only on request, such as the sealed Linux lanes.
+  Clippy and formatting pass. The Lean gate passes all its steps: 62 rule theorems against EvoIR
+  2.39.0. Neither gate expands the verified language subset.
+- On 2026-10-07 the recorded agent repair loop reaches checked assembly in 12.41 seconds in the
   workspace gate. Its refusal demo returns the three required failures without publishing
   assembly. Paired JSON/proof-record tests pass three consecutive runs and the final gate;
   both the full offline workspace and Lean gates pass on clean commit `200b4e73`.
-- Linux 6.18.44 ARM64 boots with 2,799 of 2,799 target C objects compiled by EvoCC. A second
-  configuration boots with 7,008 objects and 848 modules. On 2026-10-19 every target C unit of the
-  first configuration was rebuilt with one identified EvoCC snapshot of a working tree. That
-  kernel boots under HVF with pointer authentication and under TCG, as does the GCC reference,
-  and nine paired upstream self-test programs pass. This is not full Linux acceptance.
-- Ten of fifteen application lanes pass their recorded selection, among them zlib, zstd, cJSON,
-  Mbed TLS, TinyCC, jq, Lua, SQLite and PolyBench/C. Two Doom demos give the same framebuffer
-  hash for each of 350 frames under EvoCC, GCC 14 and Clang 19.
-- The proof-required sweep checked 107 of 107 pilot entries to the final assembly text. A native
-  run compared 14,194 vectors with the Lean source interpreter and found no difference.
-- On five library translation units, the code is 2.0 to 2.7 times the size of GCC 14 `-O2`
+- Linux 6.18.44 ARM64 boots with 2,799 of 2,799 target C objects compiled by EvoCC. The release
+  compiler built every target C unit of this configuration in a fresh tree, in one uninterrupted
+  Kbuild run. That kernel boots under HVF with pointer authentication and under TCG, as does the
+  GCC reference, and nine paired upstream self-test programs pass with 125 of 125 subtests on
+  each. A second configuration booted with 7,008 objects and 848 modules on 2026-09-28. This is
+  not full Linux acceptance.
+- One release compiler ran all 15 application lanes and Doom. c-testsuite 220/220, zlib, zstd,
+  cJSON, TinyCC, Mbed TLS 382/382, PolyBench/C, jq, Lua, SQLite and Doom pass every program or
+  unit. GCC torture (1,543 of 1,692) and the LLVM test suite (1,066 of 1,735) have no compiler
+  failure; their other programs are not applicable, have an unusable reference, or are
+  floating-point deferrals. Csmith agrees on 932 of 1,000 programs, and the other 68 have no usable
+  reference; it has no refusal and no mismatch. Toybox and musl give the same test results as
+  their GCC builds. Two Doom demos give the same framebuffer hash for each of 350 frames under
+  EvoCC, GCC 14 and Clang 19.
+- On 2026-10-06 (commit `e657709b`) the proof-required sweep checked 107 of 107 pilot entries to
+  the final assembly text. A native run compared 14,194 vectors with the Lean source interpreter
+  and found no difference.
+- On five library translation units, the code is 1.8 to 2.3 times the size of GCC 14 `-O2`
   output.
-- A release unpacked on the default macOS volume compiles a Linux hello object and the original
-  zlib 1.3.2 archive without a sysroot flag or manual include paths. Hello, the zlib example and
-  a minigzip round trip pass in the sealed Linux environment. The cross-host release workflow
-  is configured; these local results do not claim a hosted GitHub Actions run.
-- Original CMake builds on macOS pass cJSON 1.7.19's 22 tests and zlib 1.3.2's 16 default
-  CTest commands. The zlib coverage-summary command reports a missing .gcno file, but Apple's
-  gcov returns 0. Its passing exit does not establish coverage support. No test was excluded.
+- On 2026-10-14 a release unpacked on the default macOS volume compiles a Linux hello object and
+  the original zlib 1.3.2 archive without a sysroot flag or manual include paths. Hello, the zlib
+  example and a minigzip round trip pass in the sealed Linux environment. The cross-host release
+  workflow is configured; these local results do not claim a hosted GitHub Actions run.
+- Original CMake builds on macOS with the release compiler pass cJSON 1.7.19's 22 tests and
+  zlib 1.3.2's 16 default CTest commands. The zlib coverage-summary command reports a missing
+  .gcno file, but Apple's gcov returns 0. Its passing exit does not establish coverage support. No
+  test was excluded.
 
 ### Known limits
 
@@ -472,5 +478,6 @@ These items are open in this version. Each line names its entry in [TODO.md](TOD
 - A call without a prototype of a function whose definition has a prototype is undefined
   behavior, and EvoCC does not report it (N09, open item K6 of the old-style call repair).
 
-<!-- after-b10: add each old PASS program that b10 still loses, with its cause and its TODO ID
-(REVIEW item 7.3), and each new limit that the frozen acceptance finds. -->
+- LLVM `aarch64-acle-fmv-features` passed before 2026-10-25 and does not pass now. Its reference
+  build finds compiler-rt and enables FMV, and the unchanged Clang 19 rejects its CSSC check, so
+  the reference has no usable result (N09).
