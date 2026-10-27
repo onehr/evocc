@@ -104,6 +104,7 @@ fn executes_to_zero(source: &str) {
 }
 
 /// `code` in both interpreters and at IR emission, on both targets.
+#[cfg(target_os = "macos")]
 fn refused_on(target: &str, source: &str, code: &str, extra: &[&str]) {
     for mode in ["--emit=evoir", "--interpret-c-hir", "--interpret-evoir"] {
         let mut args = extra.to_vec();
@@ -125,6 +126,7 @@ fn refused_on(target: &str, source: &str, code: &str, extra: &[&str]) {
     }
 }
 
+#[cfg(target_os = "macos")]
 fn refused(source: &str, code: &str) {
     for target in TARGETS {
         refused_on(target, source, code, &[]);
@@ -136,6 +138,7 @@ fn the_scope_fixture_record_case_executes_in_both_interpreters() {
     executes_to_zero(&with_case(&fixture("atomic-scope-boundaries.c"), "CASE", 2));
 }
 
+#[cfg(target_os = "macos")]
 #[test]
 fn eight_byte_records_and_padding_bytes_follow_the_byte_rule() {
     // CASE 0 of the aggregate probe: all four forms on an 8-byte record.
@@ -184,6 +187,7 @@ fn every_size_and_object_kind_moves_its_representation() {
     );
 }
 
+#[cfg(target_os = "macos")]
 #[test]
 fn an_uninitialized_compared_byte_is_e3001() {
     // The padding byte of `want` is uninitialized when the compare-exchange
@@ -206,6 +210,7 @@ fn an_uninitialized_compared_byte_is_e3001() {
     }
 }
 
+#[cfg(target_os = "macos")]
 #[test]
 fn pointer_bytes_keep_their_provenance_through_the_forms() {
     let pointer = "#include <string.h>\n\
@@ -230,6 +235,7 @@ fn pointer_bytes_keep_their_provenance_through_the_forms() {
     }
 }
 
+#[cfg(target_os = "macos")]
 #[test]
 fn sixteen_byte_misaligned_and_other_shapes_stay_refused_in_every_mode() {
     let aggregate = probe("l11c-aggregate.c");

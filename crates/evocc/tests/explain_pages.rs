@@ -44,6 +44,7 @@ fn hints() -> BTreeMap<String, String> {
 }
 
 /// A JSON string for page text, which has no control characters.
+#[cfg(target_os = "macos")]
 fn json_string(text: &str) -> String {
     assert!(!text.chars().any(char::is_control), "{text}");
     format!("\"{}\"", text.replace('\\', "\\\\").replace('"', "\\\""))
@@ -61,6 +62,7 @@ fn run(args: &[&str], source: &str) -> Output {
     child.wait_with_output().unwrap()
 }
 
+#[cfg(target_os = "macos")]
 #[test]
 fn every_authoritative_page_has_tested_examples_and_exact_cli_text() {
     let codes = authority();

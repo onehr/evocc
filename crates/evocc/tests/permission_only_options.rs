@@ -72,6 +72,7 @@ fn clean(output: Output, context: &str) -> Vec<u8> {
 
 /// GCC 14's macro set does not change for the first three; the trapping pair
 /// changes only `__NO_TRAPPING_MATH__` (measured with `-dM -E`).
+#[cfg(target_os = "macos")]
 const PERMISSIONS: [&[&str]; 7] = [
     &["-fexpensive-optimizations"],
     &["-ftree-vectorize"],
@@ -94,6 +95,7 @@ const LOOPS: &str = "static unsigned short in[128];\n\
     return sum == 24384 && total == 1008.0f ? 0 : 1;\n\
     }\n";
 
+#[cfg(target_os = "macos")]
 #[test]
 fn each_permission_only_option_changes_no_code() {
     let work = Work::new();

@@ -221,6 +221,7 @@ fn floating_records_and_sixteen_byte_objects_keep_named_refusals() {
     executes_to_zero(&std::fs::read_to_string(fixture("atomic-objects-floating.c")).unwrap());
 }
 
+#[cfg(target_os = "macos")]
 #[test]
 fn atomic_layouts_follow_gcc_on_linux_and_apple_clang_on_darwin() {
     // size * 32 + alignment, case by case (l11a-atomic-layout.c).

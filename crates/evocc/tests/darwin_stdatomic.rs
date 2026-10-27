@@ -15,11 +15,16 @@ use std::process::{Command, Output, Stdio};
 const LINUX: &str = "aarch64-unknown-linux-gnu";
 const DARWIN: &str = "aarch64-apple-darwin";
 const TARGETS: [&str; 2] = [LINUX, DARWIN];
+#[cfg(target_os = "macos")]
 const INTERPRETERS: [&str; 2] = ["--interpret-c-hir", "--interpret-evoir"];
+#[cfg(target_os = "macos")]
 const LEVELS: [&str; 2] = ["-O0", "-O2"];
+#[cfg(target_os = "macos")]
 const STANDARDS: [&str; 2] = ["-std=gnu11", "-std=gnu17"];
 /// The cases of the macro fixture; CASE 8 reaches ordered fences.
+#[cfg(target_os = "macos")]
 const CASES: [u8; 9] = [0, 1, 2, 3, 4, 5, 6, 7, 8];
+#[cfg(target_os = "macos")]
 const INTERPRETED_CASES: [u8; 8] = [0, 1, 2, 3, 4, 5, 6, 7];
 /// The `__c11_atomic_*` builtins that Clang's `<stdatomic.h>` uses.
 const ADMITTED: [&str; 14] = [
@@ -51,6 +56,7 @@ fn probe() -> PathBuf {
     fixture("rules-20261013/l11a-stdatomic.c")
 }
 
+#[cfg(target_os = "macos")]
 fn macros() -> PathBuf {
     fixture("darwin-stdatomic-macros.c")
 }
@@ -95,6 +101,7 @@ fn stdin(source: &str, target: &str, extra: &[&str]) -> Output {
     child.wait_with_output().unwrap()
 }
 
+#[cfg(target_os = "macos")]
 fn with_case(path: &Path, value: u8) -> String {
     format!(
         "#define CASE {value}\n{}",
@@ -114,6 +121,7 @@ fn probe_without_fences() -> String {
 }
 
 /// `main`'s value in both interpreters on Darwin, at both levels.
+#[cfg(target_os = "macos")]
 fn interpreted(source: &str) -> Vec<String> {
     let mut values = Vec::new();
     for level in LEVELS {
@@ -159,6 +167,7 @@ fn accepted(source: &str) {
     assert!(output.status.success(), "{source}: {}", text(&output));
 }
 
+#[cfg(target_os = "macos")]
 #[test]
 fn the_header_compiles_at_both_levels_and_in_both_language_modes() {
     let mut sources = vec![std::fs::read_to_string(probe()).unwrap()];
@@ -178,6 +187,7 @@ fn the_header_compiles_at_both_levels_and_in_both_language_modes() {
     }
 }
 
+#[cfg(target_os = "macos")]
 #[test]
 fn the_probe_executes_in_both_interpreters_without_its_fences() {
     // The complete probe reaches an ordered fence: the barrier assembly that
@@ -197,6 +207,7 @@ fn the_probe_executes_in_both_interpreters_without_its_fences() {
     }
 }
 
+#[cfg(target_os = "macos")]
 #[test]
 fn every_macro_and_generic_function_executes_in_both_interpreters() {
     for case in INTERPRETED_CASES {
@@ -365,6 +376,7 @@ fn compare_exchange_carries_the_stronger_of_its_two_orders() {
     }
 }
 
+#[cfg(target_os = "macos")]
 #[test]
 fn ir_and_assembly_use_the_existing_atomic_forms() {
     let source = "#include <stdatomic.h>\n\
@@ -554,7 +566,9 @@ fn linux_keeps_the_gcc_header_and_no_c11_builtin() {
     }
 }
 
+#[cfg(all(target_os = "macos", target_arch = "aarch64"))]
 struct Work(PathBuf);
+#[cfg(all(target_os = "macos", target_arch = "aarch64"))]
 impl Work {
     fn new(label: &str) -> Self {
         let path = std::env::temp_dir().join(format!(
@@ -566,6 +580,7 @@ impl Work {
         Self(path)
     }
 }
+#[cfg(all(target_os = "macos", target_arch = "aarch64"))]
 impl Drop for Work {
     fn drop(&mut self) {
         if std::thread::panicking() {

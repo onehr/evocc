@@ -204,6 +204,7 @@ fn boundary_line(kind: u32) -> &'static str {
 /// The six cases of the fixed batch that EvoCC refused run unchanged in
 /// both interpreters on both targets. A local function takes the place of
 /// printf and compares the printed line with the reference line.
+#[cfg(target_os = "macos")]
 #[test]
 fn boundary_probe_prints_the_reference_lines_in_both_interpreters() {
     let wrapper = fixture("floating-half-boundaries-interpreted.c");
@@ -418,6 +419,7 @@ fn arithmetic_outcome(target: &str, kind: u32, case: u32) -> Outcome {
 /// The 15 cases of the arithmetic probe give GCC 14's class in both
 /// interpreters on both targets, or the named refusal of
 /// `arithmetic_outcome`.
+#[cfg(target_os = "macos")]
 #[test]
 fn arithmetic_probe_gives_the_gcc_14_classes_in_both_interpreters() {
     let probe = packet("l03-half-arithmetic.c");
@@ -463,6 +465,7 @@ fn arithmetic_probe_gives_the_gcc_14_classes_in_both_interpreters() {
 /// The 22 cases of the conversion probe match the single IEEE rounding in
 /// both interpreters. On Darwin, case 21 assumes a binary128 long double
 /// that the target does not have, so main reports bit 5 alone.
+#[cfg(target_os = "macos")]
 #[test]
 fn conversion_probe_rounds_once_in_both_interpreters() {
     let probe = packet("l03-half-conversions.c");
@@ -753,6 +756,7 @@ fn darwin_rounding_directions_and_flags_agree_with_gcc_14() {
 /// The crossed ABI probe as one unit runs in both interpreters on both
 /// targets: named arguments and results, HFAs, records, promoted anonymous
 /// arguments and, on Linux, stack arguments and unpromoted anonymous halves.
+#[cfg(target_os = "macos")]
 #[test]
 fn half_calls_agree_in_both_interpreters() {
     let unit = fixture("floating-half-abi-interpreted.c");
@@ -1006,6 +1010,7 @@ fn bfloat16_hfa_interfaces_are_refused() {
 /// (the crossed calls test it). Apple clang passes it in vector registers, so
 /// on Darwin it is refused at every call boundary, in both interpreters and
 /// in native code, and as an anonymous argument.
+#[cfg(target_os = "macos")]
 #[test]
 fn mixed_half_records_pass_as_composites_on_linux_only() {
     let work = Work::new("mixed-records");
@@ -1159,6 +1164,7 @@ fn bfloat16_constants_and_macros_are_linux_only() {
 /// Darwin has no stable convention for an anonymous `_Float16` or `__bf16`
 /// argument, so the argument and `va_arg` of either type are refused in both
 /// interpreters and in native code. An anonymous `__fp16` becomes `double`.
+#[cfg(target_os = "macos")]
 #[test]
 fn darwin_anonymous_halves_are_refused() {
     for kind in [0, 2] {
@@ -1479,6 +1485,7 @@ fn special_value_grid_matches_gcc_14_natively() {
 /// signaling NaN of a pair and keeps a signaling NaN in negation, and its
 /// bfloat16 conversions do not quiet a signaling NaN and give 0x8000 for a
 /// binary64 NaN.
+#[cfg(target_os = "macos")]
 fn apple_lines(kind: u32) -> &'static [&'static str] {
     if kind == 2 {
         &["nan_pairs", "neg_snan", "widen32_snan", "narrow64_nan"]
@@ -1622,6 +1629,7 @@ fn translation_time_values_match_the_run_time_in_both_interpreters() {
 /// Static half objects, half constants, the binary32 value of conditional,
 /// comma and statement expressions, and the predefined half macros, as
 /// GCC 14 gives them, in both interpreters on both targets.
+#[cfg(target_os = "macos")]
 #[test]
 fn translation_time_constants_match_gcc_14_in_both_interpreters() {
     let probe = fixture("floating-half-constants.c");

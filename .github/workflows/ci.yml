@@ -20,15 +20,39 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  # The Linux headers of the sealed image, as in release.yml. The tests compile
+  # for aarch64-unknown-linux-gnu with them on both hosts; macOS has no other source.
+  headers:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v5
+      - name: Export sealed Linux headers
+        run: |
+          docker build --platform linux/arm64 -t evo-nexlab:sealed -f .toolchain/Dockerfile.nexlab .toolchain
+          EVOCC_SYSROOT_IMAGE=evo-nexlab:sealed tools/export-sysroot.sh
+          tar -czf linux-headers.tar.gz sysroot
+      - uses: actions/upload-artifact@v4
+        with: {name: linux-headers, path: linux-headers.tar.gz, if-no-files-found: error}
+
   rust:
+    needs: headers
     strategy:
       fail-fast: false
       matrix:
         os: [macos-14, ubuntu-24.04-arm]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 120
+    # Line tables are enough for a failing test. With full debug info in each
+    # Linux test binary, the test build needs more than 21 GB of disk.
+    env:
+      CARGO_PROFILE_DEV_DEBUG: line-tables-only
+      CARGO_PROFILE_TEST_DEBUG: line-tables-only
     steps:
       - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v4
+        with: {name: linux-headers}
+      - run: tar -xzf linux-headers.tar.gz
       # rustup reads the channel and the components from rust-toolchain.toml.
       - name: Install the pinned Rust toolchain
         run: |
@@ -43,6 +67,16 @@ jobs:
         run: cargo fmt --all -- --check
       - name: cargo clippy
         run: cargo clippy --workspace --all-targets --offline --locked -- -D warnings
+      # Six test files run the Lean checker lean/.lake/build/bin/evoir-sem.
+      # elan installs the toolchain that lean/lean-toolchain pins.
+      - name: Install elan
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/leanprover/elan/v4.1.2/elan-init.sh \
+            | sh -s -- -y --default-toolchain none
+          echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
+      - name: Build evoir-sem
+        working-directory: lean
+        run: lake build evoir-sem
       - name: cargo test
         run: cargo test --workspace --offline --locked --no-fail-fast
 

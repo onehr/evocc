@@ -2,15 +2,20 @@
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
+#[cfg(target_os = "macos")]
 use std::sync::atomic::{AtomicU64, Ordering};
 
 const LINUX: &str = "aarch64-unknown-linux-gnu";
+#[cfg(target_os = "macos")]
 const DARWIN: &str = "aarch64-apple-darwin";
+#[cfg(target_os = "macos")]
 const TARGETS: [&str; 2] = [DARWIN, LINUX];
 const LEVELS: [&str; 2] = ["-O0", "-O2"];
 const INTERPRETERS: [&str; 2] = ["--interpret-c-hir", "--interpret-evoir"];
+#[cfg(target_os = "macos")]
 static NEXT_FILE: AtomicU64 = AtomicU64::new(0);
 
+#[cfg(target_os = "macos")]
 const BUILTIN_CHECK: &str = r#"#include <complex.h>
 int main(void) {
     volatile double inf = __builtin_inf();
@@ -60,6 +65,7 @@ fn command(target: &str) -> Command {
     command
 }
 
+#[cfg(target_os = "macos")]
 fn compile(source: &str, target: &str, level: &str, _mode: &str) -> Output {
     let directory = root().join("target/frontend/tmp").join(format!(
         "d27b-{}-{}",
@@ -101,10 +107,12 @@ fn text(output: &Output) -> String {
     )
 }
 
+#[cfg(target_os = "macos")]
 fn has_code(output: &Output, code: &str) -> bool {
     String::from_utf8_lossy(&output.stderr).contains(&format!("[{code}]"))
 }
 
+#[cfg(target_os = "macos")]
 #[test]
 fn darwin_cmplx_macros_keep_w0003_and_point_to_builtin() {
     let sources = ["double _Complex", "float _Complex", "long double _Complex"];
@@ -136,6 +144,7 @@ fn darwin_cmplx_macros_keep_w0003_and_point_to_builtin() {
     assert!(String::from_utf8_lossy(&explain.stdout).contains("__builtin_complex"));
 }
 
+#[cfg(target_os = "macos")]
 #[test]
 fn builtin_complex_preserves_values_on_both_targets() {
     for target in TARGETS {

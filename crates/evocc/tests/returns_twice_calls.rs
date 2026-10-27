@@ -257,6 +257,7 @@ fn a_function_that_returns_twice_or_calls_such_a_function_is_not_inlined() {
     }
 }
 
+#[cfg(target_os = "macos")]
 #[test]
 fn an_always_inline_function_that_calls_setjmp_is_refused() {
     let work = Work::new("always");

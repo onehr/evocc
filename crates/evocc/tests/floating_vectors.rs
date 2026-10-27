@@ -358,6 +358,7 @@ fn packet_probes_pass_in_both_linux_interpreters() {
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
 
+#[cfg(target_os = "macos")]
 #[test]
 fn packet_probes_pass_in_both_darwin_interpreters() {
     let failures = interpreter_failures(DARWIN);
@@ -606,8 +607,10 @@ struct GridLine {
     strict: bool,
     kind: u32,
     mode: u32,
+    #[cfg(target_os = "macos")]
     name: String,
     line: String,
+    #[cfg(target_os = "macos")]
     hash: String,
 }
 
@@ -622,7 +625,9 @@ fn grid_lines() -> Vec<GridLine> {
                 strict: form.ends_with("strict"),
                 kind: words[0].strip_prefix("KIND=").unwrap().parse().unwrap(),
                 mode: words[1].strip_prefix("MODE=").unwrap().parse().unwrap(),
+                #[cfg(target_os = "macos")]
                 name: words[2].to_owned(),
+                #[cfg(target_os = "macos")]
                 hash: words[3].to_owned(),
                 line: line.to_owned(),
             }
@@ -669,6 +674,7 @@ fn grid_expected(sample: bool, strict: bool, kind: u32, mode: u32) -> Vec<GridLi
 
 /// The interpreter runs of one build of the sample: the part, the
 /// operation and the names of the lines that the run checks.
+#[cfg(target_os = "macos")]
 fn sample_runs() -> Vec<(u32, Option<u32>, Vec<&'static str>)> {
     let mut runs = Vec::new();
     for (op, name) in ["add", "sub", "mul", "div", "neg", "plus", "shuffle"]
@@ -709,6 +715,7 @@ fn sample_runs() -> Vec<(u32, Option<u32>, Vec<&'static str>)> {
 /// ignores the optimization level and is slower, runs every Linux build, and
 /// on Darwin the plain build and the strict build of rounding mode 1. The
 /// native tests take the whole grid.
+#[cfg(target_os = "macos")]
 #[test]
 fn special_value_grid_matches_the_references_in_both_interpreters() {
     let grid = fixture("floating-vector-lanes.c");
@@ -1155,6 +1162,7 @@ fn general_registers_only_refuses_floating_vectors() {
 /// A 4-byte floating vector is no AAPCS64 short vector, and GCC 14 and Clang
 /// 19 pass it differently (table G), so it stays E4002 at a call boundary;
 /// inside a function it is a value.
+#[cfg(target_os = "macos")]
 #[test]
 fn tiny_floating_vectors_keep_their_boundary_refusal() {
     let work = Work::new("tiny");
@@ -1257,6 +1265,7 @@ fn floating_lane_obligations_keep_their_diagnostics() {
 
 /// The floating `arm_neon.h` intrinsics belong to L05b. Their nominal
 /// vector types and builtins keep the refusals they had before L05.
+#[cfg(target_os = "macos")]
 #[test]
 fn floating_neon_intrinsics_keep_their_refusals() {
     let probe = packet("l05-neon-subset.c");
@@ -1364,6 +1373,7 @@ fn machine_lane_moves_keep_every_bit() {
 /// The crossed ABI probe as one unit runs in both interpreters on both
 /// targets: every call, variadic argument and HVA record of the native
 /// crossed tests keeps its lanes.
+#[cfg(target_os = "macos")]
 #[test]
 fn crossed_abi_probe_runs_in_both_interpreters() {
     let unit = fixture("floating-vector-abi-interpreted.c");

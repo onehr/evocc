@@ -9,6 +9,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
 const LINUX: &str = "aarch64-unknown-linux-gnu";
+#[cfg(target_os = "macos")]
 const DARWIN: &str = "aarch64-apple-darwin";
 const LEVELS: [&str; 2] = ["-O0", "-O2"];
 
@@ -81,6 +82,7 @@ fn evocc(source: &Path, target: &str, level: &str, output: &Path, options: &[&st
     assert!(result.status.success(), "{}", text(&result));
 }
 
+#[cfg(target_os = "macos")]
 #[test]
 fn tiny_vector_signatures_lower_on_both_targets() {
     let work = Work::new("lower");
@@ -115,6 +117,7 @@ fn linux_general_registers_only_keeps_the_integer_convention() {
     }
 }
 
+#[cfg(target_os = "macos")]
 #[test]
 fn darwin_general_registers_only_refuses_a_widened_result() {
     // The Apple result needs v0; without SIMD registers it has no placement.

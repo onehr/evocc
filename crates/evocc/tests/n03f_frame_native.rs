@@ -233,6 +233,7 @@ fn run(linux: bool) {
     }
 }
 
+#[cfg(target_os = "macos")]
 #[test]
 fn darwin_unwind_and_frame_interactions_execute() {
     run(false);

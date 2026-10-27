@@ -327,6 +327,7 @@ fn operation_probes_pass_natively_on_linux() {
 /// CASE 1 calls an undeclared function, which GCC 14 and EvoCC refuse
 /// (W0003, an error by default). Constant folding refuses the static
 /// products and quotients of CASE 7 (E2960).
+#[cfg(target_os = "macos")]
 fn darwin_refusal(case: u32) -> Option<&'static str> {
     match case {
         1 => Some("W0003"),
@@ -337,6 +338,7 @@ fn darwin_refusal(case: u32) -> Option<&'static str> {
 
 /// The first code of a Darwin build of l04-complex-ops.c with the default
 /// diagnostics, not `-w`.
+#[cfg(target_os = "macos")]
 fn darwin_first_code(kind: u32, case: u32, mode: &str, probe: &Path) -> Option<String> {
     let defines = [format!("-DKIND={kind}"), format!("-DCASE={case}")];
     let mut args = STRICT.to_vec();
@@ -347,6 +349,7 @@ fn darwin_first_code(kind: u32, case: u32, mode: &str, probe: &Path) -> Option<S
 
 /// Darwin: the interpreters refuse a reached multiplication or division
 /// (E3067); the other cases run.
+#[cfg(target_os = "macos")]
 #[test]
 fn darwin_interpreters_refuse_multiplication_and_division() {
     let probe = packet("l04-complex-ops.c");

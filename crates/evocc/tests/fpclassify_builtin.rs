@@ -112,6 +112,7 @@ int main(void) {
 }
 "#;
 
+#[cfg(target_os = "macos")]
 #[test]
 fn each_class_of_each_type_in_every_execution_path() {
     let work = Work::new("classes");

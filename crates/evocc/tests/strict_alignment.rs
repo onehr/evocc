@@ -22,6 +22,7 @@ const LEVELS: [&str; 2] = ["-O0", "-O2"];
 /// The fixtures that move records in general registers, with the targets that
 /// compile them. Before D31 the check stopped all but two of them, on every
 /// target and level that compiles them or at -O2.
+#[cfg(target_os = "macos")]
 const RECORD_FIXTURES: [(&str, &[&str]); 11] = [
     ("record-registers/strict_align.c", &TARGETS),
     ("record-registers/records.c", &TARGETS),
@@ -345,6 +346,7 @@ fn scan(assembly: &str) -> Scan {
     result
 }
 
+#[cfg(target_os = "macos")]
 #[test]
 fn record_fixtures_compile_under_the_check_with_aligned_frame_accesses() {
     for (name, targets) in RECORD_FIXTURES {

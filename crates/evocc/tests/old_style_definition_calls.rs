@@ -16,6 +16,7 @@ use std::sync::atomic::{AtomicU32, Ordering};
 const LINUX: &str = "aarch64-unknown-linux-gnu";
 const DARWIN: &str = "aarch64-apple-darwin";
 const TARGETS: [&str; 2] = [LINUX, DARWIN];
+#[cfg(target_os = "macos")]
 const MODES: [&str; 4] = ["-std=gnu89", "-std=gnu99", "-std=gnu11", "-std=gnu17"];
 const INTERPRETERS: [&str; 3] = ["--interpret-c-hir", "--interpret-evoir", "--check"];
 const MISMATCH: &str = "error[E3068]: old-style-call-mismatch";
@@ -651,6 +652,7 @@ fn show(output: &Output) -> String {
     )
 }
 
+#[cfg(target_os = "macos")]
 fn source(name: &str) -> (&'static str, usize, Option<&'static str>) {
     let (_, text, line, output) = SOURCES
         .iter()
@@ -669,6 +671,7 @@ fn marked(source: &str) -> (String, (usize, usize)) {
 }
 
 /// The call line of a measured source, and the column of its callee `f`.
+#[cfg(target_os = "macos")]
 fn call_position(text: &str, line: usize) -> (usize, usize) {
     let call = text.lines().nth(line - 1).unwrap();
     (line, call.find("f(").unwrap() + 1)
@@ -676,6 +679,7 @@ fn call_position(text: &str, line: usize) -> (usize, usize) {
 
 /// Rule 2 and 3: GCC 14 gives no diagnostic for a call without a prototype
 /// in gnu89 to gnu17, and EvoCC compiles each such call on both targets.
+#[cfg(target_os = "macos")]
 #[test]
 fn calls_without_a_prototype_have_no_diagnostic() {
     let work = Work::new("no-diagnostic");
@@ -734,6 +738,7 @@ fn gnu23_keeps_its_mode_refusal() {
 /// pointer argument is W0012 (GCC 14: a warning in gnu89, an error later),
 /// and too many or too few arguments keep E3051 at code generation; GCC 14
 /// refuses them in the front end.
+#[cfg(target_os = "macos")]
 #[test]
 fn calls_with_a_prototype_do_not_change() {
     let work = Work::new("prototype");
@@ -798,6 +803,7 @@ fn calls_with_a_prototype_do_not_change() {
 
 /// Rule 2: a call whose promoted argument types are the promoted parameter
 /// types compiles to the code of the call with the promoted prototype.
+#[cfg(target_os = "macos")]
 #[test]
 fn defined_calls_compile_as_with_the_promoted_prototype() {
     let work = Work::new("same-code");
@@ -913,6 +919,7 @@ fn defined_calls_print_the_reference_output_in_the_sealed_linux_image() {
 
 /// Rule 5: an undefined call: each marked call reports E3068 in both
 /// interpreters and in `--check`, at the call.
+#[cfg(target_os = "macos")]
 const UNDEFINED: [&str; 9] = [
     "int f(u) unsigned u; { return u != 0; }\nint main(void) { return @f(-1); }\n",
     "int f(i) int i; { return i; }\nint main(void) { return @f(3000000000u) != 0; }\n",
@@ -925,6 +932,7 @@ const UNDEFINED: [&str; 9] = [
     "int f(ip) short *ip; { return ip[1]; }\nextern __typeof__(f) f;\nshort p[5] = {1, 2, 3, 4, 5};\nint main(void) { return @f(&p) - 2; }\n",
 ];
 
+#[cfg(target_os = "macos")]
 #[test]
 fn undefined_calls_report_e3068_at_the_call() {
     let work = Work::new("undefined");
@@ -985,6 +993,7 @@ fn exception_pairs_are_defined() {
 
 /// The EvoIR names the obligation, and the machine code has no check for it:
 /// the call runs as GCC 14 runs it (EvoMIR 5.2).
+#[cfg(target_os = "macos")]
 #[test]
 fn the_obligation_is_in_evoir_and_not_in_machine_code() {
     let work = Work::new("obligation");

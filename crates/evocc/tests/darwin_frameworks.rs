@@ -89,6 +89,7 @@ fn words(output: &Output) -> Vec<String> {
 
 /// The tree of `crates/evocc-cpp/tests/framework_headers.rs`, with one more
 /// framework for the system framework option.
+#[cfg(target_os = "macos")]
 const FRAMEWORK_TREE: [(&str, &str); 15] = [
     (
         "F1/Alpha.framework/Headers/Alpha.h",

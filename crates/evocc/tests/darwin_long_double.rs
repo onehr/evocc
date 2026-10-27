@@ -37,6 +37,7 @@ int main(void)
 
 /// Host C library and math library calls with `long double` arguments,
 /// results and variadic arguments.
+#[cfg(target_os = "macos")]
 const LIBRARY: &str = r#"
 #include <math.h>
 #include <stdio.h>
@@ -57,12 +58,14 @@ int main(void)
 
 /// Calls in both directions between EvoCC and Apple clang, with scalar and
 /// record arguments and results.
+#[cfg(target_os = "macos")]
 const CALLEE: &str = r#"
 struct pair { long double a, b; };
 long double scale(long double x, double y, long double z) { return x * y + z; }
 struct pair swap(struct pair p) { struct pair r = { p.b, p.a * 2 }; return r; }
 "#;
 
+#[cfg(target_os = "macos")]
 const CALLER: &str = r#"
 struct pair { long double a, b; };
 long double scale(long double, double, long double);
