@@ -2161,6 +2161,7 @@ fn parse_ub_reason(text: &str) -> ParseResult<UbReason> {
         "invalid_shift_count" => Ok(UbReason::InvalidShiftCount),
         "invalid_signed_left_shift" => Ok(UbReason::InvalidSignedLeftShift),
         "floating_to_integer" => Ok(UbReason::FloatingToInteger),
+        "old_style_call" => Ok(UbReason::OldStyleCall),
         _ => Err("unknown UB reason".into()),
     }
 }

@@ -6912,6 +6912,23 @@ plan, RED, flag, gates, one-page note, TODO update in the same commit.
   GCC 14 also lowers implicit function declarations, implicit `int` and
   integer-pointer conversions; and `void *` from a pointer to an atomic type
   stays E2202, while GCC 14 accepts it without a diagnostic.
+  October 27 old-style call repair: a call without a prototype of a function
+  defined with an identifier list or an empty parameter list takes the default
+  argument promotions, as in C11 6.5.2.2p6, and EvoCC compiles it as GCC 14
+  does, with no diagnostic. Both interpreters and `--check` report E3068
+  (`old-style-call-mismatch`) at a call whose argument count differs or whose
+  promoted types do not agree, outside the two exceptions; native code has no
+  check for it (EvoMIR 5.2). `old_style_definition_calls.rs` checks the 25
+  measured sources in four modes on both targets. The torture original
+  `920302-1` exits 0 natively on Darwin and in the sealed GCC 14 image, and
+  `--check` reports E3068 at its line 41. Calls with a prototype in scope keep
+  their rules; GCC 14 refuses too many or too few arguments there, while EvoCC
+  reports E3051 only at code generation. No C23 mode exists yet; in C23
+  `int f()` is a prototype, and the rule must not apply there. Open: a call
+  without a prototype of a prototyped definition is also undefined and is not
+  reported; a call through a function pointer object keeps the E3019 signature
+  check and does not get this rule, and `(*f)(...)` and `(&f)(...)` keep the
+  prototype check.
 
 - [x] **N10 — Keep one-word records and small arrays in registers** — `DONE`, P1, 2026-10-19.
   `pte_t` and `pmd_t` values live in memory: zero-filled, copied from slot to

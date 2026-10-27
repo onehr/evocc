@@ -9,6 +9,13 @@ The first public version.
 
 ### Added
 
+- Calls without a prototype of a function with an old-style definition follow ISO C: the
+  arguments take the default argument promotions, EvoCC checks no argument type against a
+  parameter type, and the call compiles as with GCC 14. Both interpreters and `--check` report
+  the new E3068 (`old-style-call-mismatch`) when the argument count differs or a promoted
+  argument type does not agree with the parameter, outside the two exceptions of C11 6.5.2.2p6.
+  Before, EvoCC checked such a call against the promoted prototype: an incompatible pointer was
+  W0012 or E2202, a count difference was E3051, and another argument was converted.
 - The lint W0012 (`incompatible-pointer-types`) reports a conversion between pointers to
   incompatible types and a conditional operator with such operands, as GCC 14 does. It is an
   error by default in C99 and later modes and a warning in C89 and GNU89.

@@ -1,6 +1,6 @@
 # EvoMIR Specification
 
-**Revision 1.15.0** | **Pinned ground truth** | Options that only permit a transform on 2026-10-27
+**Revision 1.16.0** | **Pinned ground truth** | Calls to old-style definitions on 2026-10-27
 
 ## Status and scope
 
@@ -93,6 +93,11 @@ assembler. EvoMIR representations do not enter e-classes.
   EvoIR text and options produce the same EvoMIR and assembly, byte for byte.
 - **Undefined behavior stays explicit.** An `ub.assume` lowers to a checked
   trap under the default UB-check profile and is never dropped silently.
+  The one exception is `ub.assume.old_style_call` (EvoIR 6.1), which both
+  profiles lower to nothing (Section 5.2). EvoCC compiles a call without a
+  prototype of an old-style definition as GCC 14 does, so that such a
+  program runs as it does with GCC 14. Only the checkers, the two
+  interpreters and `--check`, report its undefined behavior.
 - **What is not lowered fails closed.** An EvoIR form that this document
   does not lower gets a diagnostic of Section 10 at the instruction, and the
   driver produces no assembly for the translation unit.
@@ -676,7 +681,10 @@ Under `checked`, every `ub.assume` lowers to the branch of Section 5.1,
 except one whose operand is a direct canonical `const.bits<1> 1` in the same
 source block, which lowers to nothing; no truth is inferred from aliases or
 facts. Under `unchecked`, only the lowering of `ub.assume` is omitted;
-predicates with other consumers, explicit traps and FP admission stay. The
+predicates with other consumers, explicit traps and FP admission stay. Both
+profiles lower `ub.assume.old_style_call` to nothing, so the row of Section 5.1
+does not apply to it, for the reason of Section 1.1; its operand, an ordinary
+predicate, still lowers. The
 profiles act only at lowering: both builds of one unit consume the same
 verified EvoIR, and artifact and measurement identities include the profile.
 Interpreter modes ignore the option.
@@ -2050,6 +2058,14 @@ and the checked UB-check profile; each exporter refuses other forms.
 | `core-asm-v1` | `crates/evocc-mir/src/asm_ast.rs` (`evo-asm-ast`) | `lean/EvoIR/Asm/Reader.lean` | The assembly AST and the frame hints |
 
 ## Revision
+
+**Revision 1.16.0, 2026-10-27.** Sections 1.1 and 5.2 make one exception to
+the checked lowering of `ub.assume`: both UB-check profiles lower
+`ub.assume.old_style_call` (EvoIR 6.1 and 10.1.7) to nothing. A call without a
+prototype of an old-style definition runs as with GCC 14; the two interpreters
+and `--check` report its undefined behavior as `E3068`. The predicate of a
+signed/unsigned argument pair still lowers, to one comparison whose result
+nothing reads. No other lowering changes.
 
 **Revision 1.15.0, 2026-10-27.** Section 6.14 lists the three disabling
 vectorization options of EvoIR 10.1.9 with the other options that name

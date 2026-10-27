@@ -3105,6 +3105,12 @@ impl<'a> Substitution<'a, '_> {
                 }
             }
             CHirExpr::Call(f, args, span) => {
+                // A call without a prototype of an old-style definition is
+                // substituted only when every argument agrees, so that the
+                // lowering keeps its obligation (EvoIR 10.1.7).
+                let substitutable =
+                    crate::old_style_calls::call_verdict(&self.unit, self.target, f, args)
+                        .is_none_or(|verdict| verdict == crate::old_style_calls::Verdict::Agrees);
                 // The parser admits the pack only as the last argument of a
                 // call. A substituted variadic call evaluated its anonymous
                 // arguments once, into the objects that the pack names.
@@ -3141,7 +3147,7 @@ impl<'a> Substitution<'a, '_> {
                         .eligible
                         .get(symbol)
                         .copied()
-                        .filter(|_| c.expand_calls && !unexpanded)
+                        .filter(|_| c.expand_calls && !unexpanded && substitutable)
                         .filter(|_| {
                             self.local_leaf_costs
                                 .get(symbol)

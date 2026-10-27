@@ -2352,7 +2352,11 @@ fn lower_block(
             if lowerer.diagnostic_true_predicates.contains(&condition.id) {
                 continue;
             }
-            if lowerer.ub_checks == UbCheckProfile::Unchecked {
+            // EvoMIR 1.1 and 5.2: both profiles lower the obligation of a
+            // call without a prototype of an old-style definition to
+            // nothing. EvoCC compiles that call as GCC 14 does; only the
+            // interpreters and `--check` report its undefined behavior.
+            if lowerer.ub_checks == UbCheckProfile::Unchecked || *reason == UbReason::OldStyleCall {
                 continue;
             }
             // Section 5: the guard still branches to its reason's trap. An

@@ -128,6 +128,10 @@ pub enum UbReason {
     InvalidShiftCount,
     InvalidSignedLeftShift,
     FloatingToInteger,
+    /// A call without a prototype of an old-style definition does not
+    /// agree with the definition (Section 10.1.7). Native code drops this
+    /// obligation in both UB-check profiles (EvoMIR 5.2).
+    OldStyleCall,
 }
 
 impl UbReason {
@@ -142,6 +146,7 @@ impl UbReason {
             Self::InvalidShiftCount => "E3005",
             Self::InvalidSignedLeftShift => "E3006",
             Self::FloatingToInteger => "E3063",
+            Self::OldStyleCall => "E3068",
         }
     }
 
@@ -156,6 +161,7 @@ impl UbReason {
             Self::InvalidShiftCount => "invalid-shift-count",
             Self::InvalidSignedLeftShift => "invalid-signed-left-shift",
             Self::FloatingToInteger => "floating-to-integer-not-representable",
+            Self::OldStyleCall => "old-style-call-mismatch",
         }
     }
 
@@ -170,6 +176,7 @@ impl UbReason {
             Self::InvalidShiftCount => "invalid_shift_count",
             Self::InvalidSignedLeftShift => "invalid_signed_left_shift",
             Self::FloatingToInteger => "floating_to_integer",
+            Self::OldStyleCall => "old_style_call",
         }
     }
 }

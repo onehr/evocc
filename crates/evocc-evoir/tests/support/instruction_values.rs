@@ -63,6 +63,7 @@ fn expected() -> Vec<(&'static [u32], &'static [u32])> {
         (&[1203], &[]),
         (&[1204], &[]),
         (&[1205], &[]),           // obligations
+        (&[1206], &[]),           // old-style call obligation
         (&[1211, 1212], &[1210]), // signed division
         (&[1221, 1222], &[1220]), // unsigned division
         (&[1231, 1232], &[1230]),
@@ -378,6 +379,7 @@ pub fn sentinel_instructions() -> Vec<Inst> {
         Inst::UbAssume(bits(1203), UbReason::SignedOverflow),
         Inst::UbAssume(bits(1204), UbReason::InvalidShiftCount),
         Inst::UbAssume(bits(1205), UbReason::BitBuiltinZeroOperand),
+        Inst::UbAssume(value(1206, EvoIRType::Bits(1)), UbReason::OldStyleCall),
         Inst::SDiv(bits(1210), bits(1211), bits(1212)),
         Inst::UDiv(bits(1220), bits(1221), bits(1222)),
         Inst::ICmp(bits(1230), CmpOp::Eq, bits(1231), bits(1232)),

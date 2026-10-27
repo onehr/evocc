@@ -25,6 +25,7 @@ use evocc_chir::integer::{
     eval_binary_integer, integer_literal_value, integer_type_for_rank, usual_arithmetic_type,
     CInteger, CIntegerType,
 };
+use evocc_chir::old_style_calls::Verdict as OldStyleVerdict;
 use evocc_chir::{
     statement_expression_value, AllocationSiteManifest, AsmStmt, AssignmentOp, BinaryOp,
     CHirBlockItem, CHirDecl, CHirExpr, CHirForInit, CHirStmt, CHirUnit, ExprCategory, ExprFacts,
@@ -13593,6 +13594,68 @@ impl<'a> FunctionLowerer<'a> {
         })
     }
 
+    /// The obligations of a call without a prototype of an old-style
+    /// definition, after its arguments ran and before the call (EvoIR
+    /// 10.1.7): `const.bits<1> 0` for an undefined call, and `icmp.sle` of
+    /// zero and the argument for each signed/unsigned pair.
+    fn emit_old_style_obligations(
+        &mut self,
+        verdict: &OldStyleVerdict,
+        arguments: &[Value],
+        span: SourceSpan,
+        state: &State,
+    ) -> Result<(), LowerError> {
+        let previous = std::mem::replace(&mut self.source_span, span);
+        let result = self.old_style_obligations(verdict, arguments, span, state);
+        self.source_span = previous;
+        result
+    }
+
+    fn old_style_obligations(
+        &mut self,
+        verdict: &OldStyleVerdict,
+        arguments: &[Value],
+        span: SourceSpan,
+        state: &State,
+    ) -> Result<(), LowerError> {
+        let mut conditions = Vec::new();
+        match verdict {
+            OldStyleVerdict::Agrees => {}
+            OldStyleVerdict::Undefined => {
+                let never = self.fresh_value(EvoIRType::Bits(1));
+                self.emit(state, Inst::Const(never.clone(), 0))?;
+                conditions.push(never);
+            }
+            OldStyleVerdict::IfRepresentable(indices) => {
+                for index in indices {
+                    let argument =
+                        arguments
+                            .get(*index)
+                            .cloned()
+                            .ok_or(LowerError::InvalidControlFlow {
+                                span,
+                                reason: "old-style call verdict names a missing argument",
+                            })?;
+                    let EvoIRType::Bits(width) = argument.ty else {
+                        return Err(LowerError::UnsupportedExpression {
+                            span,
+                            feature: "old-style call integer argument is not bits",
+                        });
+                    };
+                    let zero = self.fresh_value(EvoIRType::Bits(width));
+                    self.emit(state, Inst::Const(zero.clone(), 0))?;
+                    let fits = self.fresh_value(EvoIRType::Bits(1));
+                    self.emit(state, Inst::ICmp(fits.clone(), CmpOp::SLe, zero, argument))?;
+                    conditions.push(fits);
+                }
+            }
+        }
+        for condition in conditions {
+            self.emit(state, Inst::UbAssume(condition, UbReason::OldStyleCall))?;
+        }
+        Ok(())
+    }
+
     fn emit_call(
         &mut self,
         expression: &'a CHirExpr<'a>,
@@ -13636,6 +13699,12 @@ impl<'a> FunctionLowerer<'a> {
                 integer: CIntegerType::ULONG,
             }));
         }
+        // EvoIR 10.1.7: a call without a prototype of an old-style
+        // definition. An undefined call passes the promoted arguments through
+        // the function's address, as GCC 14 does.
+        let old_style =
+            evocc_chir::old_style_calls::call_verdict(self.unit, self.target, callee, arguments);
+        let undefined_old_style = old_style == Some(OldStyleVerdict::Undefined);
         let direct = match callee {
             CHirExpr::Ident {
                 symbol,
@@ -13747,14 +13816,18 @@ impl<'a> FunctionLowerer<'a> {
                         _ => {}
                     }
                 }
-                Some(
-                    self.functions
-                        .get(symbol)
-                        .ok_or(LowerError::UnknownSymbol {
-                            symbol: *symbol,
-                            span,
-                        })?,
-                )
+                if undefined_old_style {
+                    None
+                } else {
+                    Some(
+                        self.functions
+                            .get(symbol)
+                            .ok_or(LowerError::UnknownSymbol {
+                                symbol: *symbol,
+                                span,
+                            })?,
+                    )
+                }
             }
             // GCC folds `*f` and `&f` of a function designator, so such a
             // call of a returns-twice function is direct (EvoIR 3.10). Every
@@ -13763,12 +13836,19 @@ impl<'a> FunctionLowerer<'a> {
                 .and_then(|symbol| self.functions.get(&symbol))
                 .filter(|function| function.returns_twice),
         };
-        let function_ty = self.call_designator_function_type(callee).ok_or(
-            LowerError::UnsupportedExpression {
-                span: callee.span(),
-                feature: "indirect call designator has no function signature",
-            },
-        )?;
+        // The binding type of an old-style definition is its promoted
+        // prototype; an undefined call takes the type without a prototype
+        // that the designator has, so its signature is that of its promoted
+        // arguments.
+        let function_ty = match callee {
+            CHirExpr::Ident { facts, .. } if undefined_old_style => facts.ty(),
+            _ => self.call_designator_function_type(callee).ok_or(
+                LowerError::UnsupportedExpression {
+                    span: callee.span(),
+                    feature: "indirect call designator has no function signature",
+                },
+            )?,
+        };
         let (mut parameter_types, return_type, direct_name) = if let Some(function) = direct {
             (
                 function.parameter_types.clone(),
@@ -13827,7 +13907,12 @@ impl<'a> FunctionLowerer<'a> {
         let callee_key = if direct_name.is_none() {
             let mut lowered = self.lower_expr(callee, state)?;
             let expected = self.fnptr_type(function_ty, span)?;
-            if lowered.value.ty != expected {
+            // The address of an old-style definition carries the
+            // definition's interface; the call converts it like an
+            // unprototyped function pointer.
+            let old_style_address =
+                undefined_old_style && matches!(lowered.value.ty, EvoIRType::FnPtr { .. });
+            if lowered.value.ty != expected && !old_style_address {
                 return Err(LowerError::UnsupportedExpression {
                     span: callee.span(),
                     feature: "indirect callee value disagrees with its fnptr signature",
@@ -13967,6 +14052,9 @@ impl<'a> FunctionLowerer<'a> {
                 )
             })
             .collect::<Result<Vec<_>, _>>()?;
+        if let Some(verdict) = &old_style {
+            self.emit_old_style_obligations(verdict, &args, span, state)?;
+        }
         let aggregate_return = if return_type
             .as_ref()
             .is_some_and(|value_type| self.is_aggregate_type(value_type.source))

@@ -147,6 +147,7 @@ TrapReason.BuiltinTrap|trap.builtin_trap
 UbReason.DivisionByZero|ub.assume.division_by_zero %v1201
 UbReason.InvalidShiftCount|ub.assume.invalid_shift_count %v1204
 UbReason.InvalidSignedLeftShift|ub.assume.invalid_signed_left_shift %v1200
+UbReason.OldStyleCall|ub.assume.old_style_call %v1206
 UbReason.RemainderByZero|ub.assume.remainder_by_zero %v1202
 UbReason.SignedOverflow|ub.assume.signed_overflow %v1203
 Value(id,ty)|%v1000 = const.bits<37> 987654321

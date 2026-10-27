@@ -133,6 +133,7 @@ E3061	Define the target in the same translation unit and make the alias agree wi
 E3062	Fix the IR producer so each atomic access has a valid type, width, alignment and order.
 E3066	Write no more bytes than the destination holds.
 E3067	Check the product or quotient with the Linux target, or run the native program.
+E3068	Declare a prototype, or pass arguments of the promoted parameter types.
 E3101	Reduce unexpected failures to a small source example and report them with the full diagnostic.
 W0001	Remove the variable, or use it where its value is needed.
 W0002	Use the parameter, or mark it `__attribute__((unused))` when the interface requires it.

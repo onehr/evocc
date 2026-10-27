@@ -1158,6 +1158,7 @@ fn enum_schema_keys() -> BTreeSet<&'static str> {
         UbReason::InvalidShiftCount,
         UbReason::InvalidSignedLeftShift,
         UbReason::FloatingToInteger,
+        UbReason::OldStyleCall,
     ];
     let directions = [OffsetDirection::Add, OffsetDirection::Subtract];
     let signedness = [IndexSignedness::Signed, IndexSignedness::Unsigned];
@@ -1223,6 +1224,7 @@ fn enum_schema_keys() -> BTreeSet<&'static str> {
             UbReason::SignedOverflow => "UbReason.SignedOverflow",
             UbReason::InvalidShiftCount => "UbReason.InvalidShiftCount",
             UbReason::InvalidSignedLeftShift => "UbReason.InvalidSignedLeftShift",
+            UbReason::OldStyleCall => "UbReason.OldStyleCall",
         });
     }
     for value in [

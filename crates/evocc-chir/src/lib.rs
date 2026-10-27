@@ -24,6 +24,7 @@ pub mod inline;
 pub mod lifecycle;
 pub mod linkage;
 pub mod lints;
+pub mod old_style_calls;
 pub mod returns_twice;
 
 /// A use recorded before an incomplete array's later declaration retains its
@@ -2070,6 +2071,9 @@ pub struct CHirUnit<'arena> {
     generic_selections: Vec<GenericSelectionRecord>,
     front_end_builtins: Vec<FrontEndBuiltinRecord<'arena>>,
     unprototyped_parameters: std::collections::HashMap<SymbolId, Vec<TypeId>>,
+    /// The promoted parameter types of each function that the unit defines
+    /// with an identifier list or an empty parameter list (C11 6.9.1p7).
+    old_style_parameters: std::collections::HashMap<SymbolId, Vec<TypeId>>,
     signed_wrapping: bool,
     dynamic_rounding: bool,
     has_fenv_access: bool,
@@ -2136,6 +2140,7 @@ impl<'arena> CHirUnit<'arena> {
             generic_selections: Vec::new(),
             front_end_builtins: Vec::new(),
             unprototyped_parameters: std::collections::HashMap::new(),
+            old_style_parameters: std::collections::HashMap::new(),
             signed_wrapping: false,
             dynamic_rounding: false,
             has_fenv_access,
@@ -2155,6 +2160,15 @@ impl<'arena> CHirUnit<'arena> {
         parameters: std::collections::HashMap<SymbolId, Vec<TypeId>>,
     ) {
         self.unprototyped_parameters = parameters;
+    }
+
+    /// Record the old-style definitions of the unit and their promoted
+    /// parameter types (EvoIR 10.1.7). Called once by the parser.
+    pub fn set_old_style_parameters(
+        &mut self,
+        parameters: std::collections::HashMap<SymbolId, Vec<TypeId>>,
+    ) {
+        self.old_style_parameters = parameters;
     }
 
     pub fn set_gnu_inline(&mut self, enabled: bool) {
@@ -2287,6 +2301,14 @@ impl<'arena> CHirUnit<'arena> {
     #[must_use]
     pub fn unprototyped_parameters(&self, symbol: SymbolId) -> Option<&[TypeId]> {
         self.unprototyped_parameters.get(&symbol).map(Vec::as_slice)
+    }
+
+    /// The promoted parameter types of a function that the unit defines with
+    /// an identifier list or an empty parameter list, or `None` for any
+    /// other function.
+    #[must_use]
+    pub fn old_style_parameters(&self, symbol: SymbolId) -> Option<&[TypeId]> {
+        self.old_style_parameters.get(&symbol).map(Vec::as_slice)
     }
 
     /// Attach the attributes that had no declaration node: labels and type

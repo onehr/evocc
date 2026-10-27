@@ -150,6 +150,12 @@ pub enum InterpreterError {
     IndirectCallDynamicSignatureMismatch {
         span: SourceSpan,
     },
+    /// A call without a prototype of an old-style definition whose
+    /// argument count or promoted argument types do not agree with the
+    /// definition (C11 6.5.2.2p6, EvoIR 10.1.7).
+    OldStyleCallMismatch {
+        span: SourceSpan,
+    },
     UnknownFunction {
         symbol: SymbolId,
     },
@@ -324,6 +330,7 @@ impl InterpreterError {
             } => "E3006",
             Self::FuelExhausted { .. } => "E3008",
             Self::IndirectCallDynamicSignatureMismatch { .. } => "E3019",
+            Self::OldStyleCallMismatch { .. } => "E3068",
             Self::CallThroughNullFunctionPointer { .. } => "E3015",
             Self::CallThroughNonFunctionPointer { .. } => "E3016",
             Self::Asm { .. } => "E3021",
@@ -378,6 +385,7 @@ impl InterpreterError {
             Self::IndirectCallDynamicSignatureMismatch { .. } => {
                 "indirect-call-dynamic-signature-mismatch".to_owned()
             }
+            Self::OldStyleCallMismatch { .. } => "old-style-call-mismatch".to_owned(),
             Self::ReadOfUninitializedObject { spelling, .. } => {
                 format!("read-of-uninitialized-object: {spelling}")
             }
@@ -520,6 +528,7 @@ impl InterpreterError {
             | Self::FuelExhausted { span, .. }
             | Self::Memory { span, .. }
             | Self::IndirectCallDynamicSignatureMismatch { span }
+            | Self::OldStyleCallMismatch { span }
             | Self::CallThroughNullFunctionPointer { span }
             | Self::CallThroughNonFunctionPointer { span } => Some(*span),
         }
@@ -3108,6 +3117,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                                 ..
                             } if facts.category() == ExprCategory::FunctionDesignator
                         ) {
+                            self.check_old_style_call(callee, arguments, &arguments_so_far, span)?;
                             let value_base = values.len();
                             if let Some(result) = self.start_call(
                                 callee,
@@ -5186,6 +5196,32 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         // An executed operand may itself be an assignment or update. The
         // constant-initializer evaluator is the separate non-mutating path.
         !self.static_integer_evaluation
+    }
+
+    /// A call without a prototype of an old-style definition is undefined
+    /// when the argument count differs, or a promoted argument type does not
+    /// agree with the promoted parameter type, outside the two exceptions of
+    /// C11 6.5.2.2p6 (EvoIR 10.1.7). The arguments have run.
+    fn check_old_style_call(
+        &self,
+        callee: &CHirExpr<'_>,
+        arguments: &[&CHirExpr<'_>],
+        values: &[CValue],
+        span: SourceSpan,
+    ) -> Result<(), InterpreterError> {
+        use crate::old_style_calls::{call_verdict, top_bit_set, Verdict};
+        let undefined = match call_verdict(self.unit, &self.target, callee, arguments) {
+            None | Some(Verdict::Agrees) => false,
+            Some(Verdict::IfRepresentable(indices)) => indices.iter().any(|index| {
+                matches!(values.get(*index), Some(CValue::Integer(value)) if top_bit_set(*value))
+            }),
+            Some(Verdict::Undefined) => true,
+        };
+        if undefined {
+            Err(InterpreterError::OldStyleCallMismatch { span })
+        } else {
+            Ok(())
+        }
     }
 
     fn start_call(

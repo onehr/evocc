@@ -61,14 +61,15 @@ fn asm_binding_ir(source: &str, optimize: bool) -> String {
     evocc_evoir::render_module(&module)
 }
 
+/// An empty-list definition is old-style (C11 6.9.1p7): the call with an
+/// extra argument lowers, with its obligation before the call (EvoIR 10.1.7).
 #[test]
-fn measured_refusal_classes_do_not_hide_behind_the_lowering_wrapper() {
-    assert_lowering_error(
+fn an_old_style_call_with_an_extra_argument_lowers_with_its_obligation() {
+    let ir = asm_binding_ir(
         "int f() { return 1; } int main(void) { return f(1); }",
-        306,
-        "E3051",
-        "malformed function f: call arity disagrees with the canonical prototype",
+        false,
     );
+    assert!(ir.contains("ub.assume.old_style_call"), "{ir}");
 }
 
 /// L04: a `float`, `double` or `long double` complex value passes as an

@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 2.38.0** | **Pinned ground truth** | Incompatible pointer types as in GCC 14 on 2026-10-27
+**Revision 2.39.0** | **Pinned ground truth** | Calls to old-style definitions on 2026-10-27
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract of the parser, the C lowering, equality saturation,
@@ -1275,7 +1275,9 @@ non-function provenance reports `E3016`. Function provenance names a concrete
 module symbol, whose actual signature is compared to the value's static `Sig`;
 a mismatch reports `E3019`. The dynamic check is necessary because a function
 pointer loaded from memory may select different symbols by array index, which a
-module validator cannot predict.
+module validator cannot predict. A call without a prototype of an old-style
+definition (10.1.7) carries its own obligation, `ub.assume.old_style_call`
+(`E3068`, 6.1), before the call; `E3019` still applies to its indirect form.
 
 **Provenance.** A function pointer carries the provenance of the function it
 names and preserves it across stores and loads exactly as Section 5.3 requires
@@ -2652,6 +2654,12 @@ deliberately does not repeat the text.
 | `invalid_signed_left_shift` | `E3006` |
 | `bit_builtin_zero_operand` | `E3022` |
 | `floating_to_integer` | `E3063` |
+| `old_style_call` | `E3068` |
+
+`ub.assume.old_style_call` is an interpreter obligation. EvoMIR lowers it to
+nothing in both UB-check profiles (EvoMIR 5.2), so that the call runs as GCC 14
+runs it, and no transformation may use it to remove, move or change code. The
+interpreters report it when its condition is false.
 
 For operands of type `bits<N>`, `signed_add_defined`,
 `signed_sub_defined`, and `signed_mul_defined` each have type
@@ -2728,6 +2736,7 @@ it reports the input file without a position.
 | Remainder by zero | `y == 0` | `divisor_nonzero(y)` → `ub.assume.remainder_by_zero` → `srem`/`urem` |
 | Shift amount invalid for width | mathematical `shift_amt` is outside `[0, N)` | `shift_count_defined.<signedness>(x, amt)` → `ub.assume.invalid_shift_count` → shift |
 | Invalid signed left shift | signed `x << y` is not representable (C11 6.5.7) | not asserted: the GNU profile defines the result as the truncated two's-complement bit pattern (6.1); `signed_shl_defined` and `E3006` remain readable |
+| Call of an old-style definition without a prototype | the argument count differs from the parameter count, or a promoted argument type does not agree with the promoted parameter type (10.1.7) | `const.bits<1> 0`, or `icmp.sle` of zero and the argument for a signed/unsigned pair → `ub.assume.old_style_call` → the call |
 | Pointer arithmetic validity | result must name a live object at an offset in `[0,size]` | `ptr.offset.*.*` → `pointer_valid` |
 | Memory access validity | complete positive-width range and alignment must be valid in the current snapshot | `access_in_bounds` → matching `load`/`store` |
 | Null pointer access | pointer has `Null` provenance | memory guard or direct fail-closed access reports `E3009` |
@@ -2916,6 +2925,7 @@ for them. Codes `E4xxx` belong to EvoMIR (`spec/evomir.md`).
 | `E3062` | `invalid-atomic-access` | validation / interpreter access contract |
 | `E3066` | `object-size-check-failed` | runtime |
 | `E3067` | `not-executed: complex-arithmetic` | runtime |
+| `E3068` | `old-style-call-mismatch` | runtime |
 | `E3101` | `evoir-lowering-failed` | lowering |
 | `W0001` | `unused variable` | front-end lint |
 | `W0002` | `unused parameter` | front-end lint |
@@ -4135,7 +4145,7 @@ shift_predicate  := "shift_count_defined" | "signed_shl_defined"
 ub_reason        := "division_by_zero" | "remainder_by_zero" | "signed_overflow"
                   | "invalid_shift_count" | "invalid_signed_left_shift"
                   | "bit_builtin_zero_operand"
-                  | "floating_to_integer"
+                  | "floating_to_integer" | "old_style_call"
 trap_reason      := "scalar_function_fell_off_end" | "unreachable_reached" | "builtin_trap"
 volatile_marker  := ε | " volatile"
 mask_mark        := " [mask=" integer "]"
@@ -5027,7 +5037,8 @@ short vectors (8 or 16 bytes) of one size is an HVA whatever its lane types,
 and it passes in vector registers (10.1.14). A required floating value
 or conversion on an integer-only lowering path is `E3050`
 (`not-lowered: floating-value`). A call whose actual arity differs from its
-resolved canonical interface is `E3051`, not `E3101`.
+resolved canonical interface is `E3051`, not `E3101`, except a call of an
+old-style definition without a prototype (below).
 These codes change no acceptance or execution rule, and other unsupported
 types, malformed C-HIR and IR validation failures never take them.
 
@@ -5056,6 +5067,30 @@ not a pointer to an empty prototype. A call through it applies the default
 argument promotions. Lowering carries the value as `ptr<generic>` and converts
 it at the call with `ptr.to_int` and `ptr.from_int.fnptr<Sig>`, where `Sig` is
 the promoted call's signature; the dynamic `E3019` check applies unchanged.
+
+**Calls of old-style definitions.** A call is a call without a prototype when
+the called expression names a function, no prototype of it is in scope, and the
+unit defines it with an identifier list or an empty parameter list (C11 6.9.1p7,
+6.7.6.3p14), before or after the definition. A declaration with a parameter type
+list puts a prototype in scope, in its scope; `int f();` and `__typeof__(f)` do
+not. The front end applies the default argument promotions to each argument and
+checks no argument type against a parameter type. Lowering compares each
+promoted argument type with the promoted type of the declared parameter. The two
+agree when they are compatible, or when both are pointers to character types or
+`void` in any qualification. A signed integer type and the corresponding
+unsigned type agree when the value is representable in both. The call is
+undefined (C11 6.5.2.2p6) when the counts differ or a pair does not agree. An
+agreeing call is a direct `call` that converts each argument to the
+definition's parameter type, as before. A signed/unsigned pair adds `icmp.sle`
+of zero and the argument and `ub.assume.old_style_call` after the argument
+evaluation; a constant argument whose top bit is clear agrees without them. An
+undefined call gets `const.bits<1> 0` and `ub.assume.old_style_call` there, and
+calls through the function's address with `ptr.to_int` and
+`ptr.from_int.fnptr<Sig>` of the promoted signature, so the machine passes each
+promoted argument as GCC 14 and Apple clang do. The substitution of 10.1.9 does
+not inline a call that does not agree. Calls through a function pointer object
+keep the rule above, and a call without a prototype of a function defined with a
+prototype keeps its earlier rule.
 
 #### 10.1.8 Loop and Branch Lowering
 
@@ -9137,6 +9172,19 @@ to the signature spelling.
 ---
 
 ## Revision
+
+**Revision 2.39.0, 2026-10-27.** A call without a prototype of a function that
+the unit defines with an identifier list or an empty parameter list follows
+C11 6.5.2.2p6 (10.1.7). Its arguments take the default argument promotions; no
+argument type is checked against a parameter type, and the machine passes the
+promoted arguments as GCC 14 does. The new reason `ub.assume.old_style_call`
+(`E3068`, `old-style-call-mismatch`) records a count that differs and a promoted
+argument type that the promoted parameter type does not accept outside the two
+exceptions; both interpreters and `--check` report it at the call, and native
+code has no check for it (EvoMIR 5.2). Such a call was `E2202` or `W0012` for an
+incompatible pointer after the definition, `E3051` for a count difference, and a
+prototype conversion otherwise. A call with a prototype in scope does not
+change. No registry or proved Core domain changes.
 
 **Revision 2.38.0, 2026-10-27.** The front-end lint `W0012`
 (`incompatible-pointer-types`) reports a conversion between pointers to

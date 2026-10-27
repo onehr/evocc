@@ -2772,6 +2772,30 @@ int main(void) {
 
 Check the product or quotient with the Linux target, or run the native program.
 
+### E3068: old-style-call-mismatch
+
+A call without a prototype does not match the old-style definition of its function.
+The argument count differs, or a promoted argument type differs from the promoted parameter type.
+
+C11 6.5.2.2p6 makes such a call undefined, with two exceptions.
+A signed and the corresponding unsigned type agree when the value fits both, and pointers to
+character types or void agree. EvoCC compiles the call as GCC 14 does; the interpreters and
+`--check` report it when the call runs.
+
+```c
+int second(ip) short *ip; { return ip[1]; }
+short values[2] = {1, 2};
+int main(void) { return second(&values) - 2; }
+```
+
+```c
+int second(ip) short *ip; { return ip[1]; }
+short values[2] = {1, 2};
+int main(void) { return second(values) - 2; }
+```
+
+Declare a prototype, or pass arguments of the promoted parameter types.
+
 ### E3101: evoir-lowering-failed
 
 Lowering could not construct valid EvoIR for this source.

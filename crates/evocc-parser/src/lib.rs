@@ -370,11 +370,16 @@ struct EntityState {
     has_definition: bool,
     gnu_inline_body: bool,
     assembly_named: bool,
+    /// The unit defines this function with an identifier list or an empty
+    /// parameter list (C11 6.9.1p7).
+    old_style_definition: bool,
 }
 
 #[derive(Debug)]
 struct DeclarationTransaction {
     unprototyped_calls: usize,
+    old_style_definitions: usize,
+    prototype_scopes: usize,
     standard_allocation_calls: usize,
     entity_undo: usize,
     external_entity_undo: usize,
@@ -944,6 +949,11 @@ pub struct Parser<'src, 'arena> {
     pointer_lint_findings: std::cell::RefCell<Vec<evocc_chir::lints::Finding>>,
     gnu_inline: bool,
     unprototyped_calls: Vec<(SymbolId, Vec<TypeId>, SourceSpan)>,
+    /// Each old-style definition with its promoted parameter types.
+    old_style_definitions: Vec<(SymbolId, Vec<TypeId>)>,
+    /// Each declaration of a function with a parameter type list, with the
+    /// scope that its prototype is visible in (C11 6.2.1p4).
+    prototype_scopes: Vec<(SymbolId, ScopeId)>,
     standard_allocation_calls: Vec<(SymbolId, SourceSpan)>,
     tokens: Vec<Token>,
     pos: usize,
@@ -1131,6 +1141,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             builtin_declarations: Vec::new(),
             neon_tuple_types: HashMap::new(),
             unprototyped_calls: Vec::new(),
+            old_style_definitions: Vec::new(),
+            prototype_scopes: Vec::new(),
             standard_allocation_calls: Vec::new(),
             loop_depth: 0,
             current_function_parameters: None,
@@ -1427,6 +1439,11 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         unit.set_generic_selections(std::mem::take(&mut self.generic_selections));
         unit.set_front_end_builtins(std::mem::take(&mut self.front_end_builtins));
         unit.set_unprototyped_parameters(observed);
+        unit.set_old_style_parameters(
+            std::mem::take(&mut self.old_style_definitions)
+                .into_iter()
+                .collect(),
+        );
         let mut refusals = std::mem::take(&mut self.profile_refusals);
         refusals.append(&mut convention_uses);
         refusals.append(&mut inline_refusals);
@@ -2076,6 +2093,8 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         self.declaration_transaction_depth += 1;
         DeclarationTransaction {
             unprototyped_calls: self.unprototyped_calls.len(),
+            old_style_definitions: self.old_style_definitions.len(),
+            prototype_scopes: self.prototype_scopes.len(),
             standard_allocation_calls: self.standard_allocation_calls.len(),
             entity_undo: self.entity_undo.len(),
             external_entity_undo: self.external_entity_undo.len(),
@@ -2144,6 +2163,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         }
         self.unprototyped_calls
             .truncate(transaction.unprototyped_calls);
+        self.old_style_definitions
+            .truncate(transaction.old_style_definitions);
+        self.prototype_scopes.truncate(transaction.prototype_scopes);
         self.standard_allocation_calls
             .truncate(transaction.standard_allocation_calls);
         while self.entity_undo.len() > transaction.entity_undo {
@@ -2446,6 +2468,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                         has_definition: false,
                         gnu_inline_body: false,
                         assembly_named: false,
+                        old_style_definition: false,
                     },
                 );
                 if linkage == EntityLinkage::External {
@@ -2549,6 +2572,130 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             .expect("scope symbol IDs belong to the same table");
         self.set_entity_state(symbol, state);
         true
+    }
+
+    /// Whether a function declaration puts a prototype in scope: its
+    /// declarator, or the type that it inherits, has a parameter type list
+    /// (C11 6.2.1p4, 6.7.6.3p14). `__typeof__` of an old-style definition
+    /// does not, as in GCC 14.
+    fn declares_prototype(
+        &self,
+        declarator: &ParsedDeclarator<'arena>,
+        specifier: &ParsedSpecifier<'arena>,
+        declared: TypeId,
+    ) -> bool {
+        let written = declarator.derived.iter().find_map(|layer| match layer {
+            DerivedDeclarator::Function { parameters, .. } => Some(parameters),
+            _ => None,
+        });
+        match written.or(specifier.inherited_function_parameters.as_ref()) {
+            Some(parameters) => matches!(parameters, ParameterSyntax::Prototype { .. }),
+            None => matches!(
+                self.types.get(declared).map(|ty| &ty.kind),
+                Some(TypeKind::Function {
+                    parameters: FunctionParameters::Prototype { .. },
+                    ..
+                })
+            ),
+        }
+    }
+
+    fn record_prototype_scope(&mut self, symbol: SymbolId) {
+        self.prototype_scopes.push((symbol, self.current_scope));
+    }
+
+    /// Whether a declaration of the function with a parameter type list is
+    /// visible in the current scope. Block-scope declarations share the
+    /// entity of the file-scope function, so its type cannot tell.
+    fn prototype_in_scope(&self, symbol: SymbolId) -> bool {
+        self.prototype_scopes.iter().any(|(declared, scope)| {
+            let mut current = Some(self.current_scope);
+            *declared == symbol
+                && loop {
+                    match current {
+                        Some(id) if id == *scope => break true,
+                        Some(id) => {
+                            current = self.symbols.scope(id).ok().and_then(|entry| entry.parent());
+                        }
+                        None => break false,
+                    }
+                }
+        })
+    }
+
+    /// The promoted parameter types of an old-style definition, or `None`
+    /// for a definition with a parameter type list (C11 6.9.1p7). Before
+    /// C23, an empty list in a definition is the identifier-list form with
+    /// no identifiers (C11 6.7.6.3p14), as in GCC 14 up to `-std=gnu17`.
+    /// C23 makes it a prototype; EvoCC accepts no C23 mode, so the empty
+    /// list is old-style in every accepted mode.
+    fn old_style_parameter_types(&mut self, parameters: &ParameterSyntax) -> Option<Vec<TypeId>> {
+        match parameters {
+            ParameterSyntax::Prototype { .. } => None,
+            ParameterSyntax::Unspecified => Some(Vec::new()),
+            ParameterSyntax::IdentifierList { parameters } => Some(
+                parameters
+                    .iter()
+                    .map(|parameter| {
+                        let kind =
+                            evocc_chir::default_promoted_parameter_kind(&self.types, parameter.ty)
+                                .expect("parsed parameter type exists");
+                        self.intern(kind, Qualifiers::default())
+                    })
+                    .collect(),
+            ),
+        }
+    }
+
+    /// A call of a function with an old-style definition and no prototype
+    /// in scope is a call without a prototype (C11 6.5.2.2p6), also after
+    /// the definition gave the function its promoted interface. The
+    /// designator gets the type without a prototype: the arguments then take
+    /// the default argument promotions, and no parameter type checks them.
+    fn old_style_call_designator(
+        &mut self,
+        callee: &'arena CHirExpr<'arena>,
+    ) -> Option<&'arena CHirExpr<'arena>> {
+        let CHirExpr::Ident {
+            symbol,
+            spelling,
+            facts,
+            span,
+        } = callee
+        else {
+            return None;
+        };
+        if facts.category() != ExprCategory::FunctionDesignator
+            || !self
+                .entities
+                .get(symbol)
+                .is_some_and(|state| state.old_style_definition)
+            || self.prototype_in_scope(*symbol)
+        {
+            return None;
+        }
+        let ty = self.types.get(facts.ty())?;
+        let TypeKind::Function {
+            return_type,
+            parameters: FunctionParameters::Prototype { .. },
+        } = &ty.kind
+        else {
+            return None;
+        };
+        let (return_type, qualifiers) = (*return_type, ty.qualifiers);
+        let unprototyped = self.intern(
+            TypeKind::Function {
+                return_type,
+                parameters: FunctionParameters::Unspecified,
+            },
+            qualifiers,
+        );
+        Some(self.alloc_node(CHirExpr::Ident {
+            symbol: *symbol,
+            spelling: spelling.clone(),
+            facts: ExprFacts::function_designator(unprototyped),
+            span: *span,
+        }))
     }
 
     fn mark_definition(&mut self, symbol: SymbolId, name: &SpannedName) {
@@ -3047,6 +3194,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 SymbolData::Function { storage },
                 full_type,
             );
+            if self.declares_prototype(&declarator, &specifier, full_type) {
+                self.record_prototype_scope(symbol);
+            }
             if storage != StorageClass::Static {
                 self.apply_visibility_default(symbol, &mut attributes, visibility);
             }
@@ -3082,6 +3232,12 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                     } else {
                         state.has_definition = true;
                         state.gnu_inline_body = gnu_inline_body;
+                        // Set before the body, so that a recursive call
+                        // sees the old-style definition.
+                        if let Some(promoted) = self.old_style_parameter_types(&parameters) {
+                            state.old_style_definition = true;
+                            self.old_style_definitions.push((symbol, promoted));
+                        }
                         self.set_entity_state(symbol, state);
                     }
                 }
@@ -3303,6 +3459,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 SymbolData::Object { storage }
             };
             let symbol = self.declare_symbol(&declarator.name, symbol_data, full_type);
+            if is_function && self.declares_prototype(&declarator, &specifier, full_type) {
+                self.record_prototype_scope(symbol);
+            }
             if storage != StorageClass::Typedef
                 && storage != StorageClass::Static
                 && (is_function
@@ -14592,6 +14751,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                             expression.span(),
                         );
                         return None;
+                    }
+                    if let Some(designator) = self.old_style_call_designator(expression) {
+                        expression = designator;
                     }
                     let parameters =
                         self.converted_expression_type(expression)
