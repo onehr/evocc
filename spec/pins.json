@@ -6,12 +6,12 @@
       "sha256": "772ee506e130683c927d466519a809f993bf5234b7572a8cfaffc4f19c42d249"
     },
     "spec/evoir.md": {
-      "revision": "2.34.0",
-      "sha256": "a5767285140ffd72649f8e58441de87704caf9725246e397168ec21ba64890db"
+      "revision": "2.35.0",
+      "sha256": "0c821385f6256b999a9b87ff8aa62f0498cbbf2d9c29e6fee2d6b8e88a0bfee4"
     },
     "spec/evomir.md": {
-      "revision": "1.13.0",
-      "sha256": "ce42af37310cd19f70995e7ae6eaed11416f7e3368b42afca15fe8b4d90e9383"
+      "revision": "1.14.0",
+      "sha256": "4174ead56bcc93a8a71fa44a05074710e1edc12caca78b224da99b3573a9550d"
     },
     "spec/target.md": {
       "revision": "1.1.0",

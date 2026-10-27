@@ -922,6 +922,8 @@ pub struct Parser<'src, 'arena> {
     member_availability: HashMap<MemberAttributeKey, DeclarationAvailability>,
     availability_frames: Vec<AvailabilityFrame>,
     standard_builtins: bool,
+    /// `-fno-builtin-NAME`: ordinary names whose recognition is disabled.
+    disabled_builtins: HashSet<String>,
     legacy_declarations: bool,
     lint_declarations: bool,
     lint_uses: HashSet<SymbolId>,
@@ -1076,6 +1078,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             error_count: usize::from(lexical_diagnostic.is_some()),
             error_limit: None,
             standard_builtins: true,
+            disabled_builtins: HashSet::new(),
             legacy_declarations: false,
             lint_declarations: false,
             lint_uses: HashSet::new(),
@@ -1231,6 +1234,18 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     /// Explicit `__builtin_` spellings are unaffected.
     pub fn set_standard_builtins(&mut self, enabled: bool) {
         self.standard_builtins = enabled;
+    }
+
+    /// Disable the recognition of these ordinary names only, as
+    /// `-fno-builtin-NAME` does in GCC 14. `-fbuiltin` does not restore a
+    /// name; an unrecognized name has no effect.
+    pub fn set_disabled_builtins<'n>(&mut self, names: impl IntoIterator<Item = &'n str>) {
+        self.disabled_builtins = names.into_iter().map(str::to_owned).collect();
+    }
+
+    /// Whether the ordinary name `spelling` may be recognized as a builtin.
+    fn recognizes_builtin(&self, spelling: &str) -> bool {
+        self.standard_builtins && !self.disabled_builtins.contains(spelling)
     }
 
     /// Admit the omitted integer declarations of explicitly selected C89/GNU89.
@@ -16871,7 +16886,9 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             return None;
         }
         let declaration = self.symbols.symbol(*symbol).ok()?;
-        if declaration.kind() != SymbolKind::Function {
+        if declaration.kind() != SymbolKind::Function
+            || !self.recognizes_builtin(declaration.spelling())
+        {
             return None;
         }
         Some(*symbol)
@@ -17144,7 +17161,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     fn declare_implicit_called_function(&mut self, spelling: &str, span: SourceSpan) -> SymbolId {
         self.lint_findings
             .push(evocc_chir::lints::Finding { lint: 2, span });
-        let (return_ty, parameters) = if spelling == "alloca" && self.standard_builtins {
+        let (return_ty, parameters) = if spelling == "alloca" && self.recognizes_builtin(spelling) {
             let (_, return_type, types) = self
                 .builtin_library_prototype("__builtin_alloca", span)
                 .expect("the stack allocation prototype is defined");

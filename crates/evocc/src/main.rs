@@ -184,6 +184,10 @@ struct DriverOptions {
     signed_wrapping: bool,
     dynamic_rounding: bool,
     standard_builtins: bool,
+    /// `-fno-builtin-NAME`: the names stay disabled after `-fbuiltin`.
+    disabled_builtins: std::collections::BTreeSet<String>,
+    /// False under `-fno-inline`: only `always_inline` callees are substituted.
+    optional_inlining: bool,
     hosted: bool,
     pthread: bool,
     automatic_zero: bool,
@@ -609,6 +613,8 @@ fn parse_options(args: &[String], lenient: bool) -> Result<DriverOptions, String
     let mut signed_wrapping = false;
     let mut dynamic_rounding = false;
     let mut standard_builtins = true;
+    let mut disabled_builtins = std::collections::BTreeSet::new();
+    let mut optional_inlining = true;
     let mut hosted = true;
     let mut pthread = false;
     let mut automatic_zero = false;
@@ -840,6 +846,10 @@ fn parse_options(args: &[String], lenient: bool) -> Result<DriverOptions, String
             "-mno-omit-leaf-frame-pointer" => codegen.leaf_frame_pointer_required = true,
             // No sibling-call transform exists in this backend.
             "-fno-optimize-sibling-calls" => {}
+            // EvoMIR 8.2 emits each tentative definition as a zero-filled
+            // definition, never as a common symbol. `-fcommon` stays
+            // unsupported.
+            "-fno-common" => {}
             // No automatic vectorizer exists either, so these disabling
             // options select the existing contract on both targets. Explicit
             // vector operations stay as written.
@@ -883,6 +893,20 @@ fn parse_options(args: &[String], lenient: bool) -> Result<DriverOptions, String
             }
             "-fno-builtin" => standard_builtins = false,
             "-fbuiltin" => standard_builtins = true,
+            // GCC 14 keeps a named builtin disabled after `-fbuiltin`, and an
+            // unrecognized name has no effect. An empty name stays unsupported.
+            _ if arg.len() > "-fno-builtin-".len() && arg.starts_with("-fno-builtin-") => {
+                disabled_builtins.insert(arg["-fno-builtin-".len()..].to_owned());
+            }
+            // EvoIR 10.1.9: only `always_inline` callees are substituted, as
+            // in GCC 14. The positive `-finline` stays unsupported.
+            "-fno-inline" => optional_inlining = false,
+            // The source is read as UTF-8. GCC 14 accepts these spellings in
+            // any letter case, with or without the hyphen. Every other
+            // charset stays unsupported.
+            _ if arg.strip_prefix("-finput-charset=").is_some_and(|charset| {
+                charset.eq_ignore_ascii_case("utf-8") || charset.eq_ignore_ascii_case("utf8")
+            }) => {}
             "-ffreestanding" => {
                 hosted = false;
                 standard_builtins = false;
@@ -1275,6 +1299,8 @@ fn parse_options(args: &[String], lenient: bool) -> Result<DriverOptions, String
         signed_wrapping,
         dynamic_rounding,
         standard_builtins,
+        disabled_builtins,
+        optional_inlining,
         hosted,
         pthread,
         automatic_zero,
@@ -1905,6 +1931,8 @@ fn can_concatenate(group: &[(TokenKind, String)], kind: TokenKind, text: &str) -
 }
 
 fn run_parsed(options: &DriverOptions, action: ParsedAction) -> ExitCode {
+    // Each compilation selects its own inline policy before any substitution.
+    evocc_chir::inline::set_always_inline_only(!options.optional_inlining);
     let (src, tokens) = match read_and_lex(options) {
         Ok(value) => value,
         Err(code) => return code,
@@ -1950,6 +1978,7 @@ fn run_parsed(options: &DriverOptions, action: ParsedAction) -> ExitCode {
         parser.set_availability_target(deployment);
     }
     parser.set_standard_builtins(options.standard_builtins);
+    parser.set_disabled_builtins(options.disabled_builtins.iter().map(String::as_str));
     parser.set_legacy_declarations(options.language.legacy_declarations());
     parser.enable_lints();
     parser.use_language_keywords(

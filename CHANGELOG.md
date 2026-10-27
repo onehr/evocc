@@ -9,6 +9,10 @@ The first public version.
 
 ### Added
 
+- Both drivers accept `-fno-common` and `-finput-charset=utf-8` (also `utf8`, in any letter
+  case), which name existing contracts. `-fno-builtin-NAME` disables the recognition of one
+  library name, and `-fno-inline` substitutes only `always_inline` functions, as in GCC 14.
+  `-fcommon`, other charsets and `-finline` stay unsupported.
 - The `optimize` attribute accepts what EvoCC already satisfies, with no effect on code: the
   levels 0 to 3, `O`, `O0` to `O3`, `Os` and `Og`, and twelve disabling options such as
   `no-strict-aliasing` and `no-tree-vectorize`. Every other option keeps E2952. Both drivers

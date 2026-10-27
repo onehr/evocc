@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 2.34.0** | **Pinned ground truth** | Satisfied optimize options on 2026-10-27
+**Revision 2.35.0** | **Pinned ground truth** | Four GCC driver options on 2026-10-27
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract of the parser, the C lowering, equality saturation,
@@ -5503,7 +5503,9 @@ are optimization admission limits, not new C-language refusals or permission
 to change an object's identity or read uninitialized bytes. A nonmatching
 optional call remains a call; mandatory `always_inline` cycle handling is
 unchanged. No EvoIR instruction, EqSat rule or implicit cross-block state is
-introduced by this selection.
+introduced by this selection. Under `-fno-inline`, no optional selection is
+made: as in GCC 14, only `always_inline` callees are substituted, and each
+other call stays a call.
 
 **Bracketed attributes.** `[[gnu::name]]` and `[[__gnu__::__name__]]` have
 the meaning of the GNU attribute `name` at declaration, member and tag-keyword
@@ -7781,6 +7783,26 @@ actions, whatever their position:
   references included. Requested unwind tables describe the actual frame, saved
   registers and return-address signing state.
 
+**Options that select a contract.** Both command lines accept these options
+on both targets, in any position:
+
+- `-fno-common` names the existing contract: a tentative definition is a
+  zero-filled definition (EvoMIR 8.2), never a common symbol. `-fcommon`
+  stays unsupported.
+- `-finput-charset=CHARSET`, with `utf-8` or `utf8` in any letter case,
+  names the existing contract: the source is UTF-8. Every other charset
+  stays unsupported.
+- `-fno-builtin-NAME`, with a nonempty `NAME`, disables the ordinary-name
+  builtin substitution of `NAME` only, as `-fno-builtin` does for every name.
+  A later `-fbuiltin` does not restore `NAME`, as in GCC 14. A `NAME` that
+  EvoCC does not substitute has no effect, and `__builtin_NAME` stays
+  available.
+- `-fno-inline` limits the substitution of 10.1.9 to `always_inline`
+  callees. `-finline` stays unsupported.
+
+GCC 14 accepts these options. Apple clang refuses `-finput-charset=utf8`
+without the hyphen.
+
 **Dynamic macros.** `__FILE__`, `__LINE__`, `__BASE_FILE__`, `__DATE__`,
 `__TIME__` as ISO C; `__COUNTER__` expands to `0`, `1`, `2`, ... per expansion
 in translation order; a translation unit that expands it
@@ -9022,6 +9044,14 @@ to the signature spelling.
 ---
 
 ## Revision
+
+**Revision 2.35.0, 2026-10-27.** The driver option text accepts
+`-fno-common`, `-finput-charset=` with a UTF-8 spelling, `-fno-builtin-NAME`
+and `-fno-inline` on both targets. The first two name existing contracts.
+`-fno-builtin-NAME` disables the ordinary-name substitution of one name, and
+`-fno-inline` limits the substitution of 10.1.9 to `always_inline` callees.
+`-fcommon`, other charsets and `-finline` stay unsupported. No EvoIR
+operation, registry or proved Core domain changes.
 
 **Revision 2.34.0, 2026-10-27.** Section 10.1.9 accepts the `optimize`
 arguments that EvoCC already satisfies, with no effect on code: an integer

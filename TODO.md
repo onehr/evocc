@@ -6851,6 +6851,18 @@ plan, RED, flag, gates, one-page note, TODO update in the same commit.
   embeds `pr60062`, `pr60072`, `alias-1` and `pr79043`: each exits 0 natively
   on Darwin and in the sealed GCC 14 image on Linux, at `-O0` and `-O2`.
   The two LLVM copies of `pr60062` and `pr60072` wait for the B10 campaign.
+  October 27 option repair: both drivers accept `-fno-common` and
+  `-finput-charset=` with `utf-8` or `utf8` in any letter case, with no
+  change of code. `-fno-builtin-NAME` disables the recognition of one
+  name, and the name stays disabled after `-fbuiltin`, as in GCC 14.
+  `-fno-inline` substitutes only `always_inline` callees. `-fcommon`,
+  other charsets, `-finline` and an empty builtin name stay unsupported.
+  GCC 14 also accepts iconv names of UTF-8, such as `ISO-10646/UTF8/`,
+  which EvoCC refuses; Apple clang refuses `utf8`. With their original
+  arguments, LLVM `20040709-3`, `pr68506`, `stkalign` and `wchar_t-1` exit
+  0 in the sealed GCC 14 image with GCC 14's output
+  (`selected_contract_options.rs`). The `driver_cc.rs` warning test now
+  uses `-finstrument-functions` as its unsupported option.
 
 - [x] **N10 — Keep one-word records and small arrays in registers** — `DONE`, P1, 2026-10-19.
   `pte_t` and `pmd_t` values live in memory: zero-filled, copied from slot to

@@ -205,10 +205,10 @@ fn an_ignored_option_warning_labels_only_that_option() {
         let mut args = vec![format!("--error-format={format}")];
         args.extend(extra.iter().map(|arg| arg.to_string()));
         args.extend((0..12).map(|n| format!("-DPADDING_{n}=1")));
-        args.extend(["-fno-common", "-fsyntax-only", "helper.c"].map(str::to_owned));
+        args.extend(["-finstrument-functions", "-fsyntax-only", "helper.c"].map(str::to_owned));
         let column = args
             .iter()
-            .take_while(|arg| *arg != "-fno-common")
+            .take_while(|arg| *arg != "-finstrument-functions")
             .map(|arg| arg.len() + 1)
             .sum::<usize>()
             + 1;
@@ -220,13 +220,13 @@ fn an_ignored_option_warning_labels_only_that_option() {
             .unwrap();
         (output, column)
     };
-    let message = "option `-fno-common` is not supported and has no effect";
+    let message = "option `-finstrument-functions` is not supported and has no effect";
     let (output, column) = run("text", &[]);
     succeeded(&output);
     assert_eq!(
         String::from_utf8_lossy(&output.stderr),
         format!(
-            "warning: {message}\n  --> <command-line>:1:{column}\n   |\n 1 | ... -fno-common ...\n   |     ^^^^^^^^^^^ {message}\n   |\n"
+            "warning: {message}\n  --> <command-line>:1:{column}\n   |\n 1 | ... -finstrument-functions ...\n   |     ^^^^^^^^^^^^^^^^^^^^^^ {message}\n   |\n"
         )
     );
     let (output, column) = run("json", &[]);
@@ -235,7 +235,7 @@ fn an_ignored_option_warning_labels_only_that_option() {
     assert!(
         json.contains(&format!(
             "\"spans\":[{{\"file\":\"<command-line>\",\"line_start\":1,\"column_start\":{column},\"line_end\":1,\"column_end\":{}",
-            column + "-fno-common".len()
+            column + "-finstrument-functions".len()
         )),
         "{json}"
     );

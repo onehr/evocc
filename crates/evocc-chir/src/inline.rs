@@ -15,6 +15,18 @@ mod memory_values;
 mod object_size;
 mod ranges;
 
+thread_local! {
+    /// GCC's `-fno-inline`: substitute only `always_inline` callees.
+    static ALWAYS_INLINE_ONLY: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// Select GCC's `-fno-inline` for each later substitution on this thread
+/// (EvoIR 10.1.9). The driver sets it once for each compilation; a thread
+/// that does not set it keeps every optional substitution.
+pub fn set_always_inline_only(enabled: bool) {
+    ALWAYS_INLINE_ONLY.with(|flag| flag.set(enabled));
+}
+
 #[derive(Debug)]
 pub struct InlineError {
     pub span: SourceSpan,
@@ -1201,7 +1213,7 @@ fn substitute_with_context<'a>(
     // wider contract. Each admitted call pays its source-node cost from one
     // unit-wide budget, including calls reached inside another expansion.
     // The cost is a growth heuristic, not a bound on emitted machine bytes.
-    let local_leaf_costs: BTreeMap<_, _> = candidates
+    let mut local_leaf_costs: BTreeMap<_, _> = candidates
         .iter()
         .filter_map(|(&symbol, &function)| {
             let body = &bodies[&symbol];
@@ -1249,6 +1261,12 @@ fn substitute_with_context<'a>(
         })
         .collect();
     eligible.extend(local_leaf_costs.keys().map(|&s| (s, candidates[&s])));
+    // `-fno-inline` keeps every optional selection out, as GCC 14 does. Each
+    // other call stays a call; mandatory `always_inline` handling is unchanged.
+    if ALWAYS_INLINE_ONLY.with(std::cell::Cell::get) {
+        eligible.retain(|symbol, _| roles.always_inline.contains(symbol));
+        local_leaf_costs.clear();
+    }
     let pure_constants = eligible
         .values()
         .filter_map(|f| pure_loop_result(unit, f, target).map(|value| (f.symbol, value)))
