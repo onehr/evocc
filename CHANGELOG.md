@@ -194,7 +194,8 @@ The first public version.
 
 - Application status rows name reference failures separately from EvoCC failures, and show
   refusals, deferrals, inapplicable programs and unusable oracles. Their statuses and counts
-  are unchanged; raw refusals are not an extra count of compiler failures.
+  are unchanged; raw refusals are not an extra count of compiler failures. A legend on the
+  status page explains raw refusals and reference failures, and its table gives each count once.
 - `E3007` has one meaning, `unsupported-interpreter-input`: an interpreter cannot execute the
   input. It is a refusal, not a finding. Before, its page described a withdrawn diagnostic.
 - A shift by a constant count in range has no run-time count check any more; the K16

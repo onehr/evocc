@@ -4042,7 +4042,10 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
   The renderer changes no status, count, receipt or classification rule.
   Reference-only, compiler-failure, unusable-oracle and unchanged-PASS
   controls cover the observed rows. This presentation repair does not close
-  the final health or frozen application/kernel acceptance gates.
+  the final health or frozen application/kernel acceptance gates. A review of
+  the same day repaired four presentation defects: a count of one takes the
+  singular, the table gives each count once, a cause line breaks only between
+  two items, and a legend explains raw refusals and reference failures.
 
   - [x] **T05a — Preserve multiline benchmark command failures**.
     Six RED assertions showed that trailing newlines/comments detached log

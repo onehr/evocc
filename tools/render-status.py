@@ -315,15 +315,23 @@ def lane_status(row: dict) -> str:
     return state
 
 
-def application_causes(row: dict) -> str:
+# Two sentences. The terminal view puts each one on its own line.
+CAUSE_LEGEND = ("Raw refusals overlap the classes above and do not add to the EvoCC failures.",
+                "A reference failure is a failure of the reference build.")
+
+
+def application_causes(row: dict, listed: dict | None = None) -> list[str]:
     """Describe recorded counts, without reclassifying a lane or its programs.
 
     Reviewed dispositions take precedence over raw execution outcomes. Raw
     refusals can include deferred or inapplicable programs, so they are not
-    an additional count of compiler failures.
+    an additional count of compiler failures. A count of one takes the
+    singular. The caller can pass `listed`, the names and counts that it
+    prints already (for example compiler-failure: 5). A cause with one of
+    these names and the same count is left out.
     """
     if lane_status(row) != "INCOMPLETE":
-        return ""
+        return []
     disposition = row.get("dispositions") or {}
     outcomes = row.get("outcomes") or {}
     failures = disposition.get("compiler-failure")
@@ -336,19 +344,49 @@ def application_causes(row: dict) -> str:
             # Csmith records one outcome per program, not reviewed dispositions.
             non_failures = {"agree", "oracle-unusable", "oracle-split", "not-run"}
             failures = sum(n for outcome, n in outcomes.items() if outcome not in non_failures)
-    counts = [("reference failures", row.get("baselineFailures")), ("EvoCC failures", failures)]
     refusals = row.get("refusals") or {}
-    if refusals:
-        counts.append(("raw refusals", sum(refusals.values())))
-    counts += [("FP deferrals", disposition.get("FP-deferred")),
-               ("not applicable", disposition.get("not-applicable")),
-               ("unusable oracles", disposition.get("oracle-unusable",
-                    outcomes.get("oracle-unusable", 0) + outcomes.get("oracle-split", 0))),
-               ("not run", outcomes.get("not-run"))]
-    parts = [f"{count} {label}" for label, count in counts
-             if isinstance(count, int) and count >= 0
-             and (count or label in ("reference failures", "EvoCC failures"))]
-    return "; ".join(parts) or "cause counts not recorded"
+    # Singular and plural label, count, and the name of a disposition or outcome
+    # that carries the same count (or None).
+    counts = [("reference failure", "reference failures", row.get("baselineFailures"), None),
+              ("EvoCC failure", "EvoCC failures", failures, "compiler-failure"),
+              ("raw refusal", "raw refusals", sum(refusals.values()) if refusals else None, "refused"),
+              ("FP deferral", "FP deferrals", disposition.get("FP-deferred"), "FP-deferred"),
+              ("not applicable", "not applicable", disposition.get("not-applicable"), "not-applicable"),
+              ("unusable oracle", "unusable oracles",
+               disposition.get("oracle-unusable",
+                               outcomes.get("oracle-unusable", 0) + outcomes.get("oracle-split", 0)),
+               "oracle-unusable"),
+              ("not run", "not run", outcomes.get("not-run"), "not-run")]
+    recorded = [(f"{count} {one if count == 1 else many}", name, count)
+                for one, many, count, name in counts
+                if isinstance(count, int) and count >= 0
+                and (count or one in ("reference failure", "EvoCC failure"))]
+    if not recorded:
+        return ["cause counts not recorded"]
+    listed = listed or {}
+    return [text for text, name, count in recorded if name is None or listed.get(name) != count]
+
+
+def wrap_items(items: list[str], *, width: int, indent: str) -> list[str]:
+    """Join items with semicolons, and break a line only between two items."""
+    lines: list[str] = []
+    line = ""
+    for number, item in enumerate(items, 1):
+        piece = item if number == len(items) else item + ";"
+        if line and len(indent) + len(line) + 1 + len(piece) > width:
+            lines.append(indent + line)
+            line = piece
+        else:
+            line = f"{line} {piece}" if line else piece
+    if line:
+        lines.append(indent + line)
+    return lines
+
+
+def cause_legend(rows: dict) -> tuple[str, ...]:
+    """The sentences that explain the cause counts, if an application row shows them."""
+    shown = any(application_causes(rows.get(name, {})) for _, name in APPLICATIONS)
+    return CAUSE_LEGEND if shown else ()
 
 
 def measurement(row: dict) -> str:
@@ -459,12 +497,11 @@ def render_ascii(receipts: dict[str, dict], *, evoir: str, evomir: str) -> str:
         kind = "TU" if row.get("kind") == "units" else row.get("kind", "")
         amount = f"{ratio(validated(row), row.get('total'))} {kind}".rstrip()
         lines.append(f"  {rung:4} {name:16} {lane_status(row):15} {amount:20} {measurement(row)}")
-        causes = application_causes(row)
-        if causes:
-            lines.extend(textwrap.wrap(causes, width=105, initial_indent="    ", subsequent_indent="    "))
+        lines.extend(wrap_items(application_causes(row), width=105, indent="    "))
     lines += [
         "  PROFILE_CLEAN excludes evidenced deferrals/inapplicability; it is not all-program PASS.",
         "  TU = translation unit. Mixed-link coverage and whole-program PASS are different claims.",
+        *("  " + sentence for sentence in cause_legend(rows)),
         "", "KERNEL - configurations and runtime populations remain separate",
     ]
     # An adapter can stop before replacing its last completed lane receipt.
@@ -622,11 +659,15 @@ def render_document(receipts: dict[str, dict], *, evoir: str, evomir: str) -> st
         if not detail:
             outcomes = "; ".join(f"{key}: {value}" for key, value in row.get("outcomes", {}).items())
             detail = (outcomes + "; " if outcomes else "") + row.get("note", "No measurement receipt.")
-        causes = application_causes(row)
+        # The detail lists the dispositions, or else the outcomes. Add only the causes it lacks.
+        causes = application_causes(row, listed=disposition or row.get("outcomes"))
         if causes:
-            detail += "; " + causes
+            detail += "; " + "; ".join(causes)
         digest = (row.get("measurement") or {}).get("driverSha256") or "unrecorded"
         text += f"| {name} | {detail.replace('|', '/')} | `{digest[:12]}` |\n"
+    legend = " ".join(cause_legend(rows))
+    if legend:
+        text += "\n" + legend + "\n"
     text += (
         "\n- Scalar f32/f64 execution, HFA and variadic ABI are implemented under the fixed-environment "
         "profile. Dynamic rounding and lexical non-trapping FENV_ACCESS have targeted source, "
