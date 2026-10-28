@@ -24,6 +24,10 @@ The retained preflight records include rejected candidates and their replacement
 ## Frozen method
 
 The measured registration is `agent-repair-corpus-2`, commit `7eed5eac`.
+Each registration in this chapter was a local Git tag on the commit that the
+text names. The public repository has the commits, not the tags. To replay a
+run, create the tag on its commit, because the harness checks the tag name
+that its protocol records.
 Registration 1 is retained with zero model calls. Its file query exceeded the
 131,072-byte capture limit with 137,511 bytes. A scoped query fixed that failure
 before registration 2 and the first model request.
@@ -261,11 +265,14 @@ Finite-input output agreement is not proof of correctness or absence of UB.
 
 ## Reproduce or extend
 
-Use a clean checkout of the tag, release `evo` and `evocc`, and the pinned image.
-Use a new output directory outside the repo. The owner supplies the credential.
-A dry run prints the plan; it does not validate execution prerequisites.
+Use a clean checkout of commit `7eed5eac`, release `evo` and `evocc`, and the
+pinned image. Use a new output directory outside the repo. The owner supplies
+the credential. A dry run prints the plan; it does not validate execution
+prerequisites.
 
 ```sh
+git checkout 7eed5eac064e0993d0d26a967b50dc94c71cc55b
+git tag agent-repair-corpus-2 7eed5eac064e0993d0d26a967b50dc94c71cc55b
 python3 tools/experiment/repair.py --out /tmp/repair-replay --dry-run
 python3 tools/experiment/repair.py --corpus-tag agent-repair-corpus-2 --out /tmp/repair-replay
 python3 tools/experiment/report.py /tmp/repair-replay/receipt.json
@@ -299,8 +306,8 @@ for the whole run, and count an item as easy only after scored passes.
 
 The predictions were written before any measured request. They are in
 [`predictions-2.md`](https://github.com/onehr/evocc/blob/main/tools/experiment/predictions-2.md),
-frozen by the tag `agent-repair-experiment-2`. Each comparison is strict and
-separate for each model. Tokens, rounds, diff size and span overlap use only
+frozen at commit `0701fea5` (`agent-repair-experiment-2`). Each comparison is
+strict and separate for each model. Tokens, rounds, diff size and span overlap use only
 successful repetitions.
 
 1. **Token cost.** C3 has a lower median of total model tokens per successful
@@ -397,15 +404,15 @@ Qwen's is eight items. These populations are too small for a general claim.
 
 ### Measured run
 
-The tag `agent-repair-experiment-2` is commit `0701fea5`. It holds the corpus,
-prompt, predictions, protocol, harness and preflight receipt. The run started
-at 2026-10-08T16:17:48Z from a clean checkout of the tag. It used six parallel
-slots and the protocol's USD 160 reported-cost cap.
+The registration `agent-repair-experiment-2` is commit `0701fea5`. It holds the
+corpus, prompt, predictions, protocol, harness and preflight receipt. The run
+started at 2026-10-08T16:17:48Z from a clean checkout of that commit. It used
+six parallel slots and the protocol's USD 160 reported-cost cap.
 
 The provider key has its own USD 10 spending limit. The run reached it at
 about 22:41Z. From then on, OpenRouter refused every request with HTTP 403 and
 the message "Key limit exceeded". The protocol stops a campaign when the
-provider refuses the key, but the tagged harness checked only HTTP 401 and
+provider refuses the key, but the registered harness checked only HTTP 401 and
 402. It recorded each 403 as a response error and kept starting slots. The
 raw receipt therefore shows 900 repetitions and `stop_reason=completed`;
 914 of its 1,992 HTTP attempts are refusals.
@@ -566,7 +573,7 @@ stopped in repetition 2, and the groups contain different items.
 - **One run, stopped early.** The provider key limit ended the run after 444
   of 900 repetitions. Repetition 1 is complete; repetition 2 is partial and
   repetition 3 did not start. The protocol does not permit a continuation.
-- **The stop was applied after the run.** The tagged harness did not stop on
+- **The stop was applied after the run.** The registered harness did not stop on
   the HTTP 403 key refusal. The report applies the registered stop; the raw
   receipt keeps the 914 refused attempts.
 - **Two models.** DeepSeek V4.1 Flash and Qwen3.5 9B, through OpenRouter.
@@ -589,17 +596,19 @@ stopped in repetition 2, and the groups contain different items.
 
 ### Reproduce
 
-Use a clean checkout of the tag, the release `evo` and `evocc` binaries, the
-sealed image and a provider key with enough limit for the full plan.
+Use a clean checkout of commit `0701fea5`, the release `evo` and `evocc`
+binaries, the sealed image and a provider key with enough limit for the full
+plan.
 
 ```sh
-git checkout agent-repair-experiment-2
+git checkout 0701fea5e15bb26d8944e6d589a61319a4d1e4f1
+git tag agent-repair-experiment-2 0701fea5e15bb26d8944e6d589a61319a4d1e4f1
 python3 tools/experiment/repair.py --protocol tools/experiment/protocol-2.json --dry-run --out /tmp/repair-2-replay
 python3 tools/experiment/repair.py --protocol tools/experiment/protocol-2.json --corpus-tag agent-repair-experiment-2 --parallel 6 --out /tmp/repair-2-replay
 python3 tools/experiment/report.py /tmp/repair-2-replay/receipt.json
 ```
 
-The tagged harness does not stop on an HTTP 403 key refusal. Watch the key
+The registered harness does not stop on an HTTP 403 key refusal. Watch the key
 limit. The report applies the registered stop when it reads the receipt.
 
 ## Experiment 3: pilots with a coding agent
@@ -644,7 +653,7 @@ Sources: [initial receipt](../../tests/contracts/agent-repair-3-pilot-20261009.j
 This experiment asks a narrower question: does EvoCC feedback help a coding
 agent repair defects that the default GCC warnings and UBSan do not report?
 The registered method is [protocol-4.md](../../tools/experiment/protocol-4.md).
-The tag `agent-repair-experiment-4` is commit
+The registration `agent-repair-experiment-4` is commit
 `5b765db0467dc92a94077e3f37617c04e16f24b0`. Measurement began from its clean
 tree, after qualification and the six-session pilot.
 
@@ -878,10 +887,10 @@ programs, all agent models or JSON formatting alone.
 ### Registration and method
 
 [Protocol 5](../../tools/experiment/protocol-5.md) was committed before
-measurement. Tag `agent-repair-experiment-5` is
+measurement. The registration `agent-repair-experiment-5` is commit
 `9672d2d92691f984af28e94fda0e7d433fdd868e`. Both parts ran from that clean
 commit. The corpora, prompt, conditions, scoring and analysis did not change
-after the tag. Kimi Code 2.0.2 logged `kimi-code/k3` and low effort in every
+after that commit. Kimi Code 2.0.2 logged `kimi-code/k3` and low effort in every
 session. Each session used a fresh Seatbelt workspace and a 100-step limit.
 
 Part A repeated all 24 experiment 4 items twice, as repetitions 2 and 3,
