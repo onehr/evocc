@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/images/mascot.png" alt="EvoCC mascot: a chameleon holding a wrench" width="180">
+  <img src="docs/images/logo.png" alt="EvoCC logo: the chameleon mascot with a wrench, in a blue ring. Around the ring are Agents at the top, Lean 4 on the left, EqSat on the right and Rust at the bottom." width="420">
 </p>
 
 <h1 align="center">EvoCC</h1>
