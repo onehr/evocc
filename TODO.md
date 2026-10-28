@@ -4731,6 +4731,9 @@ Reopening any of them needs a new owner decision after the N03 slices land.
     The owner tags and pushes. Exit: CHANGELOG dates 0.1.0, tag `v0.1.0`
     exists, one merged `SHA256SUMS` is published, and the README download
     URLs resolve.
+    On 2026-10-28 the owner set the release date: the dating commit dates
+    0.1.0 as 2026-10-28. The archives are built again from it; the tag and
+    the publication remain.
   - [x] **R05l — Name the proof profile in the README** — `DONE`, P2, 2026-10-15.
     Exit: the README names `core-v1` where it states what the proofs cover,
     as the owner decides.
