@@ -1,5 +1,1 @@
 blank_issues_enabled: true
-contact_links:
-  - name: Security problem
-    url: https://github.com/onehr/evocc/blob/main/SECURITY.md
-    about: Report wrong code or a checker defect as a pull request with a failing test. See SECURITY.md.

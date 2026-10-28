@@ -326,7 +326,8 @@ EvoCC 0.1.0 is experimental.
 
 ## Contributing
 
-Read [CONTRIBUTING.md](CONTRIBUTING.md). To report wrong code, follow [SECURITY.md](SECURITY.md).
+Read [CONTRIBUTING.md](CONTRIBUTING.md). To report wrong code, open a pull request with a failing
+test, or use the wrong-code issue template.
 
 ## License
 

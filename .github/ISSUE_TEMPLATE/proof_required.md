@@ -5,7 +5,7 @@ title: ""
 labels: proof
 ---
 
-<!-- If a checker accepted a wrong result, mark the title with [security] and read SECURITY.md. -->
+<!-- If a checker accepted a wrong result, a pull request with a failing test is the best report. -->
 
 ### Versions
 
