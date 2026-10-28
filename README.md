@@ -10,39 +10,69 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/onehr/evocc/actions/workflows/ci.yml"><img src="https://github.com/onehr/evocc/actions/workflows/ci.yml/badge.svg" alt="CI status"></a>
   <a href="https://github.com/onehr/evocc/releases"><img src="https://img.shields.io/github/v/release/onehr/evocc?label=release" alt="Latest release"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue" alt="Apache-2.0 license"></a>
 </p>
 
-EvoCC is a C compiler for AArch64 Linux and macOS, written from scratch in Rust. Use it in place of
-`cc`. When your program breaks a rule of C on a path that it runs, `evo check` shows you the line and
-the reason. For the supported `core-v1` subset, EvoCC can also check a compilation with Lean 4,
-from typed Core source to final assembly text.
+EvoCC is a practical C compiler for AArch64 Linux and macOS, written from scratch in Rust, that
+can show why its output is right. Use it in place of `cc`. It also does three things that a
+compiler usually leaves to other tools: it finds undefined behavior on the path that your program
+runs, its EqSat optimizer rewrites only with rules that Lean 4 proves, and it can check a whole
+compilation down to the assembly text.
 
 <p align="center">
-  <img src="docs/images/readme/highlights.svg" alt="Four terminal sessions. evocc builds zlib, and zlib passes its tests. evo check finds a signed overflow in a binary search. GCC 14 with UBSan gives no report and the program returns a wrong value, but evo check finds the uninitialized read. evo prove checks the compilation of abs, and the checked assembly traps on overflow.">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/images/readme/highlights-dark.svg">
+    <img src="docs/images/readme/highlights.svg" alt="Four terminal sessions. evocc builds zlib, and zlib passes its tests. evo check finds a signed overflow in a binary search. GCC 14 with UBSan gives no report and the program returns a wrong value, but evo check finds the uninitialized read. evo prove checks the compilation of abs, and the checked assembly traps on overflow." width="860">
+  </picture>
 </p>
 
-## Highlights
+## Why EvoCC
 
-- **A drop-in `cc`.** Existing Makefiles build with `CC=evocc`. CMake projects use
-  [`cmake/evocc.cmake`](cmake/evocc.cmake).
-- **Real software.** EvoCC builds zlib, SQLite, Lua, jq, Mbed TLS, Doom, three games and a Linux
-  kernel. Kbuild builds that kernel with `make CC=evocc`, and the kernel boots.
-- **Undefined behavior, with evidence.** `evo check` runs your program on the rules of C. It stops
-  at the first operation that breaks one and shows the line.
-- **Catches what UBSan misses.** Uninitialized reads, dangling pointers and out-of-bounds accesses
-  that GCC's warnings and UBSan do not report.
-- **Every error explained.** Each diagnostic has a stable code, a tested explanation
-  (`evo explain E3001`) and a JSON form.
-- **Proof-carrying compilation.** For the supported `core-v1` subset, `evo prove` writes assembly
-  only when Lean 4 checks every stage from typed Core source to final assembly text.
-- **Made for agents.** JSON output, safe automatic repairs and an MCP server. On bugs that GCC and
-  UBSan miss, a coding agent needed about a third fewer steps with EvoCC in an experiment of
-  2026-10-09.
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/images/readme/overview-dark.svg">
+    <img src="docs/images/readme/overview-light.svg" alt="Your C program goes into EvoCC, a drop-in cc, which writes native AArch64 code for Linux and macOS. Three guarantees branch from EvoCC: evo check stops at the first broken rule of C and shows the line; the EqSat optimizer uses only rules proved in Lean 4, and a checker replays each rewrite; evo prove has Lean 4 check every stage and writes assembly only if all stages pass." width="860">
+  </picture>
+</p>
 
-## Install
+- **The rules of C stay explicit.** EvoIR turns the undefined-behavior rules of C into checks.
+  An optimization can remove work, never a check. So `evo check` finds bugs that sanitizers miss,
+  and the checked `abs(INT_MIN)` traps. ([How it works](#how-it-works))
+- **Optimization with proved rules.** The EqSat optimizer (`-Oeq-scalar`) uses only rewrite
+  rules that Lean 4 proves for every bit width. An independent checker replays each rewrite before EvoCC writes
+  output. ([Checked optimization](book/src/optimization.md))
+- **Compilation with proof.** For the `core-v1` subset, `evo prove` has Lean 4 check every stage,
+  from typed Core source to the final assembly text. It writes assembly only if all stages pass.
+  ([Compiling with proof](book/src/proof.md))
+- **Real scale, with records.** A Linux kernel built with `make CC=evocc` boots. Doom and 15
+  application lanes, SQLite among them, run with no compiler failure. Each number has a receipt.
+  ([Proven on real code](#proven-on-real-code))
+- **Made for agents.** Stable diagnostic codes, JSON output, safe repairs and an MCP server. In a
+  registered experiment on bugs that GCC and UBSan miss, a coding agent needed about a third
+  fewer steps with EvoCC.
+  ([Agent experiment](book/src/evaluation-agents.md#experiment-5-repair-effort-and-program-size))
+
+## Proven on real code
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/images/readme/scoreboard-dark.svg">
+    <img src="docs/images/readme/scoreboard-light.svg" alt="Results of the release campaign: 2,799 of 2,799 Linux kernel C files compiled by EvoCC, a kernel that boots under HVF and under TCG, and 125 of 125 selected selftests that pass; 0 errors in 329,803 SQLite tests; 0 compiler failures in 15 application lanes and Doom; 220 of 220 c-testsuite programs; 0 Csmith mismatches, with 932 of 1,000 programs that agree and 68 that have no usable reference; 62 rewrite rules proved in Lean 4." width="860">
+  </picture>
+</p>
+
+The release compiler of commit `08bf09bd` measured these results on 2026-10-27. Records:
+[Linux kernel](tests/contracts/kernel-direct-virt-receipt.json),
+[SQLite test log](docs/images/showcase/captures.json),
+[application lanes, Doom and c-testsuite](tests/contracts/bench-receipt.json),
+[Csmith](tests/contracts/ladder-csmith-receipt.json) and
+[Lean 4 rules](tests/contracts/lean-p0-receipt.json). The [status page](docs/status.md) and the
+[evidence](docs/evidence.md) give each count with its limits.
+
+## Quick start
+
+### Install
 
 On macOS with Apple silicon, download the archive and the checksum file, check the archive and
 unpack it:
@@ -55,19 +85,12 @@ tar xzf evocc-0.1.0-aarch64-apple-darwin.tar.gz
 export PATH="$PWD/evocc-0.1.0-aarch64-apple-darwin/bin:$PATH"
 ```
 
-On Linux (AArch64), use `aarch64-unknown-linux-gnu` in the file name and `sha256sum -c -` to check
-the archive. The `bin/` directory of each archive holds four programs: `evo` (the commands),
-`evocc` (the compiler), `evocc-checker` (the certificate checker) and `evoir-sem` (the Lean
-checker).
+On Linux (AArch64), use `aarch64-unknown-linux-gnu` in the file name and `sha256sum -c -`. The
+`bin/` directory of each archive holds `evo` (the commands), `evocc` (the compiler),
+`evocc-checker` (the certificate checker) and `evoir-sem` (the Lean checker).
+[Installation](book/src/install.md) shows the source build and the macOS quarantine attribute.
 
-To build from source, run `cargo build --release --offline --locked -p evocc -p evocc-proofcheck`
-and `(cd lean && lake build)`. For a cross compile from macOS, `tools/export-sysroot.sh` exports the
-Linux headers. [Installation](book/src/install.md) gives the details. It also shows how to clear
-the quarantine attribute of a browser download on macOS.
-
-## Quick start
-
-The example programs are in [`examples/`](examples/).
+The example programs below are in [`examples/`](examples/).
 
 ### Compile, as with `cc`
 
@@ -131,9 +154,7 @@ $ evo prove abs.c -o abs.s
 checked from typed Core source to final assembly text: …/checked/record.json
 ```
 
-This program is in the `core-v1` proof profile for `aarch64-unknown-linux-gnu`. Lean 4 checks each
-stage from typed Core source to assembly text; this does not prove parsing or every C program
-that EvoCC accepts. If a check
+Lean 4 checks each stage of this compilation, from typed Core source to assembly text. If a check
 fails, `evo prove` writes no output. `abs(INT_MIN)` has no valid result in C, so the checked
 assembly traps instead of returning a wrong value:
 
@@ -153,11 +174,8 @@ assembly traps instead of returning a wrong value:
 $ claude mcp add evo -- evo mcp
 ```
 
-The `evo` commands also write JSON with `--json`. In a
-[registered experiment](book/src/evaluation-agents.md#experiment-5-repair-effort-and-program-size)
-on 2026-10-09, with the EvoCC of commit `9672d2d9`, a coding agent fixed bugs that GCC's warnings
-and UBSan miss with about a third fewer steps and tokens when it used EvoCC.
-[Agents](book/src/agents.md) shows the setup for Claude Code and Codex.
+The `evo` commands also write JSON with `--json`. [Agents](book/src/agents.md) shows the setup for
+Claude Code and Codex.
 
 ## What it compiles correctly
 
@@ -214,218 +232,57 @@ Each image is real program output, a plot of it, or an excerpt of a recorded tes
 - **Lean 4** proves the 62 rewrite rules of the optimizer. For `core-v1` on AArch64 Linux, five
   Lean checkers compare the input and output of each stage, and one theorem covers that chain.
 
+Here is one rule of C on its way through the compiler. The release compiler made this EvoIR and
+this assembly from [`abs.c`](examples/abs.c):
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/images/readme/explicit-check-dark.svg">
+    <img src="docs/images/readme/explicit-check-light.svg" alt="abs.c, then its EvoIR, then its AArch64 assembly, from the release compiler. In the EvoIR, the negation of a keeps the overflow rule as an explicit check: signed_sub_defined and ub.assume.signed_overflow. In the assembly, subs sets the overflow flag, b.vs branches on overflow, and brk #3004 stops the program." width="860">
+  </picture>
+</p>
+
 AI agents wrote EvoCC in under three months, under the direction of one engineer.
 [The paper](docs/paper.md) tells that story and describes the design and the evaluation.
 
-## Build your first optimization
+## Where EvoCC fits
 
-Start with `x + 0 → x`. In EqSat mode, you specify an equality instead of writing a new pass
-over the whole program. Lean proves the rule. A separate checker checks each use of it.
+Sanitizers instrument one optimized build. They report a bug when that build reaches it and
+their instrumentation covers it. Verified compilers such as CompCert prove their compilation
+passes correct once, for every program in the C subset that they accept. EvoCC sits between the
+two. It compiles large real programs and keeps the rules of C explicit in every stage.
+`evo check` checks the path that a program runs. Lean 4 proves the rewrite rules of its EqSat
+optimizer and, for a smaller subset, checks whole compilations.
 
-This tutorial follows a rule that EvoCC **already ships**. You can run it without changing the
-compiler. It also shows the source changes needed to add a different rule. There is no rule
-plugin or automatic Rust matcher generator yet: a new rule needs both a producer implementation
-and an independent checker implementation.
+## Add a proved optimization
 
-### 1. Choose an equality with a clear scope
+In EqSat mode, a new optimization is an equality, not a new pass. Lean 4 proves the rule once, for every
+bit width. The compiler then proposes each use of the rule with a certificate, and an independent
+checker replays it before the rewrite reaches the output.
 
-The rule in [the registry](spec/evoir.md#116-what-is-shared-and-what-is-not) is:
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/images/readme/proved-rewrite-dark.svg">
+    <img src="docs/images/readme/proved-rewrite-light.svg" alt="How a proved rewrite reaches the output: the rule x + 0 → x is in the registry; Lean 4 proves it for every bit width; the compiler proposes the rewrite with a certificate; an independent checker replays it. If the replay passes, the rewrite is used. If it fails, the original stays." width="860">
+  </picture>
+</p>
 
-```text
-p0_001_add_zero_rhs add(?x,const_like(?x,0)) => ?x when true
-```
+[Your First Proved Optimization](book/src/first-optimization.md) follows the rule `x + 0 → x`
+through the registry, its Lean proof, the compiler and the checker, and runs it on a real program.
 
-`?x` matches a value. `const_like(?x,0)` matches zero with the same bit width. `when true` means
-this rule needs no extra fact. It does not bypass the type or eligibility checks. The integer
-EqSat profile admits widths from 1 to 64 bits; floating-point values, memory operations and
-poison-tainted regions are outside this rule's scope.
-
-Here is the function from [`examples/add_zero.c`](examples/add_zero.c):
-
-```c
-unsigned int add_zero(unsigned int x)
-{
-    return x + 0u;
-}
-```
-
-Use unsigned arithmetic for this first example. Its result wraps modulo `2^32` on both supported
-targets. The rule holds for every input, including `4294967295u`. The example's `main` checks 0,
-42 and that maximum value. These checks show that the program runs; they do not prove the rule.
-
-### 2. Prove the registered rule
-
-[`examples/AddZero.lean`](examples/AddZero.lean) contains this proof:
-
-```lean
-import EvoIR.Proofs.Rules
-
-open EvoIR
-
-theorem add_zero_example : RuleCovered rule_p0_001_add_zero_rhs := by
-  intro Γ out σ F R lhs hl hF hR hc
-  by_cases hw : Γ "x" = out
-  · subst hw
-    simp_all [rule_p0_001_add_zero_rhs, denotePat, denoteRhs, elabPat,
-      denoteOp, CondHolds]
-  · simp [rule_p0_001_add_zero_rhs, denotePat, elabPat, hw] at hl
-
-#print axioms add_zero_example
-```
-
-[`RuleCovered`](lean/EvoIR/Rule.lean) states that the two patterns have the same value for every
-well-typed substitution that meets the rule's conditions. The proof handles two cases. If `x`
-has the result width, bit-vector addition by zero is the identity. If it does not, the left
-pattern cannot be well typed. This is a proof for all widths, not a loop over test values.
-
-After the [source build](CONTRIBUTING.md#build), run from the repository root:
-
-```sh
-(cd lean && lake env lean ../examples/AddZero.lean)
-```
-
-Expected output:
-
-```text
-'add_zero_example' depends on axioms: [propext, Quot.sound]
-```
-
-There is no `sorry`, new axiom or `native_decide` in this proof.
-
-### 3. Connect the rule to the compiler and checker
-
-These are the existing integration points for this rule. Use them as a model for your own rule;
-do not add the same rule a second time.
-
-| Part | Where to look | What it does |
-|---|---|---|
-| Contract | [EvoIR registry](spec/evoir.md#116-what-is-shared-and-what-is-not) | Gives the rule a stable ID, patterns and conditions. The registry has a version and digest. |
-| Producer | [`rewrite_opportunity`](crates/evocc-eqopt/src/scalar_eq.rs) | Recognizes addition by zero and proposes an alias of the other operand. |
-| Certificate | [`exact_rule`](crates/evocc-eqopt/src/evp1.rs) | Records `p0_001_add_zero_rhs` and the binding of `?x`. |
-| Independent replay | [`replay.rs`](crates/evocc-proofcheck/src/replay.rs) | Checks the operation, operand order, same-width zero and replacement without trusting the producer. |
-| Theorem | [`sound_p0_001_add_zero_rhs`](lean/EvoIR/Proofs/Rules.lean) | Proves `RuleCovered` for the registered rule. The example above expands its proof template. |
-
-For example, the producer's right-zero case proposes:
-
-```rust
-if is_constant(right, facts, 0) {
-    alias(ScalarRewrite::AddZero, left)
-}
-```
-
-The checker separately uses `identity_binary` with `operation: "add"`, `constant_left: false`
-and `constant: 0`. It also checks the binding, types and replacement. The producer does not get
-to declare its own proposal correct.
-
-For a **new** rule, first add a failing test. Add the rule to a new reviewed registry revision;
-keep previous IDs and meanings unchanged. Update the producer, certificate mapping, independent
-checker and registry digests. Generate `lean/EvoIR/Registry.lean` with
-[`registry_to_lean.py`](tools/lean/registry_to_lean.py); do not edit that generated file. Add the
-`RuleCovered` theorem and tests that reject a wrong constant, width, binding or replacement.
-Keep `ScalarRewrite`, its admission checks and the rule-ID lists in sync. If the rule must also
-work in the proof-required Core path, its separate Lean certificate checker must support it.
-Update the specification pins as described in [Contributing](CONTRIBUTING.md#specifications).
-Before accepting the rule, run both `tools/gate-changed.sh --full-workspace --offline` and
-`tools/gate-lean.sh`. A proof file alone does not install an optimization.
-
-### 4. See the change in a real program
-
-On an AArch64 macOS or Linux host, compile the same C file with `-O0`, then with
-`-O0 -Oeq-scalar`. Both builds keep native UB checks enabled. `-O0` holds the other optional
-optimizations off so this comparison isolates EqSat. Set `target` to
-`aarch64-unknown-linux-gnu` on Linux. Run from the repository root after the source build:
-
-```sh
-export PATH="$PWD/target/frontend/release:$PATH"
-target=aarch64-apple-darwin
-out=$(mktemp -d)
-checker="$PWD/target/frontend/release/evocc-checker"
-checker_sha=$(shasum -a 256 "$checker" | awk '{print $1}')
-evo check examples/add_zero.c
-evocc --target="$target" -O0 --emit=evoir examples/add_zero.c > "$out/before.evo"
-evocc --target="$target" -O0 -Oeq-scalar --eq-checker="$checker" \
-  --eq-checker-sha256="$checker_sha" --eq-proof-dir="$out/proof" \
-  --emit=evoir examples/add_zero.c > "$out/after.evo"
-```
-
-The digest selects the checker from your trusted local build. Hashing an untrusted download
-does not make it trusted. The proof directory must be new for each compilation.
-
-Inside `add_zero`, the result changes from:
-
-```text
-%v3 = const.bits<32> 0
-%v4 = add.bits<32> %v0, %v3
-ret %v4, %v1, %v2
-```
-
-to:
-
-```text
-%v3 = const.bits<32> 0
-ret %v0, %v1, %v2
-```
-
-The unused constant remains in EvoIR. The shared backend removes it. The memory and world
-tokens are unchanged. `proof/000.proof.evp` names `p0_001_add_zero_rhs`;
-`proof/chain.json` records `CHANGED`, then `UNCHANGED`, with publication `VERIFIED`.
-
-The driver already checked each transaction. You can replay its certificates separately:
-
-```sh
-for before in "$out"/proof/*.before.evo; do
-    prefix=${before%.before.evo}
-    "$checker" "$before" "$prefix.after.evo" "$prefix.proof.evp" || exit 1
-done
-```
-
-Both checker calls exit 0 without output. Now emit assembly and run both programs. `cc` only
-assembles and links these files; EvoCC compiled the C source:
-
-```sh
-evocc --target="$target" -O0 --emit=asm examples/add_zero.c > "$out/before.s"
-evocc --target="$target" -O0 -Oeq-scalar --eq-checker="$checker" \
-  --eq-checker-sha256="$checker_sha" --emit=asm examples/add_zero.c > "$out/after.s"
-diff -u "$out/before.s" "$out/after.s" || test "$?" -eq 1
-cc "$out/before.s" -o "$out/before"
-cc "$out/after.s" -o "$out/after"
-"$out/before"; echo "before: $?"
-"$out/after"; echo "after: $?"
-```
-
-On the tested AArch64 macOS build, the complete assembly diff removes just this instruction
-from `add_zero`:
-
-```diff
--    add w0, w0, #0
-```
-
-`add_zero` goes from five instructions to four. Both executables report:
-
-```text
-before: 0
-after: 0
-```
-
-This is four bytes of instructions removed from one function, not a claim about executable file
-size or speed. Alignment and linking can change the final size. `-Oeq-scalar` checks the EvoIR
-rewrite chain; it does **not** by itself prove C lowering or machine-code emission. The separate
-[proof-required path](spec/verification.md) checks those stages within its supported Core profile.
-The example adds no new rule and makes no claim about AI rule discovery. When you finish,
-remove the temporary directory printed by `echo "$out"`; no generated files belong in Git.
-
-## Status
+## Scope of 0.1.0
 
 EvoCC 0.1.0 is experimental.
 
-- It targets AArch64 only, on Linux and macOS.
-- Its code is 1.8 to 2.3 times the size of GCC `-O2` output on five library files, and it is
-  not tuned for speed.
-- `evo check` runs programs that do not call the C library.
-- Proofs cover `core-v1`: integer functions without pointers, arrays or recursion. See the
-  [exact profile and trust boundary](spec/verification.md), including the typed Core input and
-  final assembly text boundary. Assembly, linking and arbitrary accepted C programs are not proved.
-- GNU C support is broad but not complete.
+- It targets AArch64 only, on Linux and macOS. Its code is 1.8 to 2.3 times the size of GCC `-O2`
+  output on five library files, and it is not tuned for speed ([evaluation](book/src/evaluate.md)).
+- `evo check` runs programs that do not call the C library
+  ([undefined behavior](book/src/undefined-behavior.md)).
+- Proofs cover `core-v1`: integer functions without pointers, arrays or recursion, from typed Core
+  source to assembly text. Parsing, assembly, linking and other C programs are not proved
+  ([verification contract](spec/verification.md)).
+- GNU C support is broad but not complete, and full kernel test acceptance is open. The changelog
+  lists each [known limit](CHANGELOG.md#known-limits).
 
 ## Learn more
 

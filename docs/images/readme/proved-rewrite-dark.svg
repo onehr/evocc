@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="860" height="188" viewBox="0 0 860 188" role="img" aria-label="How a proved rewrite reaches the output">
+<rect x="0.5" y="8.5" width="151" height="111" rx="12" fill="#161b22" stroke="#a371f7" stroke-width="2"/>
+<text x="76" y="40" fill="#a371f7" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="17" font-weight="700" text-anchor="middle">Rule</text>
+<text x="76" y="70" fill="#f0f6fc" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="15" text-anchor="middle">x + 0 → x</text>
+<text x="76" y="96" fill="#9198a1" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" text-anchor="middle">in the registry</text>
+<rect x="177.5" y="8.5" width="151" height="111" rx="12" fill="#161b22" stroke="#a371f7" stroke-width="2"/>
+<text x="253" y="40" fill="#a371f7" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="17" font-weight="700" text-anchor="middle">Lean 4 proof</text>
+<text x="253" y="70" fill="#f0f6fc" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="15" text-anchor="middle">holds for</text>
+<text x="253" y="96" fill="#9198a1" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" text-anchor="middle">every bit width</text>
+<path d="M154 64 H167" stroke="#656c76" stroke-width="2"/><path d="M175 64 l-10 -6 v12 z" fill="#656c76"/>
+<rect x="354.5" y="8.5" width="151" height="111" rx="12" fill="#161b22" stroke="#4493f8" stroke-width="2"/>
+<text x="430" y="40" fill="#4493f8" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="17" font-weight="700" text-anchor="middle">Compiler</text>
+<text x="430" y="70" fill="#f0f6fc" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="15" text-anchor="middle">proposes it</text>
+<text x="430" y="96" fill="#9198a1" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" text-anchor="middle">with a certificate</text>
+<path d="M331 64 H344" stroke="#656c76" stroke-width="2"/><path d="M352 64 l-10 -6 v12 z" fill="#656c76"/>
+<rect x="531.5" y="8.5" width="151" height="111" rx="12" fill="#161b22" stroke="#3fb950" stroke-width="2"/>
+<text x="607" y="40" fill="#3fb950" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="17" font-weight="700" text-anchor="middle">Checker</text>
+<text x="607" y="70" fill="#f0f6fc" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="15" text-anchor="middle">replays it</text>
+<text x="607" y="96" fill="#9198a1" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" text-anchor="middle">independently</text>
+<path d="M508 64 H521" stroke="#656c76" stroke-width="2"/><path d="M529 64 l-10 -6 v12 z" fill="#656c76"/>
+<rect x="708.5" y="8.5" width="151" height="111" rx="12" fill="#161b22" stroke="#3d444d" stroke-width="1"/>
+<text x="784" y="40" fill="#f0f6fc" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="17" font-weight="700" text-anchor="middle">Result</text>
+<path d="M685 64 H698" stroke="#656c76" stroke-width="2"/><path d="M706 64 l-10 -6 v12 z" fill="#656c76"/>
+<text x="784" y="70" fill="#3fb950" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="600" text-anchor="middle">replay passes:</text>
+<text x="784" y="88" fill="#f0f6fc" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" text-anchor="middle">the rewrite is used</text>
+<path d="M784 120 V134" stroke="#656c76" stroke-width="2"/>
+<rect x="708.5" y="134.5" width="151" height="49" rx="12" fill="#161b22" stroke="#3d444d" stroke-dasharray="4 3"/>
+<text x="784" y="155" fill="#f85149" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="600" text-anchor="middle">replay fails:</text>
+<text x="784" y="173" fill="#f0f6fc" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" text-anchor="middle">the original stays</text>
+</svg>

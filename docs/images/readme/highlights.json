@@ -1,0 +1,68 @@
+{
+  "panels": [
+    {
+      "title": "A drop-in cc",
+      "steps": [
+        [
+          "evocc --version",
+          "evocc 0.1.0 (08bf09bd7631 2026-10-27)\nTarget: aarch64-apple-darwin\n"
+        ],
+        [
+          "evocc hello.c -o hello && ./hello",
+          "Hello, world!\n"
+        ],
+        [
+          "cd zlib-1.3.2 && CC=evocc ./configure > /dev/null",
+          ""
+        ],
+        [
+          "make test | grep -o 'zlib.*OK'",
+          "zlib test OK\nzlib shared test OK\n"
+        ]
+      ]
+    },
+    {
+      "title": "Undefined behavior, with evidence",
+      "steps": [
+        [
+          "evo check first_bad.c",
+          "\u001b[1;31merror[E3004]\u001b[0m: signed-integer-overflow\n  --> first_bad.c:9:19\n   |\n 9 |         int mid = (lo + hi) / 2;\n   |                   \u001b[1;31m^^^^^^^^^\u001b[0m signed-integer-overflow\n   |\n   = note: this operation failed on the executed path\n"
+        ]
+      ]
+    },
+    {
+      "title": "Catches what UBSan misses",
+      "steps": [
+        [
+          "gcc-14 -O2 -Wall -Wextra -fsanitize=undefined mean.c",
+          ""
+        ],
+        [
+          "./a.out; echo $?  # expect 4",
+          "156\n"
+        ],
+        [
+          "evo check mean.c",
+          "\u001b[1;31merror[E3001]\u001b[0m: read-of-uninitialized-object\n  --> mean.c:7:9\n   |\n 7 |         s->count += 1;\n   |         \u001b[1;31m^^^^^^^^^^^^^\u001b[0m read-of-uninitialized-object\n   |\n   = note: this operation failed on the executed path\n"
+        ]
+      ]
+    },
+    {
+      "title": "Proof-carrying compilation",
+      "steps": [
+        [
+          "cat abs.c",
+          "int abs(int a) {\n    return a > 0 ? a : -a;\n}\n"
+        ],
+        [
+          "evo prove abs.c -o abs.s --json | jq -r .result",
+          "CHECKED_TO_FINAL_ASSEMBLY\n"
+        ],
+        [
+          "grep -E 'subs|b\\.vs|brk' abs.s",
+          "    subs w0, w1, w0\n    b.vs .Labs_block4\n    brk #3004\n"
+        ]
+      ]
+    }
+  ]
+}

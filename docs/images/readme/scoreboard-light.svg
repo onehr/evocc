@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="860" height="288" viewBox="0 0 860 288" role="img" aria-label="Results of the release campaign">
+<rect x="0.5" y="0.5" width="275" height="135" rx="12" fill="#ffffff" stroke="#d0d7de"/>
+<text x="20.5" y="50.5" fill="#0969da" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="36" font-weight="700">2,799/2,799</text>
+<text x="20.5" y="78.5" fill="#1f2328" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" font-weight="600">Linux kernel C files</text>
+<text x="20.5" y="102.5" fill="#59636e" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13">boots under HVF and under TCG</text>
+<text x="20.5" y="120.5" fill="#59636e" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13">125/125 selected selftests pass</text>
+<rect x="292.5" y="0.5" width="275" height="135" rx="12" fill="#ffffff" stroke="#d0d7de"/>
+<text x="312.5" y="50.5" fill="#1a7f37" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="36" font-weight="700">0</text>
+<text x="312.5" y="78.5" fill="#1f2328" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" font-weight="600">SQLite test errors</text>
+<text x="312.5" y="102.5" fill="#59636e" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13">in 329,803 tests of its</text>
+<text x="312.5" y="120.5" fill="#59636e" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13">veryquick suite</text>
+<rect x="584.5" y="0.5" width="275" height="135" rx="12" fill="#ffffff" stroke="#d0d7de"/>
+<text x="604.5" y="50.5" fill="#1a7f37" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="36" font-weight="700">0</text>
+<text x="604.5" y="78.5" fill="#1f2328" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" font-weight="600">compiler failures</text>
+<text x="604.5" y="102.5" fill="#59636e" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13">in 15 application lanes</text>
+<text x="604.5" y="120.5" fill="#59636e" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13">and Doom</text>
+<rect x="0.5" y="152.5" width="275" height="135" rx="12" fill="#ffffff" stroke="#d0d7de"/>
+<text x="20.5" y="202.5" fill="#0969da" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="36" font-weight="700">220/220</text>
+<text x="20.5" y="230.5" fill="#1f2328" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" font-weight="600">c-testsuite programs</text>
+<text x="20.5" y="254.5" fill="#59636e" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13">pass, with no exclusion</text>
+<text x="20.5" y="272.5" fill="#59636e" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13">and no deferral</text>
+<rect x="292.5" y="152.5" width="275" height="135" rx="12" fill="#ffffff" stroke="#d0d7de"/>
+<text x="312.5" y="202.5" fill="#1a7f37" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="36" font-weight="700">0</text>
+<text x="312.5" y="230.5" fill="#1f2328" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" font-weight="600">Csmith mismatches</text>
+<text x="312.5" y="254.5" fill="#59636e" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13">932 of 1,000 programs agree;</text>
+<text x="312.5" y="272.5" fill="#59636e" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13">68 have no usable reference</text>
+<rect x="584.5" y="152.5" width="275" height="135" rx="12" fill="#ffffff" stroke="#d0d7de"/>
+<text x="604.5" y="202.5" fill="#8250df" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="36" font-weight="700">62</text>
+<text x="604.5" y="230.5" fill="#1f2328" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" font-weight="600">rewrite rules proved</text>
+<text x="604.5" y="254.5" fill="#59636e" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13">in Lean 4, for every bit width;</text>
+<text x="604.5" y="272.5" fill="#59636e" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13">a checker replays each use</text>
+</svg>

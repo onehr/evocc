@@ -3,24 +3,34 @@
 
 Run from the repository root after a release build:
 
-    python3 tools/render-readme.py
+    python3 tools/render-readme.py                # run the sessions, then write every figure
+    python3 tools/render-readme.py --render-only  # write every figure from the saved transcript
+    python3 tools/render-readme.py --check        # compare every figure with its sources
 
 The highlights figure runs four short terminal sessions and draws their real output. Each
 session runs in one shell, in a temporary directory. The GCC session runs in the sealed
-`evo-nexlab:sealed` container. The pipeline figure and the paper's agent-effort chart have
-a light and a dark variant.
+`evo-nexlab:sealed` container. The sessions go to `highlights.json`; both variants of the figure
+are drawn from it. The scoreboard reads the receipts of the release campaign. The explicit-check
+figure shows the EvoIR and the assembly that the release compiler makes for `examples/abs.c`.
+`--check` runs no session: it draws every figure again from the transcript, the receipts and the
+release compiler, and it names each file that differs. Each figure has a light and a dark variant.
 """
+import argparse
 import html
+import json
 import math
 import os
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / "docs" / "images" / "readme"
+PAPER = ROOT / "docs" / "images" / "paper"
+TRANSCRIPT = OUT / "highlights.json"
 EXAMPLES = ROOT / "examples"
 BIN = ROOT / "target" / "frontend" / "release"
 ZLIB = ROOT / ".build" / "ladder" / "zlib" / "zlib-1.3.2.tar.gz"
@@ -72,13 +82,7 @@ def session(commands, cwd, container=False):
     return list(zip(commands, outputs[1:]))
 
 
-def expect(steps, index, wanted):
-    command, output = steps[index]
-    if output != wanted:
-        raise SystemExit(f"`{command}` printed {output!r}, not {wanted!r}")
-
-
-def check(name, cwd):
+def check_session(name, cwd):
     """`evo check NAME`, in color. The colors come from `evocc --check --color=always`."""
     (_, plain), (_, colored) = session([f"evo check {name}",
                                         f"evocc --check --color=always {name}"], cwd)
@@ -90,49 +94,81 @@ def check(name, cwd):
 def drop_in(work):
     shutil.copy(EXAMPLES / "hello.c", work)
     subprocess.run(["tar", "xzf", str(ZLIB), "-C", str(work)], check=True)
-    steps = session(["evocc --version", "evocc hello.c -o hello && ./hello",
-                     "cd zlib-1.3.2 && CC=evocc ./configure > /dev/null",
-                     "make test | grep -o 'zlib.*OK'"], work)
-    expect(steps, 1, "Hello, world!\n")
-    expect(steps, 2, "")
-    expect(steps, 3, "zlib test OK\nzlib shared test OK\n")
-    return steps
+    return session(["evocc --version", "evocc hello.c -o hello && ./hello",
+                    "cd zlib-1.3.2 && CC=evocc ./configure > /dev/null",
+                    "make test | grep -o 'zlib.*OK'"], work)
 
 
 def find_ub(work):
     shutil.copy(EXAMPLES / "first_bad.c", work)
-    return [check("first_bad.c", work)]
+    return [check_session("first_bad.c", work)]
 
 
 def ubsan(work):
     shutil.copy(EXAMPLES / "mean.c", work)
     steps = session(["gcc-14 -O2 -Wall -Wextra -fsanitize=undefined mean.c",
                      "./a.out; echo $?  # expect 4"], work, container=True)
-    expect(steps, 0, "")
-    if not re.fullmatch(r"\d+\n", steps[1][1]) or steps[1][1] == "4\n":
-        raise SystemExit(f"mean.c built by GCC printed {steps[1][1]!r}")
-    return steps + [check("mean.c", work)]
+    return steps + [check_session("mean.c", work)]
 
 
 def prove(work):
     shutil.copy(EXAMPLES / "abs.c", work)
-    steps = session(["cat abs.c", "evo prove abs.c -o abs.s --json | jq -r .result",
-                     r"grep -E 'subs|b\.vs|brk' abs.s"], work)
-    expect(steps, 1, "CHECKED_TO_FINAL_ASSEMBLY\n")
-    expect(steps, 2, PROVE_ASSEMBLY)
-    return steps
+    return session(["cat abs.c", "evo prove abs.c -o abs.s --json | jq -r .result",
+                    r"grep -E 'subs|b\.vs|brk' abs.s"], work)
 
 
 PANELS = [("A drop-in cc", drop_in), ("Undefined behavior, with evidence", find_ub),
           ("Catches what UBSan misses", ubsan), ("Proof-carrying compilation", prove)]
 FONT, CHAR, LINE, PAD, GAP, TOP = 13, 7.83, 19, 18, 16, 56
+# The terminal windows. On a dark page a darker window would disappear, so it is lighter there.
+WINDOW = {"light": {"window": "#0d1117", "window_edge": "#30363d"},
+          "dark": {"window": "#161b22", "window_edge": "#3d444d"}}
+HIGHLIGHTS = {"light": "highlights.svg", "dark": "highlights-dark.svg"}
 
 
-def window(x, y, width, height, title, lines):
+def capture_highlights():
+    """Run the four sessions. Return the transcript that both variants are drawn from."""
+    panels = []
+    with tempfile.TemporaryDirectory() as tmp:
+        for i, (title, run) in enumerate(PANELS):
+            work = Path(tmp).resolve() / str(i)
+            work.mkdir()
+            panels.append({"title": title, "steps": [list(step) for step in run(work)]})
+    return {"panels": panels}
+
+
+def validate_transcript(transcript):
+    """Refuse a transcript whose sessions do not show what the README says."""
+    panels = {panel["title"]: panel["steps"] for panel in transcript["panels"]}
+    if list(panels) != [title for title, _ in PANELS]:
+        raise ValueError("the transcript does not hold the four sessions in order")
+
+    def expect(title, index, wanted, what):
+        command, output = panels[title][index]
+        if output != wanted:
+            raise ValueError(f"`{command}` printed {output!r}, not {what}")
+
+    expect("A drop-in cc", 1, "Hello, world!\n", "the hello line")
+    expect("A drop-in cc", 2, "", "nothing")
+    expect("A drop-in cc", 3, "zlib test OK\nzlib shared test OK\n", "both zlib OK lines")
+    expect("Catches what UBSan misses", 0, "", "nothing")
+    gcc = panels["Catches what UBSan misses"][1][1]
+    if not re.fullmatch(r"\d+\n", gcc) or gcc == "4\n":
+        raise ValueError(f"GCC's mean.c printed {gcc!r}, or it returned the right answer")
+    for title, code in (("Undefined behavior, with evidence", "E3004"),
+                        ("Catches what UBSan misses", "E3001")):
+        if f"error[{code}]" not in SGR.sub("", panels[title][-1][1]):
+            raise ValueError(f"evo check gives no {code} in the session {title!r}")
+    expect("Proof-carrying compilation", 1, "CHECKED_TO_FINAL_ASSEMBLY\n", "the checked result")
+    expect("Proof-carrying compilation", 2, PROVE_ASSEMBLY, "the lines of the checked abs.s")
+
+
+def window(x, y, width, height, title, lines, theme):
     """Draw one terminal window. Each line is a list of (text, color, bold)."""
+    colors = WINDOW[theme]
     out = [f'<g transform="translate({x} {y})">',
            f'<rect x="0.5" y="0.5" width="{width - 1}" height="{height - 1}" rx="10" '
-           f'fill="#0d1117" stroke="#30363d"/>',
+           f'fill="{colors["window"]}" stroke="{colors["window_edge"]}"/>',
            '<circle cx="20" cy="18" r="6" fill="#ff5f56"/><circle cx="40" cy="18" r="6" '
            'fill="#ffbd2e"/><circle cx="60" cy="18" r="6" fill="#27c93f"/>',
            f'<text x="{width // 2}" y="23" fill="#e6edf3" font-family="{SANS}" font-size="13" '
@@ -148,18 +184,15 @@ def window(x, y, width, height, title, lines):
     return "\n".join(out)
 
 
-def highlights():
+def highlights(transcript, theme):
     """Four terminal sessions in a 2 x 2 grid, one per highlight."""
     panels = []
-    with tempfile.TemporaryDirectory() as tmp:
-        for i, (title, run) in enumerate(PANELS):
-            work = Path(tmp).resolve() / str(i)
-            work.mkdir()
-            lines = []
-            for command, output in run(work):
-                lines.append([("$ ", "#7ee787", True), (command, None, True)])
-                lines += [spans(line.expandtabs()) for line in output.splitlines()]
-            panels.append((title, lines))
+    for panel in transcript["panels"]:
+        lines = []
+        for command, output in panel["steps"]:
+            lines.append([("$ ", "#7ee787", True), (command, None, True)])
+            lines += [spans(line.expandtabs()) for line in output.splitlines()]
+        panels.append((panel["title"], lines))
     columns = max(sum(len(t) for t, _, _ in line) for _, lines in panels for line in lines)
     width = 2 * PAD + math.ceil(CHAR * columns)
     rows = [max(len(panels[i][1]), len(panels[i + 1][1])) for i in (0, 2)]
@@ -167,19 +200,21 @@ def highlights():
     total_w, total_h = 2 * width + GAP, sum(heights) + GAP
     out = [f'<svg xmlns="http://www.w3.org/2000/svg" width="{total_w}" height="{total_h}" '
            f'viewBox="0 0 {total_w} {total_h}" role="img" aria-label="EvoCC highlights: '
-           + "; ".join(title for title, _ in PANELS) + '">']
+           + "; ".join(title for title, _ in panels) + '">']
     for i, (title, lines) in enumerate(panels):
         x, y = (i % 2) * (width + GAP), (i // 2) * (heights[0] + GAP)
-        out.append(window(x, y, width, heights[i // 2], title, lines))
+        out.append(window(x, y, width, heights[i // 2], title, lines, theme))
     out.append("</svg>")
     return "\n".join(out) + "\n"
 
 
 THEMES = {
     "light": dict(box="#ffffff", edge="#d0d7de", title="#1f2328", sub="#59636e",
-                  arrow="#8c959f", check="#1a7f37", rules="#8250df", prove="#0969da"),
+                  arrow="#8c959f", check="#1a7f37", rules="#8250df", prove="#0969da",
+                  code="#f6f8fa", mark="#fff8c5", mark_edge="#d4a72c", trap="#cf222e"),
     "dark": dict(box="#161b22", edge="#3d444d", title="#f0f6fc", sub="#9198a1",
-                 arrow="#656c76", check="#3fb950", rules="#a371f7", prove="#4493f8"),
+                 arrow="#656c76", check="#3fb950", rules="#a371f7", prove="#4493f8",
+                 code="#0d1117", mark="#3d2e00", mark_edge="#9e6a03", trap="#f85149"),
 }
 STAGES = [("C source", "your .c files"), ("C-HIR", "checked C semantics"),
           ("EvoIR", "explicit UB checks"), ("EvoMIR", "registers and ABI"),
@@ -274,16 +309,329 @@ def effort_chart(theme):
     return "\n".join(out) + "\n"
 
 
-def main():
-    OUT.mkdir(parents=True, exist_ok=True)
-    (OUT / "highlights.svg").write_text(highlights())
-    paper = ROOT / "docs" / "images" / "paper"
-    paper.mkdir(parents=True, exist_ok=True)
+def box(x, y, w, h, t, edge=None, width=1):
+    return (f'<rect x="{x + 0.5}" y="{y + 0.5}" width="{w - 1}" height="{h - 1}" rx="12" '
+            f'fill="{t["box"]}" stroke="{edge or t["edge"]}" stroke-width="{width}"/>')
+
+
+def arrow_right(x0, x1, y, t):
+    return (f'<path d="M{x0} {y} H{x1 - 8}" stroke="{t["arrow"]}" stroke-width="2"/>'
+            f'<path d="M{x1} {y} l-10 -6 v12 z" fill="{t["arrow"]}"/>')
+
+
+def overview(theme):
+    """Your program, EvoCC and native code, with the three guarantees as branches."""
+    t = THEMES[theme]
+    out = ['<svg xmlns="http://www.w3.org/2000/svg" width="860" height="262" viewBox="0 0 860 262" '
+           'role="img" aria-label="EvoCC compiles your C program to native AArch64 code, with three '
+           'guarantees">']
+    flow = [("Your C program", "sources and Makefiles", t["edge"], 1),
+            ("EvoCC", "a drop-in cc", t["prove"], 2),
+            ("Native AArch64 code", "for Linux and macOS", t["edge"], 1)]
+    for i, (title, sub, edge, width) in enumerate(flow):
+        x = 315 * i
+        out.append(box(x, 8, 230, 78, t, edge, width))
+        out.append(text(x + 115, 42, title, t["title"], 18, 700, "middle"))
+        out.append(text(x + 115, 66, sub, t["sub"], 14, anchor="middle"))
+        if i:
+            out.append(arrow_right(x - 76, x - 10, 47, t))
+    out.append(f'<path d="M430 86 V118 M135 118 H725 M135 118 V146 M430 118 V146 M725 118 V146" '
+               f'fill="none" stroke="{t["arrow"]}" stroke-width="2"/>')
+    guarantees = [("evo check", t["check"], "stops at the first broken", "rule of C, with the line"),
+                  ("EqSat optimizer", t["rules"], "uses only rules proved in Lean 4;",
+                   "a checker replays each rewrite"),
+                  ("evo prove", t["prove"], "Lean 4 checks every stage;", "assembly only if all pass")]
+    for i, (title, color, first, second) in enumerate(guarantees):
+        x = 295 * i
+        out.append(box(x, 146, 270, 112, t, color, 2))
+        out.append(text(x + 135, 182, title, color, 18, 700, "middle"))
+        out.append(text(x + 135, 210, first, t["title"], 14, anchor="middle"))
+        out.append(text(x + 135, 232, second, t["title"], 14, anchor="middle"))
+    out.append("</svg>")
+    return "\n".join(out) + "\n"
+
+
+def proved_rewrite(theme):
+    """One rewrite: rule, proof, proposal, independent replay, result."""
+    t = THEMES[theme]
+    out = ['<svg xmlns="http://www.w3.org/2000/svg" width="860" height="188" viewBox="0 0 860 188" '
+           'role="img" aria-label="How a proved rewrite reaches the output">']
+    steps = [("Rule", t["rules"], [("x + 0 \u2192 x", MONO)], "in the registry"),
+             ("Lean 4 proof", t["rules"], [("holds for", SANS)], "every bit width"),
+             ("Compiler", t["prove"], [("proposes it", SANS)], "with a certificate"),
+             ("Checker", t["check"], [("replays it", SANS)], "independently"),
+             ("Result", t["title"], [], "")]
+    for i, (title, color, lines, sub) in enumerate(steps):
+        x = 177 * i
+        out.append(box(x, 8, 152, 112, t, color if i < 4 else None, 2 if i < 4 else 1))
+        out.append(text(x + 76, 40, title, color, 17, 700, "middle"))
+        for row, (line, font) in enumerate(lines):
+            out.append(text(x + 76, 70 + 22 * row, line, t["title"], 15, None, "middle", font))
+        if sub:
+            out.append(text(x + 76, 96, sub, t["sub"], 13, anchor="middle"))
+        if i:
+            out.append(arrow_right(x - 23, x - 2, 64, t))
+    x = 177 * 4
+    out.append(text(x + 76, 70, "replay passes:", t["check"], 13, 600, "middle"))
+    out.append(text(x + 76, 88, "the rewrite is used", t["title"], 13, anchor="middle"))
+    out.append(f'<path d="M{x + 76} 120 V134" stroke="{t["arrow"]}" stroke-width="2"/>')
+    out.append(f'<rect x="{x + 0.5}" y="134.5" width="151" height="49" rx="12" fill="{t["box"]}" '
+               f'stroke="{t["edge"]}" stroke-dasharray="4 3"/>')
+    out.append(text(x + 76, 155, "replay fails:", t["trap"], 13, 600, "middle"))
+    out.append(text(x + 76, 173, "the original stays", t["title"], 13, anchor="middle"))
+    out.append("</svg>")
+    return "\n".join(out) + "\n"
+
+
+# The 15 application lanes of the release campaign. Doom is a separate lane.
+LANES = ("ctest", "torture", "csmith", "zlib", "zstd", "cjson", "mbedtls", "tinycc", "toybox",
+         "musl", "polybench", "llvm-test-suite", "jq", "lua", "sqlite")
+# Csmith records one outcome per program; these outcomes are not compiler failures.
+NOT_FAILURES = {"agree", "oracle-unusable", "oracle-split", "not-run"}
+
+
+def receipt(name):
+    return json.loads((ROOT / "tests" / "contracts" / name).read_text(encoding="utf-8"))
+
+
+def compiler_failures(name, row):
+    """The compiler failures of one lane, from the reviewed dispositions or the raw outcomes."""
+    if "dispositions" in row:
+        return row["dispositions"]["compiler-failure"]
+    if row.get("status") == "PASS":
+        return 0
+    outcomes = row.get("outcomes") or {}
+    if "agree" in outcomes:
+        return sum(n for outcome, n in outcomes.items() if outcome not in NOT_FAILURES)
+    if row.get("testVerdict") in ("no-regression", "libc-test-clean") and row.get("failingUnits") == []:
+        return 0
+    raise ValueError(f"the receipt gives no compiler-failure count for {name}")
+
+
+def scoreboard_data():
+    """Read the numbers of the scoreboard from the receipts of the release campaign."""
+    kernel = receipt("kernel-direct-virt-receipt.json")
+    if kernel["status"] != "BUILD_BOOT_SELECTED_SELFTEST_PASS":
+        raise ValueError("the direct Kbuild replay did not pass")
+    counts, subtests = kernel["counts"], kernel["selftests"]["subject"]["subtests"]
+    boots = [boot["verdict"] for boot in kernel["boots"].values()]
+    if kernel["selftests"]["status"] != "PASS" or set(boots) != {"PASS"}:
+        raise ValueError("a boot or the selected selftests did not pass")
+    bench = receipt("bench-receipt.json")
+    if bench.get("dirty") is not False:
+        raise ValueError("the bench receipt does not come from a clean tree")
+    rows = bench["benchmarks"]
+    failures = sum(compiler_failures(name, rows[name]) for name in (*LANES, "doom"))
+    if rows["doom"]["status"] != "PASS":
+        raise ValueError("the Doom lane did not pass")
+    log = json.loads((ROOT / "docs/images/showcase/captures.json").read_text(encoding="utf-8"))
+    summary = log["logs"]["sqlite"]["segments"][-1]["text"][-1]
+    sqlite = re.match(r"(\d+) errors out of (\d+) tests", summary)
+    if not sqlite:
+        raise ValueError("the SQLite log card has no summary line")
+    csmith = receipt("ladder-csmith-receipt.json")["latest"]
+    lean = receipt("lean-p0-receipt.json")["binding"]
+    return {
+        "linux": {"compiled": counts["evoccCObjects"],
+                  "total": counts["evoccCObjects"] + counts["gccTargetCSourceRecords"],
+                  "boots": len(boots), "subtests": subtests.get("PASS", 0),
+                  "subtestsTotal": sum(subtests.values())},
+        "sqlite": {"errors": int(sqlite.group(1)), "tests": int(sqlite.group(2))},
+        "lanes": {"lanes": len(LANES), "failures": failures},
+        "ctest": {"passed": rows["ctest"]["passed"], "total": rows["ctest"]["total"]},
+        "csmith": {"programs": csmith["programs"], "agree": csmith["agreeing"],
+                   "mismatches": compiler_failures("csmith", rows["csmith"])
+                   + sum((csmith.get("refusalsByCode") or {}).values())},
+        "lean": {"rules": int(lean["registry_rules"]) + int(lean["guard_registry"]["rules"])},
+    }
+
+
+def text(x, y, value, color, size, weight=None, anchor=None, font=SANS):
+    extra = (f' font-weight="{weight}"' if weight else "") + (f' text-anchor="{anchor}"' if anchor else "")
+    return (f'<text x="{x}" y="{y}" fill="{color}" font-family="{font}" font-size="{size}"{extra}>'
+            f'{html.escape(value)}</text>')
+
+
+def scoreboard(data, theme):
+    """Six cards, one number each, in two rows of three."""
+    t = THEMES[theme]
+    linux, sqlite, lanes = data["linux"], data["sqlite"], data["lanes"]
+    ctest, csmith, lean = data["ctest"], data["csmith"], data["lean"]
+    cards = [
+        (f"{linux['compiled']:,}/{linux['total']:,}", "Linux kernel C files", t["prove"],
+         ["boots under HVF and under TCG",
+          f"{linux['subtests']}/{linux['subtestsTotal']} selected selftests pass"]),
+        (f"{sqlite['errors']:,}", "SQLite test errors", t["check"],
+         [f"in {sqlite['tests']:,} tests of its", "veryquick suite"]),
+        (f"{lanes['failures']:,}", "compiler failures", t["check"],
+         [f"in {lanes['lanes']} application lanes", "and Doom"]),
+        (f"{ctest['passed']:,}/{ctest['total']:,}", "c-testsuite programs", t["prove"],
+         ["pass, with no exclusion", "and no deferral"]),
+        (f"{csmith['mismatches']:,}", "Csmith mismatches", t["check"],
+         [f"{csmith['agree']:,} of {csmith['programs']:,} programs agree;",
+          f"{csmith['programs'] - csmith['agree']:,} have no usable reference"]),
+        (f"{lean['rules']:,}", "rewrite rules proved", t["rules"],
+         ["in Lean 4, for every bit width;", "a checker replays each use"]),
+    ]
+    width, height, gap = 276, 136, 16
+    total_h = 2 * height + gap
+    out = [f'<svg xmlns="http://www.w3.org/2000/svg" width="860" height="{total_h}" '
+           f'viewBox="0 0 860 {total_h}" role="img" aria-label="Results of the release campaign">']
+    for i, (number, label, color, notes) in enumerate(cards):
+        x, y = (i % 3) * (width + gap) + 0.5, (i // 3) * (height + gap) + 0.5
+        out.append(f'<rect x="{x}" y="{y}" width="{width - 1}" height="{height - 1}" rx="12" '
+                   f'fill="{t["box"]}" stroke="{t["edge"]}"/>')
+        out.append(text(x + 20, y + 50, number, color, 36, 700))
+        out.append(text(x + 20, y + 78, label, t["title"], 16, 600))
+        for row, note in enumerate(notes):
+            out.append(text(x + 20, y + 102 + 18 * row, note, t["sub"], 13))
+    out.append("</svg>")
+    return "\n".join(out) + "\n"
+
+
+def ub_excerpt(source, evoir, asm):
+    """The function, the EvoIR block with its explicit check, and the assembly of its trap."""
+    lines = evoir.splitlines()
+    checks = [i for i, line in enumerate(lines) if line.strip().startswith("ub.assume.")]
+    if not checks:
+        raise ValueError("the EvoIR holds no explicit check")
+    at = checks[0]
+    first = max(i for i in range(at) if lines[i].startswith("^"))
+    last = next(i for i in range(at, len(lines)) if lines[i].split()[:1] and
+                lines[i].split()[0] in ("br", "cond_br", "ret"))
+    operand = lines[at].split()[-1]
+    marked = {at} | {i for i in range(first, at) if lines[i].strip().startswith(operand + " =")}
+    block = [(lines[i].strip(), i in marked) for i in range(first, last + 1)]
+    code = asm.splitlines()
+    branch = next((i for i, line in enumerate(code) if line.strip().startswith("b.vs ")), None)
+    if branch is None:
+        raise ValueError("the assembly holds no overflow branch")
+    label = code[branch].split()[-1] + ":"
+    start = max(i for i in range(branch) if code[i].endswith(":") and not code[i].startswith(" "))
+    trap = code.index(label) if label in code else None
+    if trap is None or trap + 1 >= len(code) or not code[trap + 1].strip().startswith("brk "):
+        raise ValueError("the assembly holds no trap at the overflow label")
+    excerpt = [(code[i], i in (branch - 1, branch)) for i in range(start, branch + 1)]
+    if trap != branch + 1:
+        excerpt.append(("    ...", False))
+    excerpt += [(code[trap], False), (code[trap + 1], True)]
+    return {"source": source.splitlines(), "evoir": block, "asm": excerpt}
+
+
+def ub_data():
+    """Compile examples/abs.c with the release compiler, for the Linux target of `evo prove`."""
+    evocc = BIN / "evocc"
+    if not evocc.is_file():
+        raise ValueError(f"{evocc} is missing; build the release compiler first")
+    source = EXAMPLES / "abs.c"
+    outputs = [subprocess.run([str(evocc), "--target=aarch64-unknown-linux-gnu", f"--emit={kind}",
+                               str(source)], capture_output=True, text=True, check=True).stdout
+               for kind in ("evoir", "asm")]
+    return ub_excerpt(source.read_text(encoding="utf-8"), *outputs)
+
+
+def explicit_check(data, theme):
+    """C source, then its EvoIR with the explicit check, then the assembly with the trap."""
+    t = THEMES[theme]
+    columns = [("C source", "abs.c", [(line, False) for line in data["source"]],
+                "abs(INT_MIN) overflows"),
+               ("EvoIR", "the rule of C stays a check", data["evoir"], "no pass may remove it"),
+               ("AArch64", "the check becomes a trap", data["asm"], "overflow stops at brk")]
+    char, row_h, pad, arrow = 7.83, 21, 14, 44
+    widths = [math.ceil(char * max(len(line) for line, _ in lines)) + 2 * pad
+              for _, _, lines, _ in columns]
+    rows = max(len(lines) for _, _, lines, _ in columns)
+    top, panel_h = 54, 18 + row_h * rows
+    left = (860 - sum(widths) - arrow * (len(columns) - 1)) // 2
+    total_h = top + panel_h + 34
+    out = [f'<svg xmlns="http://www.w3.org/2000/svg" width="860" height="{total_h}" '
+           f'viewBox="0 0 860 {total_h}" role="img" aria-label="abs.c, its EvoIR and its assembly">']
+    x = left
+    for i, (title, subtitle, lines, note) in enumerate(columns):
+        w = widths[i]
+        out.append(text(x, 20, title, t["title"], 16, 600))
+        out.append(text(x, 40, subtitle, t["sub"], 13))
+        out.append(f'<rect x="{x + 0.5}" y="{top + 0.5}" width="{w - 1}" height="{panel_h - 1}" '
+                   f'rx="10" fill="{t["code"]}" stroke="{t["edge"]}"/>')
+        for row, (line, mark) in enumerate(lines):
+            y = top + 9 + row_h * row
+            if mark:
+                out.append(f'<rect x="{x + 6}" y="{y}" width="{w - 12}" height="{row_h - 2}" rx="4" '
+                           f'fill="{t["mark"]}" stroke="{t["mark_edge"]}"/>')
+            color = t["trap"] if mark and line.strip().startswith("brk") else t["title"]
+            weight = ' font-weight="700"' if mark else ""
+            out.append(f'<text x="{x + pad}" y="{y + 14}" fill="{color}" font-family="{MONO}" '
+                       f'font-size="13" xml:space="preserve"{weight}>{html.escape(line)}</text>')
+        out.append(text(x + w // 2, top + panel_h + 24, note, t["sub"], 13, anchor="middle"))
+        if i + 1 < len(columns):
+            ax = x + w + 8
+            mid = top + panel_h // 2
+            out.append(f'<path d="M{ax} {mid} H{ax + arrow - 22}" stroke="{t["arrow"]}" stroke-width="2"/>'
+                       f'<path d="M{ax + arrow - 14} {mid} l-9 -5.5 v11 z" fill="{t["arrow"]}"/>')
+        x += w + arrow
+    out.append("</svg>")
+    return "\n".join(out) + "\n"
+
+
+def rendered(transcript, with_compiler=True):
+    """Every generated figure: its path and its text."""
+    files = {}
+    board = scoreboard_data()
+    check = ub_data() if with_compiler else None
     for theme in THEMES:
-        (OUT / f"pipeline-{theme}.svg").write_text(pipeline(theme))
-        (paper / f"agent-effort-{theme}.svg").write_text(effort_chart(theme))
-    print("wrote docs/images/readme (highlights, pipeline) and docs/images/paper (agent-effort)")
+        files[OUT / HIGHLIGHTS[theme]] = highlights(transcript, theme)
+        files[OUT / f"pipeline-{theme}.svg"] = pipeline(theme)
+        files[OUT / f"overview-{theme}.svg"] = overview(theme)
+        files[OUT / f"proved-rewrite-{theme}.svg"] = proved_rewrite(theme)
+        files[OUT / f"scoreboard-{theme}.svg"] = scoreboard(board, theme)
+        if check is not None:
+            files[OUT / f"explicit-check-{theme}.svg"] = explicit_check(check, theme)
+        files[PAPER / f"agent-effort-{theme}.svg"] = effort_chart(theme)
+    return files
+
+
+def stale(files):
+    """The files whose text on disk differs from the rendered text."""
+    return [path for path, value in files.items()
+            if not path.is_file() or path.read_text(encoding="utf-8") != value]
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--check", action="store_true",
+                      help="draw every figure again and compare; write nothing")
+    mode.add_argument("--render-only", action="store_true",
+                      help="draw every figure from the saved transcript; run no session")
+    args = parser.parse_args(argv)
+    try:
+        if args.check or args.render_only:
+            transcript = json.loads(TRANSCRIPT.read_text(encoding="utf-8"))
+        else:
+            transcript = capture_highlights()
+        validate_transcript(transcript)
+        files = rendered(transcript)
+        if args.check:
+            differ = stale(files)
+            for path in differ:
+                print(f"stale: {path.relative_to(ROOT)}", file=sys.stderr)
+            if differ:
+                return 1
+            print("README and paper figures match their transcript, receipts and compiler output")
+            return 0
+        OUT.mkdir(parents=True, exist_ok=True)
+        PAPER.mkdir(parents=True, exist_ok=True)
+        if not args.render_only:
+            TRANSCRIPT.write_text(json.dumps(transcript, indent=2, ensure_ascii=False) + "\n",
+                                  encoding="utf-8")
+        for path, value in files.items():
+            path.write_text(value, encoding="utf-8")
+    except (ValueError, OSError, subprocess.CalledProcessError) as error:
+        print(f"render-readme: {error}", file=sys.stderr)
+        return 1
+    print("wrote docs/images/readme and docs/images/paper")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

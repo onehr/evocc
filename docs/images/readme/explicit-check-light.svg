@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="860" height="253" viewBox="0 0 860 253" role="img" aria-label="abs.c, its EvoIR and its assembly">
+<text x="30" y="20" fill="#1f2328" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" font-weight="600">C source</text>
+<text x="30" y="40" fill="#59636e" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13">abs.c</text>
+<rect x="30.5" y="54.5" width="231" height="164" rx="10" fill="#f6f8fa" stroke="#d0d7de"/>
+<text x="44" y="77" fill="#1f2328" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" xml:space="preserve">int abs(int a) {</text>
+<text x="44" y="98" fill="#1f2328" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" xml:space="preserve">    return a &gt; 0 ? a : -a;</text>
+<text x="44" y="119" fill="#1f2328" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" xml:space="preserve">}</text>
+<text x="146" y="243" fill="#59636e" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" text-anchor="middle">abs(INT_MIN) overflows</text>
+<path d="M270 136 H292" stroke="#8c959f" stroke-width="2"/><path d="M300 136 l-9 -5.5 v11 z" fill="#8c959f"/>
+<text x="306" y="20" fill="#1f2328" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" font-weight="600">EvoIR</text>
+<text x="306" y="40" fill="#59636e" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13">the rule of C stays a check</text>
+<rect x="306.5" y="54.5" width="286" height="164" rx="10" fill="#f6f8fa" stroke="#d0d7de"/>
+<text x="320" y="77" fill="#1f2328" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" xml:space="preserve">^b2(%v4: bits&lt;32&gt;):</text>
+<text x="320" y="98" fill="#1f2328" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" xml:space="preserve">%v5 = const.bits&lt;32&gt; 0</text>
+<rect x="312" y="105" width="275" height="19" rx="4" fill="#fff8c5" stroke="#d4a72c"/>
+<text x="320" y="119" fill="#1f2328" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" xml:space="preserve" font-weight="700">%v6 = signed_sub_defined %v5, %v4</text>
+<rect x="312" y="126" width="275" height="19" rx="4" fill="#fff8c5" stroke="#d4a72c"/>
+<text x="320" y="140" fill="#1f2328" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" xml:space="preserve" font-weight="700">ub.assume.signed_overflow %v6</text>
+<text x="320" y="161" fill="#1f2328" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" xml:space="preserve">%v7 = sub.bits&lt;32&gt; %v5, %v4</text>
+<text x="320" y="182" fill="#1f2328" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" xml:space="preserve">br ^b3(%v4, %v7)</text>
+<text x="449" y="243" fill="#59636e" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" text-anchor="middle">no pass may remove it</text>
+<path d="M601 136 H623" stroke="#8c959f" stroke-width="2"/><path d="M631 136 l-9 -5.5 v11 z" fill="#8c959f"/>
+<text x="637" y="20" fill="#1f2328" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" font-weight="600">AArch64</text>
+<text x="637" y="40" fill="#59636e" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13">the check becomes a trap</text>
+<rect x="637.5" y="54.5" width="192" height="164" rx="10" fill="#f6f8fa" stroke="#d0d7de"/>
+<text x="651" y="77" fill="#1f2328" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" xml:space="preserve">.Labs_block2:</text>
+<text x="651" y="98" fill="#1f2328" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" xml:space="preserve">    movz w1, #0</text>
+<rect x="643" y="105" width="181" height="19" rx="4" fill="#fff8c5" stroke="#d4a72c"/>
+<text x="651" y="119" fill="#1f2328" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" xml:space="preserve" font-weight="700">    subs w0, w1, w0</text>
+<rect x="643" y="126" width="181" height="19" rx="4" fill="#fff8c5" stroke="#d4a72c"/>
+<text x="651" y="140" fill="#1f2328" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" xml:space="preserve" font-weight="700">    b.vs .Labs_block4</text>
+<text x="651" y="161" fill="#1f2328" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" xml:space="preserve">    ...</text>
+<text x="651" y="182" fill="#1f2328" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" xml:space="preserve">.Labs_block4:</text>
+<rect x="643" y="189" width="181" height="19" rx="4" fill="#fff8c5" stroke="#d4a72c"/>
+<text x="651" y="203" fill="#cf222e" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" xml:space="preserve" font-weight="700">    brk #3004</text>
+<text x="733" y="243" fill="#59636e" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" text-anchor="middle">overflow stops at brk</text>
+</svg>
