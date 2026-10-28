@@ -9,6 +9,9 @@ All notable changes to EvoCC are listed in this file. The format follows
 
 ### Changed
 
+- The task tracker keeps active work and one-line references to closed work. The full closed
+  history is in `docs/archive/todo-0.1.0.md`.
+
 ### Fixed
 
 ## [0.1.0] - 2026-10-28

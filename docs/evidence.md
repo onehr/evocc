@@ -24,7 +24,7 @@ gave none. No other date is added.
 | [Doom integration](#doom-integration) | 2026-10-27, in the campaign of the application lanes. |
 | [Checked EqSat measurements](#checked-eqsat-measurements) | One date for each row, from 2026-09-09 to 2026-10-01. |
 | [Other implementation gates](#other-implementation-gates) | Rust–Lean correspondence: rerun on 2026-10-01. The 21,000-program gates and the 384/384 corpora: the text gives no date. |
-| [Recorded acceptance evidence](#recorded-acceptance-evidence) | V01 and V02 completion on 2026-10-05 (from [TODO.md](../TODO.md#first-public-release-verification)). |
+| [Recorded acceptance evidence](#recorded-acceptance-evidence) | V01 and V02 completion on 2026-10-05 (from the [closed tracker history](archive/todo-0.1.0.md#first-public-release-verification)). |
 | [Acceptance sweep](#acceptance-sweep-2026-10-06) | 2026-10-06, at implementation commit `8770b186`; repeated at `e657709b`. |
 | [Native run of the checked output](#native-run-of-the-checked-output) | 2026-10-06, subject `e657709b` (the receipt date). |
 | [Showcase](#showcase-notes) | 2026-10-27: the six demo captures, the Doom frame and the five log cards come from that campaign and the kernel replay. The three games: 2026-09-29. See the capture notes. |
@@ -351,7 +351,7 @@ are the elements for symbols 7 and 56 of
 The acceptance run binds implementation commit `8770b186`. At that commit, the full workspace gate
 passes (407 suites, 3,102 passed, 0 failed, 5 ignored; Clippy and formatting pass), and the Lean
 gate passes (receipt Lean commit `5d917f39`). The
-[TODO entry for V06](../TODO.md#first-public-release-verification) records the binary digests.
+[Closed tracker entry for V06](archive/todo-0.1.0.md#v06) records the binary digests.
 After V07, the sweep passes again at `e657709b`: 17 of 17 modules, 107 of 107 entries and both
 optimized cases. The 19 `output.s` files are byte-identical to the earlier output. The
 [native-run receipt](../tests/contracts/core-v1-native-run.json) records this repeat.

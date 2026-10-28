@@ -50,7 +50,8 @@ test is not a proof. The assembler, the linker, the runtime and the hardware
 stay trusted: the native run tests them but does not prove them. Receipt:
 [core-v1-native-run.json](../../tests/contracts/core-v1-native-run.json); repeat
 with `python3 tools/proof-native/proof_native.py all WORK_DIR`.
-Execution is tracked only in [TODO.md](../../TODO.md#first-public-release-verification).
+Closed execution records are in the [tracker history](todo-0.1.0.md#first-public-release-verification).
+Active work is tracked only in [TODO.md](../../TODO.md#execution-order).
 
 The verification contract now lives in [spec/verification.md](../../spec/verification.md); this plan keeps the history.
 
