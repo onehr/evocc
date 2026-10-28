@@ -482,7 +482,8 @@ These items are open in this version. Each line names its entry in [TODO.md](TOD
   `evo_cli.rs`, `returns_twice_calls.rs` and `interpreter_main_arguments.rs` (`.build/ladder/` and
   `.evidence/`), and `n03f_frame_native.rs` on macOS (`.evidence/codegen/n03f/`); `ci.yml` skips
   these four. Three need the macOS 26 SDK: `clang_extension_refusals.rs`, `darwin_availability.rs`
-  and `fixed_enum_underlying_types.rs`.
+  and `fixed_enum_underlying_types.rs`; the macOS jobs of `ci.yml` and `release.yml` now run on
+  `macos-26`, which has that SDK.
 - The daily nightly build is off until a hosted CI run passes (R05m).
 - Only a direct call of an old-style definition takes the default argument promotions. A call
   through a function pointer object keeps the signature check E3019, and `(*f)(...)` and

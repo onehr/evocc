@@ -40,7 +40,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-14, ubuntu-24.04-arm]
+        os: [macos-26, ubuntu-24.04-arm]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 120
     # Line tables are enough for a failing test. With full debug info in each

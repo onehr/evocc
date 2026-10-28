@@ -68,7 +68,7 @@ and the hosted runs (R05m). **Nothing** means that no step of this release check
 
 | Deliverable | State | Waits for | Evidence |
 |---|---|---|---|
-| Hosted runs of `ci.yml`, `book.yml`, `nightly.yml` and `release.yml` | Open on 2026-10-28. No hosted run has passed. Since 2026-10-07 GitHub refuses every job because of the billing state of the account. `book.yml` publishes to GitHub Pages, which the owner sets up. On a clean hosted runner, seven tests need inputs that Git does not track or the macOS 26 SDK; the known limits of `CHANGELOG.md` name them. `ci.yml` skips the four that need untracked inputs. The nightly workflow stays disabled until a hosted run passes, and the archives of 0.1.0 are the local release build. | Owner (R05m) | [`.github/workflows/`](../.github/workflows/) |
+| Hosted runs of `ci.yml`, `book.yml`, `nightly.yml` and `release.yml` | Open on 2026-10-28. No hosted run has passed. Since 2026-10-07 GitHub refuses every job because of the billing state of the account. `book.yml` publishes to GitHub Pages, which the owner sets up. On a clean hosted runner, seven tests need inputs that Git does not track or the macOS 26 SDK; the known limits of `CHANGELOG.md` name them. `ci.yml` skips the four that need untracked inputs, and its macOS job, like that of `release.yml`, now runs on `macos-26` for the three that need the macOS 26 SDK. The nightly workflow stays disabled until a hosted run passes, and the archives of 0.1.0 are the local release build. | Owner (R05m) | [`.github/workflows/`](../.github/workflows/) |
 
 ## Proof-claim boundary
 
