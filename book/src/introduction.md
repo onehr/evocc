@@ -1,9 +1,9 @@
 # Introduction
 
-Welcome to *The EvoCC Book*. EvoCC is a C compiler for 64-bit Arm (AArch64) that checks its own
-work. It is written from scratch in Rust, and its checkers are proved in Lean 4. EvoCC compiles a
-Linux kernel that boots. It also builds real programs such as SQLite, Lua, zlib, Mbed TLS and Doom,
-and those programs pass their own tests.
+Welcome to *The EvoCC Book*. EvoCC is an experimental C compiler for 64-bit Arm (AArch64), written
+from scratch by AI agents in Rust and Lean 4. One rule runs through it: an untrusted part proposes,
+and a small checker decides. EvoCC compiles a Linux kernel that boots. It also builds real programs
+such as SQLite, Lua, zlib, Mbed TLS and Doom, and those programs pass their own tests.
 
 ## Who this book is for
 

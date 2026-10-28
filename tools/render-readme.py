@@ -12,6 +12,8 @@ session runs in one shell, in a temporary directory. The GCC session runs in the
 `evo-nexlab:sealed` container. The sessions go to `highlights.json`; both variants of the figure
 are drawn from it. The scoreboard reads the receipts of the release campaign. The explicit-check
 figure shows the EvoIR and the assembly that the release compiler makes for `examples/abs.c`.
+The stages figure follows line 7 of `examples/mean.c`: the record of `evo check`, then the EvoIR
+and the assembly of that line, and it refuses facts that do not match the source.
 `--check` runs no session: it draws every figure again from the transcript, the receipts and the
 release compiler, and it names each file that differs. Each figure has a light and a dark variant.
 """
@@ -319,34 +321,39 @@ def arrow_right(x0, x1, y, t):
             f'<path d="M{x1} {y} l-10 -6 v12 z" fill="{t["arrow"]}"/>')
 
 
-def overview(theme):
-    """Your program, EvoCC and native code, with the three guarantees as branches."""
+# One row for each level: what proposes, and the small checker that decides.
+PROPOSE_CHECK = [
+    ("AI agents", "write the code of the compiler", "check", "Tests and oracles",
+     "a failing test first; two interpreters", "that must agree with GCC 14 and Clang"),
+    ("The EqSat optimizer", "proposes each rewrite", "rules", "evocc-checker and Lean 4",
+     "replays each rewrite against rules", "that Lean 4 proves for every bit width"),
+    ("Each compiler stage", "for core-v1 functions", "prove", "Five Lean 4 checkers",
+     "compare the input and output of each stage;", "one theorem covers the whole chain"),
+]
+
+
+def propose_check(theme):
+    """The rule of the project: an untrusted part proposes, and a small checker decides."""
     t = THEMES[theme]
-    out = ['<svg xmlns="http://www.w3.org/2000/svg" width="860" height="262" viewBox="0 0 860 262" '
-           'role="img" aria-label="EvoCC compiles your C program to native AArch64 code, with three '
-           'guarantees">']
-    flow = [("Your C program", "sources and Makefiles", t["edge"], 1),
-            ("EvoCC", "a drop-in cc", t["prove"], 2),
-            ("Native AArch64 code", "for Linux and macOS", t["edge"], 1)]
-    for i, (title, sub, edge, width) in enumerate(flow):
-        x = 315 * i
-        out.append(box(x, 8, 230, 78, t, edge, width))
-        out.append(text(x + 115, 42, title, t["title"], 18, 700, "middle"))
-        out.append(text(x + 115, 66, sub, t["sub"], 14, anchor="middle"))
-        if i:
-            out.append(arrow_right(x - 76, x - 10, 47, t))
-    out.append(f'<path d="M430 86 V118 M135 118 H725 M135 118 V146 M430 118 V146 M725 118 V146" '
-               f'fill="none" stroke="{t["arrow"]}" stroke-width="2"/>')
-    guarantees = [("evo check", t["check"], "stops at the first broken", "rule of C, with the line"),
-                  ("EqSat optimizer", t["rules"], "uses only rules proved in Lean 4;",
-                   "a checker replays each rewrite"),
-                  ("evo prove", t["prove"], "Lean 4 checks every stage;", "assembly only if all pass")]
-    for i, (title, color, first, second) in enumerate(guarantees):
-        x = 295 * i
-        out.append(box(x, 146, 270, 112, t, color, 2))
-        out.append(text(x + 135, 182, title, color, 18, 700, "middle"))
-        out.append(text(x + 135, 210, first, t["title"], 14, anchor="middle"))
-        out.append(text(x + 135, 232, second, t["title"], 14, anchor="middle"))
+    rows = len(PROPOSE_CHECK)
+    height = 40 + rows * 96 + 36
+    out = [f'<svg xmlns="http://www.w3.org/2000/svg" width="860" height="{height}" '
+           f'viewBox="0 0 860 {height}" role="img" aria-label="At each level of EvoCC, an untrusted '
+           f'part proposes and a small checker decides">']
+    out.append(text(150, 22, "Proposes (untrusted)", t["sub"], 14, 700, "middle"))
+    out.append(text(620, 22, "Decides (a small checker)", t["sub"], 14, 700, "middle"))
+    for i, (who, what, color, checker, first, second) in enumerate(PROPOSE_CHECK):
+        y = 40 + i * 96
+        out.append(box(0, y, 300, 82, t))
+        out.append(text(150, y + 36, who, t["title"], 16, 700, "middle"))
+        out.append(text(150, y + 59, what, t["sub"], 14, anchor="middle"))
+        out.append(arrow_right(308, 372, y + 41, t))
+        out.append(box(380, y, 480, 82, t, t[color], 2))
+        out.append(text(620, y + 27, checker, t[color], 16, 700, "middle"))
+        out.append(text(620, y + 49, first, t["title"], 14, anchor="middle"))
+        out.append(text(620, y + 69, second, t["title"], 14, anchor="middle"))
+    out.append(text(430, height - 12, "When a check fails, nothing is accepted.", t["title"], 15, 600,
+                    "middle"))
     out.append("</svg>")
     return "\n".join(out) + "\n"
 
@@ -573,19 +580,265 @@ def explicit_check(data, theme):
     return "\n".join(out) + "\n"
 
 
+def block_values(lines):
+    """Map each value of an EvoIR text to the index of the line that defines it."""
+    names = {}
+    for i, line in enumerate(lines):
+        if " = " in line:
+            for name in re.findall(r"%v\d+", line.split(" = ", 1)[0]):
+                names[name] = i
+    return names
+
+
+def last_function(lines, before):
+    """The header line and the name of the C function that holds line index `before`."""
+    header = [line for line in lines[:before + 1] if re.match(r"\w[^;]*\)\s*\{$", line)][-1]
+    return header, re.search(r"(\w+)\(", header).group(1)
+
+
+def stages_facts(source, number, pointer, member):
+    """What typed C knows about `pointer->member` on line `number`, checked against the source."""
+    lines = source.splitlines()
+    header, callee = last_function(lines, number - 1)
+    params = re.search(r"\((.*)\)", header).group(1).split(", ")
+    position = next((i for i, p in enumerate(params) if re.fullmatch(rf"struct \w+ \*{pointer}", p)),
+                    None)
+    if position is None:
+        raise ValueError(f"`{pointer}` is not a struct pointer parameter of {callee}()")
+    tag = params[position].split()[1]
+    members = re.search(rf"struct {tag} \{{([^}}]*)\}};", source)
+    ctype = members and re.search(rf"(\w[\w ]*?) {member};", members.group(1))
+    if not ctype or ctype.group(1) != "int":
+        raise ValueError(f"`{pointer}->{member}` is not an int member of struct {tag}")
+    calls = [(i, m) for i, line in enumerate(lines) for m in re.finditer(rf"\b{callee}\(([^;]*)\);",
+                                                                          line)]
+    if len(calls) != 1:
+        raise ValueError(f"{callee}() has not exactly one call")
+    at, call = calls[0]
+    argument = call.group(1).split(", ")[position]
+    if not re.fullmatch(r"&\w+", argument):
+        raise ValueError(f"the call of {callee}() does not pass the address of an object")
+    name = argument[1:]
+    declaration = next((i for i in range(at, -1, -1)
+                        if re.match(rf"\s*struct {tag} {name}\b", lines[i])), None)
+    if declaration is None:
+        raise ValueError(f"no struct {tag} {name} is declared before the call of {callee}()")
+    if not re.fullmatch(rf"\s*struct {tag} {name};", lines[declaration]):
+        raise ValueError(f"struct {tag} {name} has an initializer")
+    owner = last_function(lines, declaration)[1]
+    if last_function(lines, at)[1] != owner:
+        raise ValueError(f"the call of {callee}() is not in {owner}()")
+    return tag, owner
+
+
+def stages_excerpt(source, record, evoir, asm):
+    """One line of C at four stages: its source, typed C, typed SSA and the bits that remain."""
+    diagnostic = record["diagnostics"][0]
+    code, message = diagnostic["code"], diagnostic["message"]
+    if (code, message) != ("E3001", "read-of-uninitialized-object"):
+        raise ValueError(f"evo check reports {code} {message}, not E3001 for uninitialized bytes")
+    span = next(span for span in diagnostic["spans"] if span["primary"])
+    number = span["line_start"]
+    line = source.splitlines()[number - 1].strip()
+    target = re.fullmatch(r"(\w+)->(\w+) \+= 1;", line)
+    if not target:
+        raise ValueError(f"line {number} is not `pointer->member += 1;`: {line!r}")
+    pointer, member = target.groups()
+    tag, owner = stages_facts(source, number, pointer, member)
+
+    header, evoir_lines = stages_evoir(evoir)
+    asm_lines, trap = stages_asm(asm)
+    facts = [([(f"{pointer}->{member}", True), (" is an int of 4 bytes", False)], False),
+             ([("its bytes are not initialized", False)], True),
+             ([(pointer, True), (f" points into the struct {tag} object of {owner}()", False)], False)]
+    return {"source": line, "where": f"{span['file']}, line {number}", "facts": facts,
+            "check": f"evo check stops here: {code} {message} at "
+                     f"{span['file']}:{number}:{span['column_start']}",
+            "header": header, "evoir": evoir_lines, "asm": asm_lines, "trap": trap}
+
+
+def stages_evoir(evoir):
+    """The EvoIR of `p->m += 1`, from the constant and the guarded load to the store."""
+    lines = evoir.splitlines()
+    names = block_values(lines)
+
+    def defining(name):
+        return lines[names[name]] if name in names else ""
+
+    for at, text in enumerate(lines[:-1]):
+        add = re.fullmatch(r"\s*(%v\d+) = signed_add_defined (%v\d+), (%v\d+)", text)
+        if (add and lines[at + 1].strip() == f"ub.assume.signed_overflow {add.group(1)}"
+                and re.fullmatch(rf"\s*{add.group(3)} = const\.bits<32> 1", defining(add.group(3)))
+                and " = load " in defining(add.group(2))):
+            break
+    else:
+        raise ValueError("the EvoIR holds no overflow obligation for `+= 1` of a loaded value")
+    _, loaded, one = add.groups()
+    load = re.fullmatch(rf"\s*\({loaded}, %v\d+, %v\d+\) = load (%v\d+), %v\d+, (%v\d+) : bits<(\d+)>",
+                        defining(loaded))
+    guard = load and re.fullmatch(rf"\s*{load.group(1)} = access_in_bounds %v\d+, {load.group(2)} "
+                                  r"\[size=(\d+), align=\d+\]", defining(load.group(1)))
+    if not guard or (int(guard.group(1)), int(load.group(3))) != (4, 32):
+        raise ValueError("the load of the member does not read the 4 bytes of an int")
+    sums = [re.fullmatch(rf"\s*(%v\d+) = add\.bits<32> {loaded}, {one}", text) for text in lines[at + 2:]]
+    result = next((match.group(1) for match in sums if match), None)
+    end = next((j for j in range(at + 2, len(lines)) if result and re.fullmatch(
+        rf"\s*\(%v\d+, %v\d+\) = store %v\d+, %v\d+, {load.group(2)}, {result}", lines[j])), None)
+    if end is None:
+        raise ValueError("the EvoIR does not store the sum back to the member")
+    start = min(names[one], names[load.group(1)])
+    blocks = [j for j in range(end + 1) if lines[j].startswith("^")]
+    header = blocks and re.fullmatch(r"(\^\w+)\((.*)\):", lines[blocks[-1]])
+    if not header or blocks[-1] > start:
+        raise ValueError("the EvoIR of the line is not in one block")
+    used, shown = set(re.findall(r"%v\d+", "\n".join(lines[start:end + 1]))), []
+    for param in header.group(2).split(", "):
+        if param.split(":")[0] in used:
+            shown.append(param)
+        elif shown[-1:] != ["…"]:
+            shown.append("…")
+    return (f"{header.group(1)}({', '.join(shown)}):",
+            [(lines[j], j in (at, at + 1)) for j in range(start, end + 1)])
+
+
+def stages_asm(asm):
+    """The assembly of `p->m += 1`: its block, the overflow branch and the store; and the trap."""
+    code = asm.splitlines()
+    adds = next((k for k, text in enumerate(code[:-1]) if re.fullmatch(r"\s*adds w\d+, w\d+, w\d+", text)
+                 and code[k + 1].strip().startswith("b.vs ")), None)
+    if adds is None:
+        raise ValueError("the assembly holds no adds with an overflow branch")
+    dest, first, second = re.fullmatch(r"\s*adds (w\d+), (w\d+), (w\d+)", code[adds]).groups()
+    labels = [k for k in range(adds) if code[k].endswith(":") and not code[k].startswith(" ")]
+    body = code[labels[-1] + 1:adds] if labels else []
+    loads = [re.fullmatch(rf"\s*ldr (?:{first}|{second}), (\[x\d+, #\d+\])", text) for text in body]
+    ones = [re.fullmatch(rf"\s*movz (?:{first}|{second}), #1", text) for text in body]
+    if len(body) != 2 or not any(loads) or not any(ones):
+        raise ValueError("the block of the adds does not only load the member and the constant 1")
+    field = next(match for match in loads if match).group(1)
+    store = next((k for k in range(adds + 2, len(code)) if code[k].strip() == f"str {dest}, {field}"),
+                 None)
+    if store is None or any(not code[k].endswith(":") for k in range(adds + 2, store)):
+        raise ValueError("the sum is not stored back right after the overflow branch")
+    target, seen = code[adds + 1].split()[-1], set()
+    while target + ":" in code and target not in seen and code.index(target + ":") + 1 < len(code):
+        seen.add(target)
+        step = code[code.index(target + ":") + 1].strip()
+        if step == "brk #3004":
+            return [(code[k], k in (adds, adds + 1)) for k in range(labels[-1], store + 1)], step
+        if not step.startswith("b "):
+            break
+        target = step.split()[1]
+    raise ValueError("the overflow branch reaches no brk #3004 trap")
+
+
+def stages_data():
+    """Check and compile examples/mean.c with the release build, for the target of figure C."""
+    tools = [BIN / "evo", BIN / "evocc"]
+    for tool in tools:
+        if not tool.is_file():
+            raise ValueError(f"{tool} is missing; build the release compiler first")
+    source = EXAMPLES / "mean.c"
+    with tempfile.TemporaryDirectory() as tmp:
+        shutil.copy(source, tmp)
+        env = dict(os.environ, PATH=f"{BIN}{os.pathsep}{os.environ['PATH']}")
+        check = subprocess.run([str(tools[0]), "--json", "check", "mean.c"], cwd=tmp, env=env,
+                               capture_output=True, text=True)
+    if check.returncode != 1 or not check.stdout.strip():
+        raise ValueError(f"evo check mean.c exited {check.returncode}, not 1 with a finding")
+    record = json.loads(check.stdout.splitlines()[0])
+    outputs = [subprocess.run([str(tools[1]), "--target=aarch64-unknown-linux-gnu", f"--emit={kind}",
+                               str(source)], capture_output=True, text=True, check=True).stdout
+               for kind in ("evoir", "asm")]
+    return stages_excerpt(source.read_text(encoding="utf-8"), record, *outputs)
+
+
+STAGE_X, STAGE_W = 172, 688
+CODE_SIZE, TEXT_SIZE = 13, 14
+
+
+def fit(parts, room):
+    """Refuse a line that would not fit: `parts` is a list of (text, font size)."""
+    width = sum(0.61 * size * len(value) for value, size in parts)
+    if width > room:
+        raise ValueError(f"{''.join(value for value, _ in parts)!r} is too wide for its panel")
+
+
+def stages(data, theme):
+    """One line of C, top to bottom, at four stages: what the program still knows at each."""
+    t = THEMES[theme]
+    rows = [
+        ("C source", data["where"], [(data["source"], False)], []),
+        ("C-HIR", "typed C", data["facts"], [(data["check"], t["check"], 600)]),
+        ("EvoIR", "typed SSA", [(data["header"], False)] + data["evoir"],
+         [("Each rule of C is a predicate and an obligation that no pass may delete.", t["rules"], 600),
+          ("Lean proves the rewrite rules on bits<N> values, for every N.", t["rules"], 600)]),
+        ("AArch64", "bits only", data["asm"],
+         [("Only bits remain: no type, no init state, no pointer object.", t["sub"], None),
+          (f"The overflow rule stays a trap: b.vs leads to {data['trap']}.", t["sub"], None)]),
+    ]
+    pad, out, y = 14, [], 2
+    for i, (name, subtitle, lines, notes) in enumerate(rows):
+        facts = name == "C-HIR"
+        row_h = 26 if facts else 21
+        panel_h = row_h * len(lines) + 16
+        fit([(name, 17)], STAGE_X - 12)
+        fit([(subtitle, TEXT_SIZE)], STAGE_X - 12)
+        out.append(text(0, y + 20, name, t["title"], 17, 700))
+        out.append(text(0, y + 42, subtitle, t["sub"], TEXT_SIZE))
+        out.append(f'<rect x="{STAGE_X + 0.5}" y="{y + 0.5}" width="{STAGE_W - 1}" '
+                   f'height="{panel_h - 1}" rx="10" fill="{t["box"] if facts else t["code"]}" '
+                   f'stroke="{t["edge"]}"/>')
+        for row, (line, mark) in enumerate(lines):
+            top = y + 8 + row_h * row
+            if mark:
+                out.append(f'<rect x="{STAGE_X + 6}" y="{top}" width="{STAGE_W - 12}" '
+                           f'height="{row_h - 2}" rx="4" fill="{t["mark"]}" stroke="{t["mark_edge"]}"/>')
+            weight = f' font-weight="{600 if facts else 700}"' if mark else ""
+            if facts:
+                parts = [(value, CODE_SIZE if is_code else TEXT_SIZE, MONO if is_code else SANS)
+                         for value, is_code in line]
+                fit([(value, size) for value, size, _ in parts], STAGE_W - 2 * pad)
+                tspans = "".join(f'<tspan font-family="{font}" font-size="{size}">'
+                                 f'{html.escape(value)}</tspan>' for value, size, font in parts)
+                out.append(f'<text x="{STAGE_X + pad}" y="{top + 17}" fill="{t["title"]}" '
+                           f'xml:space="preserve"{weight}>{tspans}</text>')
+            else:
+                fit([(line, CODE_SIZE)], STAGE_W - 2 * pad)
+                out.append(f'<text x="{STAGE_X + pad}" y="{top + 14}" fill="{t["title"]}" '
+                           f'font-family="{MONO}" font-size="{CODE_SIZE}" xml:space="preserve"'
+                           f'{weight}>{html.escape(line)}</text>')
+        y += panel_h
+        for note, color, note_weight in notes:
+            fit([(note, TEXT_SIZE)], STAGE_W)
+            y += 22
+            out.append(text(STAGE_X, y, note, color, TEXT_SIZE, note_weight))
+        if i + 1 < len(rows):
+            mid = STAGE_X + STAGE_W // 2
+            out.append(f'<path d="M{mid} {y + 12} V{y + 30}" stroke="{t["arrow"]}" stroke-width="2"/>'
+                       f'<path d="M{mid} {y + 38} l-6 -10 h12 z" fill="{t["arrow"]}"/>')
+            y += 50
+    height = y + 8
+    return "\n".join([f'<svg xmlns="http://www.w3.org/2000/svg" width="860" height="{height}" '
+                      f'viewBox="0 0 860 {height}" role="img" aria-label="One line of C at four '
+                      f'stages of EvoCC">'] + out + ["</svg>"]) + "\n"
+
+
 def rendered(transcript, with_compiler=True):
     """Every generated figure: its path and its text."""
     files = {}
     board = scoreboard_data()
     check = ub_data() if with_compiler else None
+    line = stages_data() if with_compiler else None
     for theme in THEMES:
         files[OUT / HIGHLIGHTS[theme]] = highlights(transcript, theme)
         files[OUT / f"pipeline-{theme}.svg"] = pipeline(theme)
-        files[OUT / f"overview-{theme}.svg"] = overview(theme)
+        files[OUT / f"propose-check-{theme}.svg"] = propose_check(theme)
         files[OUT / f"proved-rewrite-{theme}.svg"] = proved_rewrite(theme)
         files[OUT / f"scoreboard-{theme}.svg"] = scoreboard(board, theme)
         if check is not None:
             files[OUT / f"explicit-check-{theme}.svg"] = explicit_check(check, theme)
+            files[OUT / f"stages-{theme}.svg"] = stages(line, theme)
         files[PAPER / f"agent-effort-{theme}.svg"] = effort_chart(theme)
     return files
 

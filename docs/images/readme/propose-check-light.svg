@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="860" height="364" viewBox="0 0 860 364" role="img" aria-label="At each level of EvoCC, an untrusted part proposes and a small checker decides">
+<text x="150" y="22" fill="#59636e" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" font-weight="700" text-anchor="middle">Proposes (untrusted)</text>
+<text x="620" y="22" fill="#59636e" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" font-weight="700" text-anchor="middle">Decides (a small checker)</text>
+<rect x="0.5" y="40.5" width="299" height="81" rx="12" fill="#ffffff" stroke="#d0d7de" stroke-width="1"/>
+<text x="150" y="76" fill="#1f2328" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" font-weight="700" text-anchor="middle">AI agents</text>
+<text x="150" y="99" fill="#59636e" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" text-anchor="middle">write the code of the compiler</text>
+<path d="M308 81 H364" stroke="#8c959f" stroke-width="2"/><path d="M372 81 l-10 -6 v12 z" fill="#8c959f"/>
+<rect x="380.5" y="40.5" width="479" height="81" rx="12" fill="#ffffff" stroke="#1a7f37" stroke-width="2"/>
+<text x="620" y="67" fill="#1a7f37" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" font-weight="700" text-anchor="middle">Tests and oracles</text>
+<text x="620" y="89" fill="#1f2328" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" text-anchor="middle">a failing test first; two interpreters</text>
+<text x="620" y="109" fill="#1f2328" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" text-anchor="middle">that must agree with GCC 14 and Clang</text>
+<rect x="0.5" y="136.5" width="299" height="81" rx="12" fill="#ffffff" stroke="#d0d7de" stroke-width="1"/>
+<text x="150" y="172" fill="#1f2328" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" font-weight="700" text-anchor="middle">The EqSat optimizer</text>
+<text x="150" y="195" fill="#59636e" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" text-anchor="middle">proposes each rewrite</text>
+<path d="M308 177 H364" stroke="#8c959f" stroke-width="2"/><path d="M372 177 l-10 -6 v12 z" fill="#8c959f"/>
+<rect x="380.5" y="136.5" width="479" height="81" rx="12" fill="#ffffff" stroke="#8250df" stroke-width="2"/>
+<text x="620" y="163" fill="#8250df" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" font-weight="700" text-anchor="middle">evocc-checker and Lean 4</text>
+<text x="620" y="185" fill="#1f2328" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" text-anchor="middle">replays each rewrite against rules</text>
+<text x="620" y="205" fill="#1f2328" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" text-anchor="middle">that Lean 4 proves for every bit width</text>
+<rect x="0.5" y="232.5" width="299" height="81" rx="12" fill="#ffffff" stroke="#d0d7de" stroke-width="1"/>
+<text x="150" y="268" fill="#1f2328" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" font-weight="700" text-anchor="middle">Each compiler stage</text>
+<text x="150" y="291" fill="#59636e" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" text-anchor="middle">for core-v1 functions</text>
+<path d="M308 273 H364" stroke="#8c959f" stroke-width="2"/><path d="M372 273 l-10 -6 v12 z" fill="#8c959f"/>
+<rect x="380.5" y="232.5" width="479" height="81" rx="12" fill="#ffffff" stroke="#0969da" stroke-width="2"/>
+<text x="620" y="259" fill="#0969da" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" font-weight="700" text-anchor="middle">Five Lean 4 checkers</text>
+<text x="620" y="281" fill="#1f2328" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" text-anchor="middle">compare the input and output of each stage;</text>
+<text x="620" y="301" fill="#1f2328" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" text-anchor="middle">one theorem covers the whole chain</text>
+<text x="430" y="352" fill="#1f2328" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="15" font-weight="600" text-anchor="middle">When a check fails, nothing is accepted.</text>
+</svg>

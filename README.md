@@ -5,20 +5,34 @@
 <h1 align="center">EvoCC</h1>
 
 <p align="center">
-  <b>A C compiler that shows its work.</b><br>
-  Built by agents. Built for agents.
+  <b>An experimental C compiler, written by AI agents.</b><br>
+  Agents propose. Checkers decide.
 </p>
 
 <p align="center">
+  <img src="https://img.shields.io/badge/compiler-Rust-b7410e" alt="Compiler written in Rust">
+  <img src="https://img.shields.io/badge/proofs-Lean%204-0f6cbd" alt="Proofs in Lean 4">
+  <img src="https://img.shields.io/badge/target-AArch64%20Linux%20%7C%20macOS-555555" alt="Target: AArch64 Linux and macOS">
   <a href="https://github.com/onehr/evocc/releases"><img src="https://img.shields.io/github/v/release/onehr/evocc?label=release" alt="Latest release"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue" alt="Apache-2.0 license"></a>
 </p>
 
-EvoCC is a practical C compiler for AArch64 Linux and macOS, written from scratch in Rust, that
-can show why its output is right. Use it in place of `cc`. It also does three things that a
-compiler usually leaves to other tools: it finds undefined behavior on the path that your program
-runs, its EqSat optimizer rewrites only with rules that Lean 4 proves, and it can check a whole
-compilation down to the assembly text.
+EvoCC is an experimental C compiler for AArch64 Linux and macOS. AI agents wrote it from scratch
+in Rust and Lean 4, in under three months, under the direction of one engineer. By release 0.1.0
+that came to about 2,300 commits, 350,000 lines of Rust and 69,000 lines of Lean. EvoCC has its
+own preprocessor, parser, three intermediate representations, optimizer, register allocator and
+assembly emitter. It builds a Linux kernel that boots, SQLite, Doom and many other de-facto
+standard C bench/programs.
+
+One rule runs through the whole compiler: an untrusted part proposes, and a small checker
+decides. Agents propose code; a test written first, two interpreters and sealed GCC and Clang
+oracles decide whether it lands. The EqSat optimizer proposes rewrites; an independent checker
+replays each one against rules that Lean 4 proves. For a subset of C, each stage proposes its
+output, and Lean checkers decide. When a check fails, nothing is accepted.
+
+The same checks serve your programs. EvoCC's typed IRs keep each rule of C as an explicit check,
+so `evo check` names the exact operation that breaks one, also when GCC's warnings and UBSan miss
+it. Use `evocc` in place of `cc`, and give `evo mcp` to your coding agent.
 
 <p align="center">
   <picture>
@@ -31,27 +45,46 @@ compilation down to the assembly text.
 
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/images/readme/overview-dark.svg">
-    <img src="docs/images/readme/overview-light.svg" alt="Your C program goes into EvoCC, a drop-in cc, which writes native AArch64 code for Linux and macOS. Three guarantees branch from EvoCC: evo check stops at the first broken rule of C and shows the line; the EqSat optimizer uses only rules proved in Lean 4, and a checker replays each rewrite; evo prove has Lean 4 check every stage and writes assembly only if all stages pass." width="860">
+    <source media="(prefers-color-scheme: dark)" srcset="docs/images/readme/propose-check-dark.svg">
+    <img src="docs/images/readme/propose-check-light.svg" alt="At each level of EvoCC, an untrusted part proposes and a small checker decides. AI agents write the code of the compiler; tests and oracles decide: a failing test first, and two interpreters that must agree with GCC 14 and Clang. The EqSat optimizer proposes each rewrite; evocc-checker replays each rewrite against rules that Lean 4 proves for every bit width. For core-v1 functions, each compiler stage proposes its output; five Lean 4 checkers compare the input and output of each stage, and one theorem covers the whole chain. When a check fails, nothing is accepted." width="860">
   </picture>
 </p>
 
-- **The rules of C stay explicit.** EvoIR turns the undefined-behavior rules of C into checks.
-  An optimization can remove work, never a check. So `evo check` finds bugs that sanitizers miss,
-  and the checked `abs(INT_MIN)` traps. ([How it works](#how-it-works))
-- **Optimization with proved rules.** The EqSat optimizer (`-Oeq-scalar`) uses only rewrite
-  rules that Lean 4 proves for every bit width. An independent checker replays each rewrite before EvoCC writes
-  output. ([Checked optimization](book/src/optimization.md))
-- **Compilation with proof.** For the `core-v1` subset, `evo prove` has Lean 4 check every stage,
-  from typed Core source to the final assembly text. It writes assembly only if all stages pass.
-  ([Compiling with proof](book/src/proof.md))
-- **Real scale, with records.** A Linux kernel built with `make CC=evocc` boots. Doom and 15
-  application lanes, SQLite among them, run with no compiler failure. Each number has a receipt.
-  ([Proven on real code](#proven-on-real-code))
-- **Made for agents.** Stable diagnostic codes, JSON output, safe repairs and an MCP server. In a
-  registered experiment on bugs that GCC and UBSan miss, a coding agent needed about a third
-  fewer steps with EvoCC.
-  ([Agent experiment](book/src/evaluation-agents.md#experiment-5-repair-effort-and-program-size))
+- **Written from scratch by AI agents.** [The paper](docs/paper.md#8-how-agents-built-evocc)
+  tells how one engineer directed them, what they got wrong, and which checks caught it.
+- **Typed IRs that keep the rules of C.** C-HIR keeps C's types, which bytes are initialized and
+  which object each pointer may point to. EvoIR is typed SSA: each rule of C is a predicate and
+  an obligation that no pass may delete, and memory and I/O travel on explicit tokens. See
+  [one line through the typed IRs](#one-line-through-the-typed-irs).
+- **`evo check` finds undefined behavior.** It runs your program on the rules of C and stops at
+  the first operation that breaks one, with the line. It finds bugs that GCC's warnings and UBSan
+  miss, such as uninitialized reads. ([Undefined behavior](book/src/undefined-behavior.md))
+- **Rust for the compiler, Lean 4 for the proofs.** The EqSat optimizer (`-Oeq-scalar`) uses only
+  rewrite rules that Lean 4 proves for every bit width. For the `core-v1` subset, `evo prove` has
+  Lean 4 check every stage, from typed Core source to the final assembly text.
+  ([Checked optimization](book/src/optimization.md), [compiling with proof](book/src/proof.md))
+- **Built for agents to change.** In EqSat mode, a new optimization is an equality with a Lean
+  proof, not a new pass. The two interpreters give each lowering an executable reference, the
+  target is a set of tables, the specifications are pinned, and each result has a receipt.
+  Agents use EvoCC too: diagnostics have stable codes and JSON, and in a
+  [registered experiment](book/src/evaluation-agents.md#experiment-5-repair-effort-and-program-size)
+  a coding agent needed about a third fewer steps with EvoCC.
+- **Experimental, at real scale.** A Linux kernel built with `make CC=evocc` boots, and 15
+  application lanes and Doom run with no compiler failure. The [scope of 0.1.0](#scope-of-010)
+  lists what is not done yet.
+
+### One line through the typed IRs
+
+In C-HIR and EvoIR, the program stays typed, and the types carry the rules of C. So `evo check`
+can name the exact rule that a line breaks, and the optimizer and the Lean proofs work on the same
+rules. Here is one line of [`mean.c`](examples/mean.c) at four stages of the release compiler:
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/images/readme/stages-dark.svg">
+    <img src="docs/images/readme/stages-light.svg" alt="One line of mean.c, s->count += 1;, at four stages of the release compiler. C-HIR, typed C: s->count is an int of 4 bytes, its bytes are not initialized, and s points into the struct stats object of mean(); evo check stops here with E3001 read-of-uninitialized-object at mean.c:7:9. EvoIR, typed SSA: the block passes the values ptr<generic>, mem<all> and world, and the line becomes access_in_bounds, a load of bits<32>, signed_add_defined with ub.assume.signed_overflow, add.bits<32> and a store; each rule of C is a predicate and an obligation that no pass may delete, and Lean proves the rewrite rules on bits<N> values for every N. AArch64, bits only: movz, ldr, adds, b.vs and str, with no type, no init state and no pointer object; the overflow rule stays a trap, because b.vs leads to brk #3004." width="860">
+  </picture>
+</p>
 
 ## Proven on real code
 

@@ -171,6 +171,124 @@ class ExplicitCheckFigureTests(unittest.TestCase):
                 self.assertEqual(committed, render.explicit_check(data, theme))
 
 
+class StagesFigureTests(unittest.TestCase):
+    SOURCE = (ROOT / "examples/mean.c").read_text(encoding="utf-8")
+    RECORD = {"exit_code": 1, "diagnostics": [{
+        "code": "E3001", "message": "read-of-uninitialized-object",
+        "spans": [{"file": "mean.c", "line_start": 7, "column_start": 9, "primary": True}]}]}
+    EVOIR = """func @mean(%arg0: ptr<generic>, %arg1: bits<32>, %arg2: mem<all>, %arg3: world) -> (bits<32>, mem<all>, world) cc = target_default
+{
+^b3(%v29: bits<32>, %v30: ptr<generic>, %v31: bits<32>, %v32: ptr<generic>, %v33: bits<32>, %v34: mem<all>, %v35: world):
+    %v36 = const.bits<32> 1
+    %v37 = access_in_bounds %v34, %v32 [size=4, align=4]
+    (%v38, %v39, %v40) = load %v37, %v35, %v32 : bits<32>
+    %v41 = signed_add_defined %v38, %v36
+    ub.assume.signed_overflow %v41
+    %v42 = add.bits<32> %v38, %v36
+    %v43 = access_in_bounds %v39, %v32 [size=4, align=4]
+    (%v44, %v45) = store %v43, %v40, %v32, %v42
+    %v46 = const.bits<64> 4
+    br ^b6(%v29, %v30, %v31, %v32, %v44, %v45)
+}
+"""
+    ASM = """mean:
+.Lmean_block3:
+    movz w5, #1
+    ldr w6, [x2, #0]
+    adds w5, w6, w5
+    b.vs .Lmean_block18
+.Lmean_block12:
+    str w5, [x2, #0]
+    add x5, x2, #4
+.Lmean_block11:
+    brk #3004
+.Lmean_block18:
+    b .Lmean_block11
+.size mean, .-mean
+"""
+
+    def excerpt(self, source=None, record=None, evoir=None, asm=None):
+        return render.stages_excerpt(source or self.SOURCE, record or self.RECORD,
+                                     evoir or self.EVOIR, asm or self.ASM)
+
+    def test_one_line_of_c_at_each_stage(self):
+        data = self.excerpt()
+        self.assertEqual((data["source"], data["where"]), ("s->count += 1;", "mean.c, line 7"))
+        self.assertEqual([("".join(text for text, _ in parts), mark) for parts, mark in data["facts"]],
+                         [("s->count is an int of 4 bytes", False),
+                          ("its bytes are not initialized", True),
+                          ("s points into the struct stats object of mean()", False)])
+        self.assertEqual(data["check"],
+                         "evo check stops here: E3001 read-of-uninitialized-object at mean.c:7:9")
+        self.assertEqual(data["header"], "^b3(…, %v32: ptr<generic>, …, %v34: mem<all>, %v35: world):")
+        body = self.EVOIR.splitlines()[3:11]
+        self.assertEqual([line for line, _ in data["evoir"]], body)
+        self.assertEqual([line.strip() for line, mark in data["evoir"] if mark],
+                         ["%v41 = signed_add_defined %v38, %v36", "ub.assume.signed_overflow %v41"])
+        self.assertEqual([line for line, _ in data["asm"]], self.ASM.splitlines()[1:8])
+        self.assertEqual([line.split()[0] for line, mark in data["asm"] if mark], ["adds", "b.vs"])
+        self.assertEqual(data["trap"], "brk #3004")
+
+    def test_facts_and_lines_that_do_not_match_are_refused(self):
+        changes = [
+            ({"source": self.SOURCE.replace("struct stats s;", "struct stats s = {0};")}, "initializer"),
+            ({"source": self.SOURCE.replace("int count;", "long count;")}, "not an int member"),
+            ({"record": {"exit_code": 1, "diagnostics": [{
+                "code": "E3004", "message": "signed-integer-overflow",
+                "spans": self.RECORD["diagnostics"][0]["spans"]}]}}, "E3001"),
+            ({"evoir": self.EVOIR.replace("[size=4, align=4]", "[size=8, align=8]")}, "4 bytes"),
+            ({"evoir": self.EVOIR.replace("ub.assume.signed_overflow", "nop")}, "overflow obligation"),
+            ({"asm": self.ASM.replace("brk #3004", "ret")}, "no brk #3004 trap"),
+        ]
+        for change, message in changes:
+            with self.subTest(change=message), self.assertRaisesRegex(ValueError, message):
+                self.excerpt(**change)
+
+    def test_a_line_too_wide_for_its_panel_is_refused(self):
+        for key in ("evoir", "asm"):
+            with self.subTest(stage=key):
+                data = self.excerpt()
+                line, mark = data[key][0]
+                data[key][0] = (line + "  ; " + "x" * 90, mark)
+                with self.assertRaisesRegex(ValueError, "too wide"):
+                    render.stages(data, "light")
+
+    def test_text_stays_legible_in_the_readme_column(self):
+        for theme in render.THEMES:
+            with self.subTest(theme=theme):
+                svg = render.stages(self.excerpt(), theme)
+                scale = 830 / float(re.search(r'viewBox="0 0 ([\d.]+) ', svg).group(1))
+                sizes = re.findall(r'font-family="([^"]+)" font-size="([\d.]+)"', svg)
+                self.assertTrue(sizes)
+                for font, size in sizes:
+                    self.assertGreaterEqual(float(size) * scale, 12 if font == render.MONO else 13)
+
+    def test_readme_shows_the_figure_under_why_evocc(self):
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        section = readme.split("## Why EvoCC\n", 1)[1].split("\n## ", 1)[0]
+        self.assertLess(section.index("propose-check-light.svg"), section.index("\n### "))
+        self.assertLess(section.index("- **Built for agents to change.**"), section.index("\n### "))
+        self.assertIn('srcset="docs/images/readme/stages-dark.svg"', section)
+        alt = re.search(r'stages-light\.svg" alt="([^"]+)"', section).group(1)
+        for value in ("s->count += 1;", "E3001 read-of-uninitialized-object at mean.c:7:9",
+                      "signed_add_defined", "ub.assume.signed_overflow", "ptr<generic>", "mem<all>",
+                      "world", "ldr", "adds", "b.vs", "str", "brk #3004"):
+            self.assertIn(value, alt)
+
+    def test_committed_figure_is_the_output_of_the_release_compiler(self):
+        if not all((render.BIN / tool).is_file() for tool in ("evocc", "evo")):
+            self.skipTest("needs the release build in target/frontend/release")
+        data = render.stages_data()
+        for theme in render.THEMES:
+            with self.subTest(theme=theme):
+                committed = (render.OUT / f"stages-{theme}.svg").read_text(encoding="utf-8")
+                self.assertEqual(committed, render.stages(data, theme))
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        alt = re.search(r'stages-light\.svg" alt="([^"]+)"', readme).group(1)
+        for value in (data["source"], data["check"].split(": ", 1)[1], data["trap"]):
+            self.assertIn(value, alt)
+
+
 class HighlightsTests(unittest.TestCase):
     def transcript(self):
         return json.loads(render.TRANSCRIPT.read_text(encoding="utf-8"))
