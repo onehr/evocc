@@ -10,6 +10,7 @@
 - [Error Index](error-index.md)
 - [Compiling with Proof](proof.md)
 - [Checked Optimization](optimization.md)
+- [Your First Proved Optimization](first-optimization.md)
 - [How EvoCC Works](how-it-works.md)
 - [Evaluating EvoCC](evaluate.md)
 - [Agent Repair Experiment](evaluation-agents.md)
