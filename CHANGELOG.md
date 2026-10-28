@@ -480,9 +480,10 @@ These items are open in this version. Each line names its entry in [TODO.md](TOD
   because of the billing state of the account (R05m).
 - A clean hosted runner fails seven tests (R05m). Four need inputs that Git does not track:
   `evo_cli.rs`, `returns_twice_calls.rs` and `interpreter_main_arguments.rs` (`.build/ladder/` and
-  `.evidence/`), and `n03f_frame_native.rs` on macOS (`.evidence/codegen/n03f/`). Three need the
-  macOS 26 SDK: `clang_extension_refusals.rs`, `darwin_availability.rs` and
-  `fixed_enum_underlying_types.rs`.
+  `.evidence/`), and `n03f_frame_native.rs` on macOS (`.evidence/codegen/n03f/`); `ci.yml` skips
+  these four. Three need the macOS 26 SDK: `clang_extension_refusals.rs`, `darwin_availability.rs`
+  and `fixed_enum_underlying_types.rs`.
+- The daily nightly build is off until a hosted CI run passes (R05m).
 - Only a direct call of an old-style definition takes the default argument promotions. A call
   through a function pointer object keeps the signature check E3019, and `(*f)(...)` and
   `(&f)(...)` keep the prototype check (N09, open item K4 of the old-style call repair).

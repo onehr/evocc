@@ -92,7 +92,9 @@ another header root with `--sysroot`.
 
 ## Nightly builds
 
-The [rolling nightly prerelease](https://github.com/onehr/evocc/releases/tag/nightly)
+Nightly builds are paused. The daily schedule starts again when a hosted CI run passes;
+until then, use a stable release. When it runs, the
+[rolling nightly prerelease](https://github.com/onehr/evocc/releases/tag/nightly)
 is the download location for daily and manual builds of `main`. The workflow uses
 the same packaging, native smoke checks and cross-host object check as stable
 releases. A successful run replaces two archives named
