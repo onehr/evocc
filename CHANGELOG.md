@@ -3,6 +3,14 @@
 All notable changes to EvoCC are listed in this file. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.2.0] - Unreleased
+
+### Added
+
+### Changed
+
+### Fixed
+
 ## [0.1.0] - 2026-10-28
 
 The first public version.

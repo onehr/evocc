@@ -75,7 +75,7 @@ def render_todo(source: str) -> str:
                 raise ValueError(f'missing/unsupported open-task state: {name}')
             opened[name] = state[1]
     section = source.split(markers[0], 1)[1].split(markers[1], 1)[0]
-    queue_names = ('KERNEL', 'APPLICATION', 'REVIEW', 'AUDIT', 'ACCEPTANCE', 'LATER')
+    queue_names = ('KERNEL', 'APPLICATION', 'REVIEW', 'AUDIT', 'ACCEPTANCE', 'RELEASE', 'LATER')
     queues, scheduled = {}, set()
     for line in section.splitlines():
         if not line.startswith('|'):

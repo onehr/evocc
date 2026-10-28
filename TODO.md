@@ -139,8 +139,62 @@ was found in the read-only process check at this planning checkpoint.
 | REVIEW |  | No rule decision is open. The 2026-10-13 decisions for K07, L03 to L10 and L11a to L11c are in docs/archive/notebook/rules-20261013/DECISIONS.md. |
 | AUDIT | D33 | D24 to D28 closed the follow-ups of D22, D23, L04 and L05; D33 changes the alignment model. D01-D15 are closed in their recorded scope. Keep the T03 audit boundary; kernel/application acceptance and deferred proof domains remain separate. |
 | ACCEPTANCE | T04, T02, K13, K14, R05, R05k | On 2026-10-27 the compiler of `08bf09bd` passed the frozen acceptance (B10 and the direct Kbuild replay), the final gate T05 passed, and both archives were built (R05a). Next: the owner's R05k: the dating commit, the rebuild of both archives from it, the tag and the publication. |
-| LATER | R05m, R01, R02, R03, R03a, R03b, R03c, R03d, R03e, R03f, R03g, R03h, R04, R04a, R04b, R04c, R04d, R04e, N06, N06a, N06b, N06c, N06d, N06e | S1–S5 and R02e first slice are closed; S6 stays with R01's two G2 builds. R03 V1 negative-admission study is frozen; positive Q3 remains unachieved and R03a/b/c/d NOT_ADMITTED, R03e deferred. No VM timing or audit expansion; x86-64 and release stay separate. The bounded N01–N05/N07 batch is dispositioned, not a complete optimizing compiler: N03b/N03e preflights are negative, N07 E3 has zero SMT proofs, and all five library size targets remain missed. N03d C5 has size/correctness evidence but three compile-cost misses; C2/C5 remain outside the admitted cumulative configuration, and T1's misses stay frozen. All new defaults remain OFF. Retain N02's 70 admitted/187 opaque inputs and source-bridge mismatch. Broader inlining, mid-level and allocator work need newly scoped designs; no paused R activity is automatically reopened. |
+| RELEASE | Q01, Q02, Q03, Q04, Q05, R04, R04a, R07, R07a | Release 0.2.0, foundation: Q01 to Q05, R04a and R07a. Then x86-64 (R04b to R04e), RISC-V (R07b to R07e), Lean core-v2 (V09 to V13), the EqSat kit (E01 to E03) and the release (R05m). |
+| LATER | R05m, R01, R02, R03, R03a, R03b, R03c, R03d, R03e, R03f, R03g, R03h, R04b, R04c, R04d, R04e, N06, N06a, N06b, N06c, N06d, N06e, R07b, R07c, R07d, R07e, V09, V10, V11, V12, V13, E01, E02, E03 | S1–S5 and R02e first slice are closed; S6 stays with R01's two G2 builds. R03 V1 negative-admission study is frozen; positive Q3 remains unachieved and R03a/b/c/d NOT_ADMITTED, R03e deferred. No VM timing or audit expansion; x86-64 and release stay separate. The bounded N01–N05/N07 batch is dispositioned, not a complete optimizing compiler: N03b/N03e preflights are negative, N07 E3 has zero SMT proofs, and all five library size targets remain missed. N03d C5 has size/correctness evidence but three compile-cost misses; C2/C5 remain outside the admitted cumulative configuration, and T1's misses stay frozen. All new defaults remain OFF. Retain N02's 70 admitted/187 opaque inputs and source-bridge mismatch. Broader inlining, mid-level and allocator work need newly scoped designs; no paused R activity is automatically reopened. |
 <!-- closure-queues:end -->
+
+## Release 0.2.0
+
+Owner decision of 2026-10-28: EvoCC 0.2.0 is extendable, easy to adopt and ready for production
+use. It supports AArch64 (Linux and macOS), x86-64 Linux userspace and RISC-V (RV64GC) Linux
+userspace. The proof-required path stays AArch64 Linux only and refuses the other targets with
+exit status 6. The work runs in six parts: foundation, x86-64, RISC-V, Lean `core-v2`, the EqSat
+kit, and the release. AArch64 output stays byte-identical through the first three parts, apart
+from named fixes.
+
+- [ ] **Q01 — Size limits with a ratchet** — `OPEN`, P1.
+  Files and functions in `crates/*/src/` and `tools/` have at most 1,500 and 150 lines. A
+  baseline lists the older items above a limit; it only shrinks. Exit: `tools/check-size.py` runs
+  in the gate and in `ci.yml`.
+- [ ] **Q02 — Split the four largest source files** — `OPEN`, P1.
+  `evocc-parser/src/lib.rs`, `evocc-lower/src/lib.rs`, `evocc-chir/src/interp.rs` and
+  `evocc-evoir/src/lib.rs` become modules of at most 1,500 lines. Exit: the AArch64 identity check
+  and the full gate.
+- [ ] **Q03 — Split the long functions of the backend path** — `OPEN`, P1.
+  `parse_options`, `emit_inst`, `lower_inst` and `lower_block` become functions of at most 150
+  lines. Exit: the AArch64 identity check and the full gate.
+- [ ] **Q04 — An architecture page and a README for each crate** — `OPEN`, P1.
+  Exit: `ARCHITECTURE.md` and 18 crate READMEs, each fact checked against the code.
+- [ ] **Q05 — Keep active work in the tracker, and inventory the tools** — `OPEN`, P2.
+  Exit: closed entries move to `docs/archive/todo-0.1.0.md`; an inventory classifies each file
+  under `tools/`.
+- [ ] **R07 — RISC-V (RV64GC) Linux userspace backend** — `OPEN`, P1.
+  The same shared EvoMIR as x86-64 (R04). The proof-required path refuses RISC-V.
+  - [ ] **R07a — Design** — `OPEN`, P1. Exit: `docs/design/riscv64-linux.md` with measured
+    environment facts and milestones R07b to R07e.
+  - [ ] **R07b — Integer-only functions and calls** — `LATER`, P1. Exit: from R07a.
+  - [ ] **R07c — Memory, records, globals and the full LP64D convention** — `LATER`, P1.
+    Exit: from R07a.
+  - [ ] **R07d — Floating point and variadic calls** — `LATER`, P1. Exit: from R07a.
+  - [ ] **R07e — Run the corpus on RISC-V** — `LATER`, P1. Exit: c-testsuite, cJSON, zlib,
+    Lua and SQLite pass their own tests with `CC=evocc` under `qemu-riscv64`.
+- [ ] **V09 — Propose loop cutpoints automatically** — `LATER`, P1.
+  `evo prove` makes the cutpoint proposal that a loop needs today by hand. The proposal stays
+  untrusted. Exit: the `core-v1` pilot loops pass with no hand-written proposal.
+- [ ] **V10 — `char`, `short`, `_Bool` and `switch` in `core-v2`** — `LATER`, P1.
+- [ ] **V11 — Frame objects at the assembly stage: `&local` and local arrays** — `LATER`, P1.
+- [ ] **V12 — Recursion on the proof-required path** — `LATER`, P2.
+- [ ] **V13 — EvoIR as a standalone Lean library with a conformance suite** — `LATER`, P1.
+  Exit: its own Lake library, a text round-trip theorem, and a suite that the Lean and the Rust
+  interpreters both run in CI.
+- [ ] **E01 — One rule registry for the producer, the checker and Lean** — `LATER`, P1.
+  Exit: a new rule is one registry entry and one Lean theorem; the checker keeps its independent
+  rule table (spec section 11.6).
+- [ ] **E02 — A generic certificate replay checker crate** — `LATER`, P1.
+  Exit: the EvoIR checker is its first instance, and a second toy language uses it in a test.
+- [ ] **E03 — An `egg` saturation producer, measured** — `LATER`, P2.
+  Needs the owner's approval of the download. Exit: certificates that `evocc-checker` accepts,
+  and a ladder size and compile-time comparison against the current producer.
 
 ## Diagnostics and command-line product work
 
@@ -4565,7 +4619,7 @@ Reopening any of them needs a new owner decision after the N03 slices land.
     Test every installation/codegen boundary against shadow artifacts. Prove and
     integrate survivors before actual verified metrics; screening is not a gain.
 
-- [ ] **R04 — x86-64 userspace backend/ABI milestone** — `LATER`, P3.
+- [ ] **R04 — x86-64 userspace backend/ABI milestone** — `OPEN`, P1.
   Implement the gated SysV/backend slice after ARM64 acceptance priorities,
   retaining shared IR semantics. Close with native userspace ABI/corpus evidence.
   Full x86 kernel support remains a separately declared stretch, not an implied
@@ -4580,28 +4634,28 @@ Reopening any of them needs a new owner decision after the N03 slices land.
   floating-point tests must use QEMU, because Rosetta differs from x86 for some
   NaN results. Every milestone keeps the AArch64 output byte-identical.
 
-  - [ ] **R04a — Prepare the shared code for a third target** — `LATER`, P3.
+  - [ ] **R04a — Prepare the shared code for a third target** — `OPEN`, P1.
     Target predicates, ordered argument and result register lists, the generator
     and the layout plumbing, about 830 lines and 300 test lines. Exit: the
     AArch64 output of the workspace tests and the ladder programs is
     byte-identical.
 
-  - [ ] **R04b — Compile integer-only functions and calls** — `LATER`, P3.
+  - [ ] **R04b — Compile integer-only functions and calls** — `LATER`, P1.
     About 3,400 lines and 1,800 test lines. Exit: integer unit tests per EvoMIR
     form pass under QEMU in the amd64 container, and integer ABI calls agree
     with GCC 14 in both directions.
 
-  - [ ] **R04c — Memory, records, globals and the full SysV convention** — `LATER`, P3.
+  - [ ] **R04c — Memory, records, globals and the full SysV convention** — `LATER`, P1.
     About 2,300 lines and 1,400 test lines, including the SysV record classes in
     the `byval` mark. Exit: every argument class crosses to and from GCC 14 with
     the GCC value.
 
-  - [ ] **R04d — SSE2 floating point and variadic calls** — `LATER`, P3.
+  - [ ] **R04d — SSE2 floating point and variadic calls** — `LATER`, P1.
     About 2,100 lines and 1,200 test lines, with the register save area and
     `%al`. Exit: bit-exact floating-point tests under QEMU, and variadic calls
     in both directions with GCC 14.
 
-  - [ ] **R04e — Run the corpus on x86-64** — `LATER`, P3.
+  - [ ] **R04e — Run the corpus on x86-64** — `LATER`, P1.
     About 950 lines, 400 test lines and room for defects, with the small `rdtsc`
     inline-assembly subset that SQLite's test build needs. Exit: c-testsuite,
     cJSON, zlib, Lua and SQLite pass their own tests with `CC=evocc` in the

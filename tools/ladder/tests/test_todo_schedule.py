@@ -28,6 +28,7 @@ def tracker():
 | REVIEW | L04 | Approve a rule. |
 | AUDIT | | Audit changed paths. |
 | ACCEPTANCE | K13 | Run only after prerequisites. |
+| RELEASE | | Plan the release. |
 | LATER | R01 | Prove the wider gate. |
 <!-- closure-queues:end -->
 """
