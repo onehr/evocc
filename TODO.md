@@ -139,7 +139,7 @@ was found in the read-only process check at this planning checkpoint.
 | REVIEW |  | No rule decision is open. The 2026-10-13 decisions for K07, L03 to L10 and L11a to L11c are in docs/archive/notebook/rules-20261013/DECISIONS.md. |
 | AUDIT | D33 | D24 to D28 closed the follow-ups of D22, D23, L04 and L05; D33 changes the alignment model. D01-D15 are closed in their recorded scope. Keep the T03 audit boundary; kernel/application acceptance and deferred proof domains remain separate. |
 | ACCEPTANCE | T04, T02, K13, K14, R05, R05k | On 2026-10-27 the compiler of `08bf09bd` passed the frozen acceptance (B10 and the direct Kbuild replay), the final gate T05 passed, and both archives were built (R05a). Next: the owner's R05k: the dating commit, the rebuild of both archives from it, the tag and the publication. |
-| RELEASE | Q01, Q02, Q03, Q04, Q05, R04, R04a, R07, R07a | Release 0.2.0, foundation: Q01 to Q05, R04a and R07a. Then x86-64 (R04b to R04e), RISC-V (R07b to R07e), Lean core-v2 (V09 to V13), the EqSat kit (E01 to E03) and the release (R05m). |
+| RELEASE | Q01, Q02, Q03, Q04, Q05, R04, R04a, R07 | Release 0.2.0, foundation: Q01 to Q05 and R04a; R07a's measured design is complete. Then x86-64 (R04b to R04e), RISC-V (R07b to R07e), Lean core-v2 (V09 to V13), the EqSat kit (E01 to E03) and the release (R05m). |
 | LATER | R05m, R01, R02, R03, R03a, R03b, R03c, R03d, R03e, R03f, R03g, R03h, R04b, R04c, R04d, R04e, N06, N06a, N06b, N06c, N06d, N06e, R07b, R07c, R07d, R07e, V09, V10, V11, V12, V13, E01, E02, E03 | S1–S5 and R02e first slice are closed; S6 stays with R01's two G2 builds. R03 V1 negative-admission study is frozen; positive Q3 remains unachieved and R03a/b/c/d NOT_ADMITTED, R03e deferred. No VM timing or audit expansion; x86-64 and release stay separate. The bounded N01–N05/N07 batch is dispositioned, not a complete optimizing compiler: N03b/N03e preflights are negative, N07 E3 has zero SMT proofs, and all five library size targets remain missed. N03d C5 has size/correctness evidence but three compile-cost misses; C2/C5 remain outside the admitted cumulative configuration, and T1's misses stay frozen. All new defaults remain OFF. Retain N02's 70 admitted/187 opaque inputs and source-bridge mismatch. Broader inlining, mid-level and allocator work need newly scoped designs; no paused R activity is automatically reopened. |
 <!-- closure-queues:end -->
 
@@ -170,14 +170,29 @@ from named fixes.
   under `tools/`.
 - [ ] **R07 — RISC-V (RV64GC) Linux userspace backend** — `OPEN`, P1.
   The same shared EvoMIR as x86-64 (R04). The proof-required path refuses RISC-V.
-  - [ ] **R07a — Design** — `OPEN`, P1. Exit: `docs/design/riscv64-linux.md` with measured
-    environment facts and milestones R07b to R07e.
-  - [ ] **R07b — Integer-only functions and calls** — `LATER`, P1. Exit: from R07a.
+  - [x] **R07a — Design** — `DONE`, P1, 2026-10-29.
+    [Design](docs/design/riscv64-linux.md): RV64GC/LP64D, measured GCC 14/QEMU environment,
+    every current machine form, software flags, binary128, fenv and ABI boundaries. The local
+    probe image and sources/results are in `OUT/riscv-design/` of the foundation goal.
+    This is a design, not an implemented backend. No compiler behavior changes.
+  - [ ] **R07b — Integer-only functions and calls** — `LATER`, P1.
+    Estimate: 3,000 production/tooling and 1,600 test lines, plus target tables. Exit: every
+    integer expansion passes GNU/LLVM assembly and QEMU execution; scalar/pair ABI calls pass
+    both ways; 256 integer seeds agree; proof-required RISC-V refuses with exit 6 before output;
+    checked traps, AArch64 full-object identity and the full gate pass. See design Section 6 M1.
   - [ ] **R07c — Memory, records, globals and the full LP64D convention** — `LATER`, P1.
-    Exit: from R07a.
-  - [ ] **R07d — Floating point and variadic calls** — `LATER`, P1. Exit: from R07a.
+    Estimate: 2,300 production/tooling and 1,600 test lines. Exit: record/hidden-result ABI,
+    bank exhaustion, original 128-/256-case corpus populations, PIC/TLS, memory and atomics pass;
+    grammar, allocation-negative tests, AArch64 identity and the full gate pass. See Section 6 M2.
+  - [ ] **R07d — Floating point and variadic calls** — `LATER`, P1.
+    Estimate: 2,200 production/tooling and 1,500 test lines. Exit: strict values/status in all
+    four modes, both tininess boundaries, NaN boxing, audited binary128 helpers/conversions
+    and variadic cross-calls pass; AArch64 identity and the full gate pass. See Section 6 M3.
   - [ ] **R07e — Run the corpus on RISC-V** — `LATER`, P1. Exit: c-testsuite, cJSON, zlib,
     Lua and SQLite pass their own tests with `CC=evocc` under `qemu-riscv64`.
+    Estimate: 800 production/tooling and 500 test lines, plus a 500-line defect allowance.
+    Keep pinned inputs/flags and every counted EvoCC object; no reference rebuild. Baseline ISA
+    audit, AArch64 identity and the full gate pass. See design Section 6 M4.
 - [ ] **V09 — Propose loop cutpoints automatically** — `LATER`, P1.
   `evo prove` makes the cutpoint proposal that a loop needs today by hand. The proposal stays
   untrusted. Exit: the `core-v1` pilot loops pass with no hand-written proposal.
@@ -1133,7 +1148,7 @@ Reopening any of them needs a new owner decision after the N03 slices land.
   retaining shared IR semantics. Close with native userspace ABI/corpus evidence.
   Full x86 kernel support remains a separately declared stretch, not an implied
   consequence of ARM64 boot. [Roadmap][roadmap].
-  The 2026-10-13 [design](docs/archive/notebook/r04-x86-64-design-20261013.md)
+  The 2026-10-13 [design](docs/design/x86-64-linux.md)
   makes x86-64 a third target of the shared EvoMIR instruction set, so the
   lowering, the EvoMIR interpreter, SSA destruction, the allocator, the verifier
   and the frame layout stay shared. Each EvoMIR form emits a fixed AT&T

@@ -7,6 +7,10 @@ All notable changes to EvoCC are listed in this file. The format follows
 
 ### Added
 
+- A RISC-V64 Linux backend design with measured RV64GC/LP64D layout, ABI, floating-point
+  environment and assembler behavior. It shares its section structure with the x86-64 design;
+  both designs are in `docs/design/`. Neither backend is implemented by this change.
+
 ### Changed
 
 - The task tracker keeps active work and one-line references to closed work. The full closed
