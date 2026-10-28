@@ -62,6 +62,3 @@ output/
 
 # mdBook writes the rendered book here; the source is book/src/.
 book/book/
-# The notebook web site was removed with the notebook. A local checkout can
-# still hold its installed packages and build output.
-/web/
