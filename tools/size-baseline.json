@@ -19,7 +19,6 @@
     "crates/evocc-mir/src/lib.rs": 1687,
     "crates/evocc-mir/src/lower.rs": 8288,
     "crates/evocc-mir/src/text_parse.rs": 1571,
-    "crates/evocc-parser/src/lib.rs": 21062,
     "crates/evocc-proofcheck/src/replay.rs": 2196,
     "crates/evocc-randgate/src/generate.rs": 2767,
     "crates/evocc-types/src/lib.rs": 3130,
