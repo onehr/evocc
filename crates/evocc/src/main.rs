@@ -1,18 +1,14 @@
-//! evocc: equality-native, self-contained C compiler.
+//! Compiler driver for AArch64 Linux and macOS.
 //!
-//! The driver has two command lines. The cc command line (`cc.rs`) takes
-//! several inputs and the actions `-E`, `-S`, `-c` and link, and it runs the
-//! platform assembler and linker. The development command line takes one
-//! input and one action: preprocessing, C-HIR validation, both scalar Day-6
-//! interpreters, canonical EvoIR text emission, and AArch64 assembly emission
-//! through EvoMIR.
+//! The cc command line in `cc` handles preprocessing, assembly, object
+//! compilation and linking. The development command line exposes typed
+//! C-HIR, the C-HIR and EvoIR interpreters, EvoIR text and EvoMIR emission.
 //!
-//! The shell delegates real work to the crates built in Day 2-3:
-//!   -E           → evocc-lex → evocc-cpp → token text output
-//!   --parse-only → evocc-lex → evocc-parser → C-HIR (validate only)
+//! Proof-required compilation exports typed Core and stage snapshots for
+//! `evoir-sem`. It publishes checked assembly text only after acceptance.
+//! This guarantee does not cover arbitrary accepted C programs.
 //!
-//! Probe mode (invocation ends with --probe) is preserved from Day 1-2
-//! and answers NOT_IMPLEMENTED for stages beyond the current capability.
+//! The `evo` binary provides user commands and the stdio agent and editor servers.
 
 use std::fs;
 use std::io::{Read, Write};

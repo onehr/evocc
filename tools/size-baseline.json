@@ -19,7 +19,7 @@
     "crates/evocc-proofcheck/src/replay.rs": 2196,
     "crates/evocc-randgate/src/generate.rs": 2767,
     "crates/evocc-types/src/lib.rs": 3130,
-    "crates/evocc/src/main.rs": 2246,
+    "crates/evocc/src/main.rs": 2242,
     "tools/generate-target.py": 1647,
     "tools/k1/selftest_full.py": 1571,
     "tools/k1/substitute.py": 1526,

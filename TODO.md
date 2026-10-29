@@ -139,7 +139,7 @@ was found in the read-only process check at this planning checkpoint.
 | REVIEW |  | No rule decision is open. The 2026-10-13 decisions for K07, L03 to L10 and L11a to L11c are in docs/archive/notebook/rules-20261013/DECISIONS.md. |
 | AUDIT | D33 | D24 to D28 closed the follow-ups of D22, D23, L04 and L05; D33 changes the alignment model. D01-D15 are closed in their recorded scope. Keep the T03 audit boundary; kernel/application acceptance and deferred proof domains remain separate. |
 | ACCEPTANCE | T04, T02, K13, K14, R05, R05k | On 2026-10-27 the compiler of `08bf09bd` passed the frozen acceptance (B10 and the direct Kbuild replay), the final gate T05 passed, and both archives were built (R05a). Next: the owner's R05k: the dating commit, the rebuild of both archives from it, the tag and the publication. |
-| RELEASE | Q04, Q05, R04, R04a, R07 | Release 0.2.0, foundation: Q01 to Q05 and R04a; R07a's measured design is complete. Then x86-64 (R04b to R04e), RISC-V (R07b to R07e), Lean core-v2 (V09 to V13), the EqSat kit (E01 to E03) and the release (R05m). |
+| RELEASE | Q05, R04, R04a, R07 | Release 0.2.0, foundation: Q01 to Q05 and R04a; R07a's measured design is complete. Then x86-64 (R04b to R04e), RISC-V (R07b to R07e), Lean core-v2 (V09 to V13), the EqSat kit (E01 to E03) and the release (R05m). |
 | LATER | R05m, R01, R02, R03, R03a, R03b, R03c, R03d, R03e, R03f, R03g, R03h, R04b, R04c, R04d, R04e, N06, N06a, N06b, N06c, N06d, N06e, R07b, R07c, R07d, R07e, V09, V10, V11, V12, V13, E01, E02, E03 | S1–S5 and R02e first slice are closed; S6 stays with R01's two G2 builds. R03 V1 negative-admission study is frozen; positive Q3 remains unachieved and R03a/b/c/d NOT_ADMITTED, R03e deferred. No VM timing or audit expansion; x86-64 and release stay separate. The bounded N01–N05/N07 batch is dispositioned, not a complete optimizing compiler: N03b/N03e preflights are negative, N07 E3 has zero SMT proofs, and all five library size targets remain missed. N03d C5 has size/correctness evidence but three compile-cost misses; C2/C5 remain outside the admitted cumulative configuration, and T1's misses stay frozen. All new defaults remain OFF. Retain N02's 70 admitted/187 opaque inputs and source-bridge mismatch. Broader inlining, mid-level and allocator work need newly scoped designs; no paused R activity is automatically reopened. |
 <!-- closure-queues:end -->
 
@@ -186,8 +186,13 @@ from named fixes.
   value/block allocation order. Existing tests are unchanged. All 792 start-baseline
   objects match, with equal twins, complete native agreements and determinism.
   The full offline workspace gate is required before the completion commit.
-- [ ] **Q04 — An architecture page and a README for each crate** — `OPEN`, P1.
+- [x] **Q04 — An architecture page and a README for each crate** — `DONE`, P1, 2026-10-29.
   Exit: `ARCHITECTURE.md` and 18 crate READMEs, each fact checked against the code.
+  The architecture names the actual pipeline, both source/IR interpreters and the separate
+  ordinary and proof-required paths. Each crate page lists its interfaces, inputs, outputs,
+  invariants, contract and tests. The enforced dependency boundaries link to their tests.
+  The architecture has 127 lines; the crate pages have at most 32. Fact checks and the
+  mdBook 0.4.52 build must pass before the full offline gate and completion commit.
 - [ ] **Q05 — Keep active work in the tracker, and inventory the tools** — `OPEN`, P2.
   Exit: closed entries move to `docs/archive/todo-0.1.0.md`; an inventory classifies each file
   under `tools/`.

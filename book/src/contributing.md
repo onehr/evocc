@@ -5,6 +5,8 @@ defect in the compiler.
 
 - [CONTRIBUTING.md](https://github.com/onehr/evocc/blob/main/CONTRIBUTING.md) explains how to build
   EvoCC and how a change moves from a failing test to a commit.
+- [Architecture](https://github.com/onehr/evocc/blob/main/ARCHITECTURE.md) describes the pipeline,
+  crate interfaces and trust boundaries.
 - [TODO.md](https://github.com/onehr/evocc/blob/main/TODO.md) is the task tracker. Each task has a
   stable name, a status and the evidence that closes it.
 - The [issue templates](https://github.com/onehr/evocc/issues/new/choose) ask for what we need to

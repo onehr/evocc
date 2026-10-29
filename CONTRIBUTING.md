@@ -96,6 +96,7 @@ disagree, one of them has a defect. Fix the code, or change the document with a 
 
 ## Project documents
 
+- [Architecture](ARCHITECTURE.md): the pipeline, crate interfaces and trust boundaries.
 - [The paper](docs/paper.md): the story of the project, the design and the evaluation.
 - [Evidence](docs/evidence.md) and the [status dashboard](docs/status.md): measured results with
   dates.
