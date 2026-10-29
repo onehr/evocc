@@ -2,7 +2,7 @@
   "schema": "agent-repair.protocol.c1",
   "name": "Experiment 8: chat models repair silent undefined behavior with frozen feedback",
   "status": "unregistered",
-  "status_note": "Pilot first. The owner approves the measured run after the pilot. Registration is a commit of this file with status registered and the tag agent-repair-experiment-8; the measured run starts from that clean commit. Registration changes only status and status_note. Any other change of the harness or of this file after the pilot needs a new pilot. Pilot data stay out of the measured analysis.",
+  "status_note": "Pilot first. The owner approves the measured run after the pilot. Registration is a commit of this file with status registered and the tag agent-repair-experiment-8; the measured run starts from that clean commit. Registration changes only status, status_note and, when the pilot shows another name of the same model, reported_models. Any other change of the harness or of this file after the pilot needs a new pilot. Pilot data stay out of the measured analysis.",
   "question": "When GCC 14's warnings and UBSan report nothing, does EvoCC's feedback help a chat model repair the defect in one response? Experiments 4 and 5 asked this of a coding agent that could test its own changes; this experiment asks it of chat models that cannot.",
   "items_root": "tests/fixtures/agent-repair-4",
   "corpus_tag": "agent-repair-experiment-4",
@@ -11,9 +11,42 @@
     "path": "tests/fixtures/agent-repair-4/qualification.json",
     "sha256": "9c98c41cc4d9942a013e49bfa07181b112382c6e2d29a6168f7df99e19471fef"
   },
-  "items": ["adler-byte", "adler-reset", "adler-view", "crc-byte", "crc-reset", "crc-view", "increment-limit", "left-count", "magnitude-limit", "mean-empty", "minify-byte", "minify-reset", "minify-view", "pointer-byte", "pointer-reset", "pointer-view", "right-count", "scale-empty", "xxh32-byte", "xxh32-reset", "xxh32-view", "xxh64-byte", "xxh64-reset", "xxh64-view"],
-  "silent_codes": ["E3001", "E3010", "E3011"],
-  "control_codes": ["E3002", "E3004", "E3005"],
+  "items": [
+    "adler-byte",
+    "adler-reset",
+    "adler-view",
+    "crc-byte",
+    "crc-reset",
+    "crc-view",
+    "increment-limit",
+    "left-count",
+    "magnitude-limit",
+    "mean-empty",
+    "minify-byte",
+    "minify-reset",
+    "minify-view",
+    "pointer-byte",
+    "pointer-reset",
+    "pointer-view",
+    "right-count",
+    "scale-empty",
+    "xxh32-byte",
+    "xxh32-reset",
+    "xxh32-view",
+    "xxh64-byte",
+    "xxh64-reset",
+    "xxh64-view"
+  ],
+  "silent_codes": [
+    "E3001",
+    "E3010",
+    "E3011"
+  ],
+  "control_codes": [
+    "E3002",
+    "E3004",
+    "E3005"
+  ],
   "conditions": {
     "c1": "The frozen experiment 4 C1 record of the original program.c: GCC 14 at O0 with -Wall -Wextra -fsanitize=undefined, build and run.",
     "c3": "The frozen experiment 4 C3 record of the original program.c: the EvoCC build and run, evo check, one evo explain record for each code and the evo fix plan."
@@ -25,30 +58,114 @@
   "models": [
     {
       "model": "deepseek/deepseek-v4.1-flash",
-      "reported_models": ["deepseek/deepseek-v4.1-flash", "deepseek/deepseek-v4.1-flash-20260910"],
+      "reported_models": [
+        "deepseek/deepseek-v4.1-flash",
+        "deepseek/deepseek-v4.1-flash-20260910"
+      ],
       "provider_name": "AtlasCloud",
-      "provider": {"order": ["atlas-cloud"], "allow_fallbacks": false},
-      "price_usd_per_million": {"input": 0.135, "output": 0.54},
-      "cost_cap_usd": {"pilot": 0.1, "measured": 1.5}
+      "provider": {
+        "order": [
+          "atlas-cloud"
+        ],
+        "allow_fallbacks": false
+      },
+      "price_usd_per_million": {
+        "input": 0.135,
+        "output": 0.54
+      },
+      "cost_cap_usd": {
+        "pilot": 0.15,
+        "measured": 2.0
+      }
     },
     {
-      "model": "qwen/qwen3.5-9b",
-      "reported_models": ["qwen/qwen3.5-9b"],
-      "provider_name": "Parasail",
-      "provider": {"order": ["parasail"], "allow_fallbacks": false},
-      "price_usd_per_million": {"input": 0.1, "output": 0.25},
-      "cost_cap_usd": {"pilot": 0.1, "measured": 0.75}
+      "model": "mistralai/mistral-small-2603",
+      "reported_models": [
+        "mistralai/mistral-small-2603"
+      ],
+      "provider_name": "Mistral",
+      "provider": {
+        "order": [
+          "mistral"
+        ],
+        "allow_fallbacks": false
+      },
+      "price_usd_per_million": {
+        "input": 0.15,
+        "output": 0.6
+      },
+      "cost_cap_usd": {
+        "pilot": 0.15,
+        "measured": 2.0
+      }
+    },
+    {
+      "model": "minimax/minimax-m3.1-flash",
+      "reported_models": [
+        "minimax/minimax-m3.1-flash"
+      ],
+      "provider_name": "Minimax",
+      "provider": {
+        "order": [
+          "minimax"
+        ],
+        "allow_fallbacks": false
+      },
+      "price_usd_per_million": {
+        "input": 0.15,
+        "output": 0.6
+      },
+      "cost_cap_usd": {
+        "pilot": 0.15,
+        "measured": 2.0
+      }
+    },
+    {
+      "model": "qwen/qwen3.8-flash",
+      "reported_models": [
+        "qwen/qwen3.8-flash"
+      ],
+      "provider_name": "Alibaba",
+      "provider": {
+        "order": [
+          "alibaba"
+        ],
+        "allow_fallbacks": false
+      },
+      "price_usd_per_million": {
+        "input": 0.15,
+        "output": 0.47
+      },
+      "cost_cap_usd": {
+        "pilot": 0.15,
+        "measured": 1.5
+      }
     }
   ],
-  "provider_basis": "On 2026-10-29 the public endpoint lists of OpenRouter gave AtlasCloud (atlas-cloud/fp8, the P17a provider) for DeepSeek V4.1 Flash and Parasail (parasail/bf16) for Qwen3.5 9B; both list the reasoning parameter. The first pilot pinned Qwen3.5 9B to DeepInfra; both of its attempts got HTTP 429 (engine_overloaded, a shared upstream pool), the run stopped at no cost, and DeepInfra then showed status -2. Parasail serves the same bf16 weights with status 0.",
+  "provider_basis": "On 2026-10-29 the public endpoint lists of OpenRouter gave these providers, each with status 0 and the reasoning parameter: AtlasCloud (atlas-cloud/fp8, the P17a provider) for DeepSeek V4.1 Flash, and the first-party endpoints of Mistral, MiniMax and Alibaba for the other three models. Qwen3.5 9B left the protocol: its first pilot on DeepInfra and its second on Parasail stopped on HTTP 429 from shared upstream pools, at no cost. The owner chose the replacements: a Mistral, a MiniMax and a new small Qwen model.",
   "temperature": 0,
-  "max_tokens": 8192,
-  "reasoning": {"effort": "low"},
-  "reasoning_basis": "Experiment 2 sent no reasoning control, and most answers used the whole 16,384-token budget. This experiment limits the reasoning effort and the output tokens.",
+  "max_tokens": 16384,
+  "reasoning": {
+    "effort": "low"
+  },
+  "reasoning_basis": "Experiment 2 sent no reasoning control, and most answers used the whole 16,384-token budget. In the second pilot of this experiment, low effort did not bound the reasoning: a trial without a hint used all of an 8,192-token limit. This experiment keeps the reasoning, sets low effort and a 16,384-token limit, and counts a length stop as not repaired.",
   "repetitions": 3,
   "responses_per_trial": 1,
   "scoring": {
-    "builds": [["gcc-14", "-O0"], ["gcc-14", "-O2"], ["clang-19", "-O2"]],
+    "builds": [
+      [
+        "gcc-14",
+        "-O0"
+      ],
+      [
+        "gcc-14",
+        "-O2"
+      ],
+      [
+        "clang-19",
+        "-O2"
+      ]
+    ],
     "correct": "Delivered and valid under repair.extract, and the hidden driver passes under all three sealed builds (qualify_silent.score_builds), as in experiments 4 and 5."
   },
   "outcomes": {
@@ -81,7 +198,8 @@
   "predictions": {
     "P1": "For each model separately: on the 18 silent items, C3 repairs more than C1. The unit is the item. The statistic for an item is its correct C3 repetitions minus its correct C1 repetitions. Exact one-sided Wilcoxon signed-rank test (report.exact_wilcoxon: zero differences dropped, midranks for ties, all signs enumerated). P1 holds for a model when p < 0.05.",
     "P2": "For each model separately: on the 6 controls, C3 loses at most 2 of the 18 control trials: correct C1 trials minus correct C3 trials is at most 2. Descriptive; no test.",
-    "complete_run": "P1 and P2 use a run that completed all 144 trials of its model. A run that stops early tests nothing, as in experiment 2. A score error counts as not correct, and the report lists it.",
+    "P3": "For each model separately: on the 18 silent items, C3 uses fewer completion tokens than C1. The unit is the item. The statistic for an item is the mean completion tokens of its C1 trials minus that of its C3 trials, over every trial with a response; a length stop counts its tokens. Exact one-sided Wilcoxon signed-rank test as in P1. P3 holds for a model when p < 0.05.",
+    "complete_run": "P1, P2 and P3 use a run that completed all 144 trials of its model. A run that stops early tests nothing, as in experiment 2. A score error counts as not correct, and the report lists it.",
     "reporting": [
       "Report delivered, valid and correct counts for each model, condition and class.",
       "Report undelivered reasons separately: length stops, deadlines and request errors.",
@@ -92,16 +210,31 @@
   "phases": {
     "pilot": {
       "trials": [
-        {"item": "adler-reset", "condition": "c3"},
-        {"item": "crc-view", "condition": "c1"},
-        {"item": "minify-byte", "condition": "c3"},
-        {"item": "increment-limit", "condition": "c1"},
-        {"item": "xxh64-view", "condition": "c3"}
+        {
+          "item": "adler-reset",
+          "condition": "c3"
+        },
+        {
+          "item": "crc-view",
+          "condition": "c1"
+        },
+        {
+          "item": "minify-byte",
+          "condition": "c3"
+        },
+        {
+          "item": "increment-limit",
+          "condition": "c1"
+        },
+        {
+          "item": "xxh64-view",
+          "condition": "c3"
+        }
       ],
       "go_criteria": [
-        "Every pilot trial completes with HTTP 200 from the pinned provider and a registered model name.",
+        "Every pilot trial completes with HTTP 200 from the pinned provider and a registered model name. In the pilot, another name of the same model is recorded and does not stop the run.",
         "Every final attempt reports the cost and the prompt, completion and reasoning tokens.",
-        "No answer stops for length, and the largest completion stays below max_tokens.",
+        "The provider accepts max_tokens: every length stop is at max_tokens, and no completion exceeds it.",
         "Every delivered and valid candidate is scored on all three builds without a score error.",
         "The pilot cost stays below the pilot cap, and the projected measured cost (the mean pilot cost of a trial times 144, plus the unknown-cost reserve of the pilot) stays below the measured cap.",
         "The median request time is at most 120 seconds."

@@ -181,8 +181,11 @@ def exchange(run, protocol, model, row, data):
     return None
 
 
-def outcome(run, model, row, response, capture, item_dir):
-    """Check the provider and model, judge the answer and score a valid candidate."""
+def outcome(run, model, row, response, capture, item_dir, phase):
+    """Check the provider and model, judge the answer and score a valid candidate.
+
+    In the pilot, another name of the same model is recorded and does not stop the run.
+    """
     if row["provider"] != model["provider_name"]:
         row["deviation"] = "provider"
     elif row["model"] not in model["reported_models"]:
@@ -201,7 +204,7 @@ def outcome(run, model, row, response, capture, item_dir):
         except FAILURES + (OSError,) as error:
             row.update(correct=None, score_error=str(error) if isinstance(error, FAILURES) else type(error).__name__)
     row["status"] = "completed"
-    if row["deviation"]:
+    if row["deviation"] and not (phase == "pilot" and row["deviation"] == "model"):
         run.halt("deviation_" + row["deviation"])
 
 
@@ -215,7 +218,7 @@ def blank(spec, item):
                 candidate_sha256=None, transcript="%03d.json.gz" % spec["trial"])
 
 
-def trial(run, protocol, model, spec, prompt, items):
+def trial(run, protocol, model, spec, prompt, items, phase):
     """Run one trial and return its row. Every exception stops the run and keeps the row."""
     item = items[spec["item"]]
     row = blank(spec, item)
@@ -226,7 +229,7 @@ def trial(run, protocol, model, spec, prompt, items):
         row["payload_sha256"] = budget.sha(data)
         response = exchange(run, protocol, model, row, data)
         if response is not None:
-            outcome(run, model, row, response, capture, ROOT / protocol["items_root"] / spec["item"])
+            outcome(run, model, row, response, capture, ROOT / protocol["items_root"] / spec["item"], phase)
     except STOPS as error:
         row.update(status="stopped", error=str(error))
         run.halt(str(error))
@@ -283,6 +286,8 @@ def go(protocol, model, receipt):
                 (row["prompt_tokens"], row["completion_tokens"], row["reasoning_tokens"]) for row in runs)
     longest = max((row["completion_tokens"] for row in runs if type(row["completion_tokens"]) is int), default=None)
     lengths = sum(row["finish_reason"] == "length" for row in runs)
+    clamped = [row["trial"] for row in runs if row["finish_reason"] == "length"
+               and row["completion_tokens"] != protocol["max_tokens"]]
     valid = [row for row in runs if row["valid"]]
     scored = bool(valid) and all(row["correct"] is not None and not row["score_error"] for row in valid)
     spent = sums["cost_usd"] + sums["unknown_cost_reserve_usd"]
@@ -295,8 +300,9 @@ def go(protocol, model, receipt):
             sum(row["status"] == "completed" for row in runs), expected,
             sorted({str(row["provider"]) for row in runs}), sorted({str(row["model"]) for row in runs}))),
         (complete and usage, "every final attempt has a cost and prompt, completion and reasoning tokens: %s" % usage),
-        (lengths == 0 and longest is not None and longest < protocol["max_tokens"],
-         "%d length stops; largest completion %s of %d tokens" % (lengths, longest, protocol["max_tokens"])),
+        (not clamped and longest is not None and longest <= protocol["max_tokens"],
+         "%d length stops; below the limit: %s; largest completion %s of %d tokens" % (
+             lengths, clamped, longest, protocol["max_tokens"])),
         (scored, "%d valid, %d scored, %d correct" % (
             len(valid), sum(row["correct"] is not None for row in valid), sum(row["correct"] is True for row in valid))),
         (spent < caps["pilot"] and projected < caps["measured"],
@@ -348,7 +354,7 @@ def execute(protocol, model, phase, out, path=PROTOCOL):
                 run.halt(reason)
             if run.stop:
                 break
-            row = trial(run, protocol, model, spec, prompt, items)
+            row = trial(run, protocol, model, spec, prompt, items, phase)
             receipt["runs"].append(row)
             receipt["unattempted"] = len(trials) - len(receipt["runs"])
             budget.write(out / "receipt.json", receipt, key)
@@ -367,14 +373,17 @@ def execute(protocol, model, phase, out, path=PROTOCOL):
 
 
 def analyze(protocol, receipt):
-    """Apply the registered predictions P1 and P2 to one measured receipt."""
+    """Apply the registered predictions P1, P2 and P3 to one measured receipt."""
     runs, model = receipt["runs"], receipt["plan"]["model"]["model"]
     complete = (receipt["stop_reason"] == "completed"
                 and len(runs) == protocol["phases"]["measured"]["trials_per_model"])
-    passed, codes = {}, {}
+    passed, codes, tokens = {}, {}, {}
     for row in runs:
-        passed.setdefault((row["item"], row["condition"]), []).append(row["correct"] is True)
+        key = row["item"], row["condition"]
+        passed.setdefault(key, []).append(row["correct"] is True)
         codes[row["item"]] = row["code"]
+        if type(row.get("completion_tokens")) is int:
+            tokens.setdefault(key, []).append(row["completion_tokens"])
 
     def repaired(items, condition):
         return sum(sum(passed.get((item, condition), [])) for item in items)
@@ -383,11 +392,17 @@ def analyze(protocol, receipt):
     controls = [i for i in protocol["items"] if i in codes and i not in silent]
     test = report.exact_wilcoxon([repaired([i], "c3") - repaired([i], "c1") for i in silent])
     loss = repaired(controls, "c1") - repaired(controls, "c3")
+    means = {key: statistics.mean(values) for key, values in tokens.items()}
+    paired = [i for i in silent if (i, "c1") in means and (i, "c3") in means]
+    effort = report.exact_wilcoxon([means[i, "c1"] - means[i, "c3"] for i in paired])
     table = {name: dict(c1=repaired(items, "c1"), c3=repaired(items, "c3"), trials=protocol["repetitions"] * len(items))
              for name, items in (("silent", silent), ("controls", controls))}
+    table["silent_tokens"] = {condition: round(statistics.mean(means[i, condition] for i in paired), 1) if paired else None
+                              for condition in ("c1", "c3")}
     return dict(model=model, complete=complete, table=table,
                 P1=dict(test, held=complete and test["p"] < 0.05),
                 P2=dict(loss=loss, held=complete and loss <= 2),
+                P3=dict(effort, items=len(paired), held=complete and len(paired) == len(silent) and effort["p"] < 0.05),
                 undelivered=sum(row["status"] == "completed" and not row["delivered"] for row in runs),
                 score_errors=sum(bool(row["score_error"]) for row in runs), cost_usd=receipt["totals"]["cost_usd"])
 
@@ -400,7 +415,7 @@ def main(argv=None):
     run_parser.add_argument("--model", required=True)
     run_parser.add_argument("--out", required=True)
     run_parser.add_argument("--protocol", default=str(PROTOCOL))
-    analyze_parser = commands.add_parser("analyze", help="apply P1 and P2 to measured receipts")
+    analyze_parser = commands.add_parser("analyze", help="apply P1, P2 and P3 to measured receipts")
     analyze_parser.add_argument("receipts", nargs="+")
     analyze_parser.add_argument("--protocol", default=str(PROTOCOL))
     args = parser.parse_args(argv)

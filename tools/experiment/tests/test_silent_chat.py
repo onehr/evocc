@@ -67,7 +67,7 @@ class PayloadTests(unittest.TestCase):
         request = chat.payload(PROTOCOL, DEEPSEEK, "the prompt", SOURCE, "the feedback")
         self.assertEqual(request["provider"], {"order": ["atlas-cloud"], "allow_fallbacks": False})
         self.assertEqual(request["reasoning"], {"effort": "low"})
-        self.assertEqual((request["temperature"], request["max_tokens"]), (0, 8192))
+        self.assertEqual((request["temperature"], request["max_tokens"]), (0, 16384))
         self.assertEqual(request["messages"][0], {"role": "system", "content": "the prompt"})
         self.assertTrue(request["messages"][1]["content"].endswith("\nFeedback:\nthe feedback"))
         chat.repair.encode(request, KEY)
@@ -75,7 +75,7 @@ class PayloadTests(unittest.TestCase):
             chat.repair.encode(dict(request, note=KEY), KEY)
 
     def test_reserve_uses_the_input_allowance_and_the_output_limit(self):
-        expected = (2000 * 0.135 + 8192 * 0.54) / 1e6
+        expected = (2000 * 0.135 + 16384 * 0.54) / 1e6
         self.assertAlmostEqual(chat.reserve(PROTOCOL, DEEPSEEK), expected)
 
 
@@ -134,7 +134,7 @@ class ExchangeTests(unittest.TestCase):
 
 
 class OutcomeTests(unittest.TestCase):
-    def outcome(self, response, builds=None):
+    def outcome(self, response, builds=None, phase="measured"):
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
         run = chat.budget.Run(PROTOCOL, Path(tmp.name), 1.0, KEY)
@@ -142,7 +142,7 @@ class OutcomeTests(unittest.TestCase):
                      provider=response["provider"], model=response["model"])
         passed = {"gcc-14-O0": dict(passed=True), "gcc-14-O2": dict(passed=True), "clang-19-O2": dict(passed=True)}
         with patch.object(chat.qualify_silent, "score_builds", return_value=builds or passed) as score:
-            chat.outcome(run, DEEPSEEK, target, response, {}, Path("item"))
+            chat.outcome(run, DEEPSEEK, target, response, {}, Path("item"), phase)
         return run, target, score
 
     def test_a_valid_candidate_is_correct_only_on_all_three_builds(self):
@@ -162,6 +162,12 @@ class OutcomeTests(unittest.TestCase):
         run, target, _ = self.outcome(answer(provider="Together"))
         self.assertEqual((target["deviation"], run.stop), ("provider", "deviation_provider"))
 
+    def test_the_pilot_records_another_model_name_and_goes_on(self):
+        run, target, _ = self.outcome(answer(model="deepseek/deepseek-v4.1-flash-1017"), phase="pilot")
+        self.assertEqual((target["deviation"], run.stop), ("model", None))
+        run, target, _ = self.outcome(answer(model="deepseek/deepseek-v4.1-flash-1017"))
+        self.assertEqual(run.stop, "deviation_model")
+
 
 class GoTests(unittest.TestCase):
     def receipt(self, rows, cost=0.002):
@@ -173,6 +179,11 @@ class GoTests(unittest.TestCase):
         self.assertTrue(result["held"], result)
         self.assertEqual(len(result["criteria"]), len(PROTOCOL["phases"]["pilot"]["go_criteria"]))
 
+    def test_a_length_stop_at_the_limit_does_not_block_the_go(self):
+        stopped = row(finish_reason="length", completion_tokens=16384, delivered=False, valid=False, correct=False)
+        result = chat.go(PROTOCOL, DEEPSEEK, self.receipt([stopped] + [row()] * 4))
+        self.assertTrue(result["held"], result)
+
     def test_each_failure_blocks_the_go(self):
         cases = [
             dict(rows=[row(finish_reason="length")] + [row()] * 4),
@@ -180,7 +191,7 @@ class GoTests(unittest.TestCase):
             dict(rows=[row(attempts=[dict(http_status=200, cost=0.0004, seconds=200.0)])] * 5),
             dict(rows=[row(correct=None, score_error="qualification_guest_failed")] + [row()] * 4),
             dict(rows=[row()] * 4),
-            dict(rows=[row()] * 5, cost=0.06),
+            dict(rows=[row()] * 5, cost=0.08),
         ]
         for case in cases:
             result = chat.go(PROTOCOL, DEEPSEEK, self.receipt(case["rows"], case.get("cost", 0.002)))
@@ -198,7 +209,9 @@ class AnalysisTests(unittest.TestCase):
                 correct = trial["condition"] == "c3" or trial["item"].startswith("xxh")
             else:
                 correct = trial["condition"] == "c1" or trial["repetition"] == 1
-            rows.append(dict(trial, code=code, correct=correct, status="completed", delivered=True, score_error=None))
+            tokens = (8000 if trial["condition"] == "c1" else 1000) if silent else 900
+            rows.append(dict(trial, code=code, correct=correct, status="completed", delivered=True, score_error=None,
+                             completion_tokens=tokens))
         return dict(runs=rows, plan=dict(model=DEEPSEEK), stop_reason=stop, totals=dict(cost_usd=0.5))
 
     def test_p1_holds_and_p2_fails_on_a_controls_loss(self):
@@ -209,10 +222,12 @@ class AnalysisTests(unittest.TestCase):
         self.assertLess(result["P1"]["p"], 0.05)
         self.assertEqual(result["P2"]["loss"], 12)
         self.assertFalse(result["P2"]["held"])
+        self.assertTrue(result["P3"]["held"])
+        self.assertEqual(result["table"]["silent_tokens"], dict(c1=8000, c3=1000))
 
     def test_a_run_that_stopped_early_tests_nothing(self):
         result = chat.analyze(PROTOCOL, self.receipt(stop="reported_cost_cap"))
-        self.assertFalse(result["P1"]["held"] or result["P2"]["held"])
+        self.assertFalse(result["P1"]["held"] or result["P2"]["held"] or result["P3"]["held"])
 
 
 if __name__ == "__main__":
