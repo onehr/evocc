@@ -165,10 +165,12 @@ from named fixes.
   `evocc-evoir/src/lib.rs` become modules of at most 1,500 lines. Exit: the AArch64 identity check
   and the full gate.
   The parser now has 31 responsibility files with a 1,448-line root; lowering has 33 files
-  with a 713-line root. The moves preserve their 504 and 256 function token sequences and
-  all literal contents. Each move matches all 792 full-object hashes of the start baseline,
-  with matching twins and native results on Darwin/Linux. Each commit requires the full
-  workspace gate. The C-HIR interpreter and EvoIR source roots remain open.
+  with a 713-line root; the C-HIR interpreter has 28 files with a 1,208-line root. Function
+  comparisons cover 504, 256 and 212 items. All production function tokens and literal
+  contents stay unchanged; two C-HIR unit calls lose only optional trailing commas under
+  rustfmt. Each move matches all 792 full-object hashes of the start baseline, with matching
+  twins and native results on Darwin/Linux. Each commit requires the full workspace gate.
+  The EvoIR source root remains open.
 - [ ] **Q03 — Split the long functions of the backend path** — `OPEN`, P1.
   `parse_options`, `emit_inst`, `lower_inst` and `lower_block` become functions of at most 150
   lines. Exit: the AArch64 identity check and the full gate.

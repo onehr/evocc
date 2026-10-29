@@ -2,7 +2,6 @@
   "files": {
     "crates/evocc-chir/src/allocation.rs": 3487,
     "crates/evocc-chir/src/inline.rs": 4319,
-    "crates/evocc-chir/src/interp.rs": 12981,
     "crates/evocc-chir/src/lib.rs": 3720,
     "crates/evocc-chir/src/place.rs": 1800,
     "crates/evocc-cpp/src/lib.rs": 4387,
