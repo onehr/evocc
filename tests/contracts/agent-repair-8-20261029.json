@@ -1,0 +1,162 @@
+[
+  {
+    "model": "deepseek/deepseek-v4.1-flash",
+    "complete": true,
+    "table": {
+      "silent": {
+        "c1": 50,
+        "c3": 54,
+        "trials": 54
+      },
+      "controls": {
+        "c1": 18,
+        "c3": 17,
+        "trials": 18
+      },
+      "silent_tokens": {
+        "c1": 6420.6,
+        "c3": 1533.7
+      }
+    },
+    "P1": {
+      "nonzero": 4,
+      "positive_rank": 10.0,
+      "p": 0.0625,
+      "held": false
+    },
+    "P2": {
+      "loss": 1,
+      "held": true
+    },
+    "P3": {
+      "nonzero": 18,
+      "positive_rank": 171.0,
+      "p": 3.814697265625e-06,
+      "items": 18,
+      "held": true
+    },
+    "undelivered": 1,
+    "score_errors": 0,
+    "cost_usd": 0.25605466199999993
+  },
+  {
+    "model": "minimax/minimax-m3.1-flash",
+    "complete": true,
+    "table": {
+      "silent": {
+        "c1": 54,
+        "c3": 54,
+        "trials": 54
+      },
+      "controls": {
+        "c1": 15,
+        "c3": 16,
+        "trials": 18
+      },
+      "silent_tokens": {
+        "c1": 1107.8,
+        "c3": 931.9
+      }
+    },
+    "P1": {
+      "nonzero": 0,
+      "positive_rank": 0.0,
+      "p": 1.0,
+      "held": false
+    },
+    "P2": {
+      "loss": -1,
+      "held": true
+    },
+    "P3": {
+      "nonzero": 18,
+      "positive_rank": 143.0,
+      "p": 0.0052032470703125,
+      "items": 18,
+      "held": true
+    },
+    "undelivered": 0,
+    "score_errors": 0,
+    "cost_usd": 0.09464181000000002
+  },
+  {
+    "model": "qwen/qwen3.8-27b",
+    "complete": true,
+    "table": {
+      "silent": {
+        "c1": 30,
+        "c3": 54,
+        "trials": 54
+      },
+      "controls": {
+        "c1": 18,
+        "c3": 18,
+        "trials": 18
+      },
+      "silent_tokens": {
+        "c1": 2716.7,
+        "c3": 1103.3
+      }
+    },
+    "P1": {
+      "nonzero": 8,
+      "positive_rank": 36.0,
+      "p": 0.00390625,
+      "held": true
+    },
+    "P2": {
+      "loss": 0,
+      "held": true
+    },
+    "P3": {
+      "nonzero": 18,
+      "positive_rank": 171.0,
+      "p": 3.814697265625e-06,
+      "items": 18,
+      "held": true
+    },
+    "undelivered": 0,
+    "score_errors": 0,
+    "cost_usd": 0.52739532
+  },
+  {
+    "model": "mistralai/mistral-small-2603",
+    "complete": false,
+    "table": {
+      "silent": {
+        "c1": 1,
+        "c3": 3,
+        "trials": 9
+      },
+      "controls": {
+        "c1": 0,
+        "c3": 0,
+        "trials": 0
+      },
+      "silent_tokens": {
+        "c1": 4525.5,
+        "c3": 1588.5
+      }
+    },
+    "P1": {
+      "nonzero": 2,
+      "positive_rank": 3.0,
+      "p": 0.25,
+      "held": false
+    },
+    "P2": {
+      "loss": 0,
+      "held": false
+    },
+    "P3": {
+      "nonzero": 2,
+      "positive_rank": 2.0,
+      "p": 0.5,
+      "items": 2,
+      "held": false
+    },
+    "undelivered": 0,
+    "score_errors": 0,
+    "cost_usd": 0.00860172
+  }
+]

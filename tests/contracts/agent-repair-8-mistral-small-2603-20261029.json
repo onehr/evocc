@@ -1,0 +1,1356 @@
+{
+  "schema": "agent-repair.v8",
+  "phase": "silent-chat-measured",
+  "date": "2026-10-29T10:36:14.302970+00:00",
+  "protocol": {
+    "path": "tools/experiment/protocol-8.json",
+    "sha256": "6c3c1dbb1b2bf918837a4c58ee90bff9a9c6a975c8bc47f10b3be57093ec3dd7",
+    "status": "registered"
+  },
+  "plan": {
+    "phase": "measured",
+    "model": {
+      "model": "mistralai/mistral-small-2603",
+      "reported_models": [
+        "mistralai/mistral-small-2603"
+      ],
+      "provider_name": "Mistral",
+      "provider": {
+        "order": [
+          "mistral"
+        ],
+        "allow_fallbacks": false
+      },
+      "price_usd_per_million": {
+        "input": 0.15,
+        "output": 0.6
+      },
+      "cost_cap_usd": {
+        "pilot": 0.15,
+        "measured": 2.0
+      }
+    },
+    "trials": [
+      {
+        "trial": 1,
+        "item": "adler-byte",
+        "condition": "c3",
+        "repetition": 1
+      },
+      {
+        "trial": 2,
+        "item": "adler-byte",
+        "condition": "c1",
+        "repetition": 1
+      },
+      {
+        "trial": 3,
+        "item": "adler-reset",
+        "condition": "c1",
+        "repetition": 1
+      },
+      {
+        "trial": 4,
+        "item": "adler-reset",
+        "condition": "c3",
+        "repetition": 1
+      },
+      {
+        "trial": 5,
+        "item": "adler-view",
+        "condition": "c3",
+        "repetition": 1
+      },
+      {
+        "trial": 6,
+        "item": "adler-view",
+        "condition": "c1",
+        "repetition": 1
+      },
+      {
+        "trial": 7,
+        "item": "crc-byte",
+        "condition": "c1",
+        "repetition": 1
+      },
+      {
+        "trial": 8,
+        "item": "crc-byte",
+        "condition": "c3",
+        "repetition": 1
+      },
+      {
+        "trial": 9,
+        "item": "crc-reset",
+        "condition": "c3",
+        "repetition": 1
+      },
+      {
+        "trial": 10,
+        "item": "crc-reset",
+        "condition": "c1",
+        "repetition": 1
+      },
+      {
+        "trial": 11,
+        "item": "crc-view",
+        "condition": "c1",
+        "repetition": 1
+      },
+      {
+        "trial": 12,
+        "item": "crc-view",
+        "condition": "c3",
+        "repetition": 1
+      },
+      {
+        "trial": 13,
+        "item": "increment-limit",
+        "condition": "c3",
+        "repetition": 1
+      },
+      {
+        "trial": 14,
+        "item": "increment-limit",
+        "condition": "c1",
+        "repetition": 1
+      },
+      {
+        "trial": 15,
+        "item": "left-count",
+        "condition": "c1",
+        "repetition": 1
+      },
+      {
+        "trial": 16,
+        "item": "left-count",
+        "condition": "c3",
+        "repetition": 1
+      },
+      {
+        "trial": 17,
+        "item": "magnitude-limit",
+        "condition": "c3",
+        "repetition": 1
+      },
+      {
+        "trial": 18,
+        "item": "magnitude-limit",
+        "condition": "c1",
+        "repetition": 1
+      },
+      {
+        "trial": 19,
+        "item": "mean-empty",
+        "condition": "c1",
+        "repetition": 1
+      },
+      {
+        "trial": 20,
+        "item": "mean-empty",
+        "condition": "c3",
+        "repetition": 1
+      },
+      {
+        "trial": 21,
+        "item": "minify-byte",
+        "condition": "c3",
+        "repetition": 1
+      },
+      {
+        "trial": 22,
+        "item": "minify-byte",
+        "condition": "c1",
+        "repetition": 1
+      },
+      {
+        "trial": 23,
+        "item": "minify-reset",
+        "condition": "c1",
+        "repetition": 1
+      },
+      {
+        "trial": 24,
+        "item": "minify-reset",
+        "condition": "c3",
+        "repetition": 1
+      },
+      {
+        "trial": 25,
+        "item": "minify-view",
+        "condition": "c3",
+        "repetition": 1
+      },
+      {
+        "trial": 26,
+        "item": "minify-view",
+        "condition": "c1",
+        "repetition": 1
+      },
+      {
+        "trial": 27,
+        "item": "pointer-byte",
+        "condition": "c1",
+        "repetition": 1
+      },
+      {
+        "trial": 28,
+        "item": "pointer-byte",
+        "condition": "c3",
+        "repetition": 1
+      },
+      {
+        "trial": 29,
+        "item": "pointer-reset",
+        "condition": "c3",
+        "repetition": 1
+      },
+      {
+        "trial": 30,
+        "item": "pointer-reset",
+        "condition": "c1",
+        "repetition": 1
+      },
+      {
+        "trial": 31,
+        "item": "pointer-view",
+        "condition": "c1",
+        "repetition": 1
+      },
+      {
+        "trial": 32,
+        "item": "pointer-view",
+        "condition": "c3",
+        "repetition": 1
+      },
+      {
+        "trial": 33,
+        "item": "right-count",
+        "condition": "c3",
+        "repetition": 1
+      },
+      {
+        "trial": 34,
+        "item": "right-count",
+        "condition": "c1",
+        "repetition": 1
+      },
+      {
+        "trial": 35,
+        "item": "scale-empty",
+        "condition": "c1",
+        "repetition": 1
+      },
+      {
+        "trial": 36,
+        "item": "scale-empty",
+        "condition": "c3",
+        "repetition": 1
+      },
+      {
+        "trial": 37,
+        "item": "xxh32-byte",
+        "condition": "c3",
+        "repetition": 1
+      },
+      {
+        "trial": 38,
+        "item": "xxh32-byte",
+        "condition": "c1",
+        "repetition": 1
+      },
+      {
+        "trial": 39,
+        "item": "xxh32-reset",
+        "condition": "c1",
+        "repetition": 1
+      },
+      {
+        "trial": 40,
+        "item": "xxh32-reset",
+        "condition": "c3",
+        "repetition": 1
+      },
+      {
+        "trial": 41,
+        "item": "xxh32-view",
+        "condition": "c3",
+        "repetition": 1
+      },
+      {
+        "trial": 42,
+        "item": "xxh32-view",
+        "condition": "c1",
+        "repetition": 1
+      },
+      {
+        "trial": 43,
+        "item": "xxh64-byte",
+        "condition": "c1",
+        "repetition": 1
+      },
+      {
+        "trial": 44,
+        "item": "xxh64-byte",
+        "condition": "c3",
+        "repetition": 1
+      },
+      {
+        "trial": 45,
+        "item": "xxh64-reset",
+        "condition": "c3",
+        "repetition": 1
+      },
+      {
+        "trial": 46,
+        "item": "xxh64-reset",
+        "condition": "c1",
+        "repetition": 1
+      },
+      {
+        "trial": 47,
+        "item": "xxh64-view",
+        "condition": "c1",
+        "repetition": 1
+      },
+      {
+        "trial": 48,
+        "item": "xxh64-view",
+        "condition": "c3",
+        "repetition": 1
+      },
+      {
+        "trial": 49,
+        "item": "adler-byte",
+        "condition": "c1",
+        "repetition": 2
+      },
+      {
+        "trial": 50,
+        "item": "adler-byte",
+        "condition": "c3",
+        "repetition": 2
+      },
+      {
+        "trial": 51,
+        "item": "adler-reset",
+        "condition": "c3",
+        "repetition": 2
+      },
+      {
+        "trial": 52,
+        "item": "adler-reset",
+        "condition": "c1",
+        "repetition": 2
+      },
+      {
+        "trial": 53,
+        "item": "adler-view",
+        "condition": "c1",
+        "repetition": 2
+      },
+      {
+        "trial": 54,
+        "item": "adler-view",
+        "condition": "c3",
+        "repetition": 2
+      },
+      {
+        "trial": 55,
+        "item": "crc-byte",
+        "condition": "c3",
+        "repetition": 2
+      },
+      {
+        "trial": 56,
+        "item": "crc-byte",
+        "condition": "c1",
+        "repetition": 2
+      },
+      {
+        "trial": 57,
+        "item": "crc-reset",
+        "condition": "c1",
+        "repetition": 2
+      },
+      {
+        "trial": 58,
+        "item": "crc-reset",
+        "condition": "c3",
+        "repetition": 2
+      },
+      {
+        "trial": 59,
+        "item": "crc-view",
+        "condition": "c3",
+        "repetition": 2
+      },
+      {
+        "trial": 60,
+        "item": "crc-view",
+        "condition": "c1",
+        "repetition": 2
+      },
+      {
+        "trial": 61,
+        "item": "increment-limit",
+        "condition": "c1",
+        "repetition": 2
+      },
+      {
+        "trial": 62,
+        "item": "increment-limit",
+        "condition": "c3",
+        "repetition": 2
+      },
+      {
+        "trial": 63,
+        "item": "left-count",
+        "condition": "c3",
+        "repetition": 2
+      },
+      {
+        "trial": 64,
+        "item": "left-count",
+        "condition": "c1",
+        "repetition": 2
+      },
+      {
+        "trial": 65,
+        "item": "magnitude-limit",
+        "condition": "c1",
+        "repetition": 2
+      },
+      {
+        "trial": 66,
+        "item": "magnitude-limit",
+        "condition": "c3",
+        "repetition": 2
+      },
+      {
+        "trial": 67,
+        "item": "mean-empty",
+        "condition": "c3",
+        "repetition": 2
+      },
+      {
+        "trial": 68,
+        "item": "mean-empty",
+        "condition": "c1",
+        "repetition": 2
+      },
+      {
+        "trial": 69,
+        "item": "minify-byte",
+        "condition": "c1",
+        "repetition": 2
+      },
+      {
+        "trial": 70,
+        "item": "minify-byte",
+        "condition": "c3",
+        "repetition": 2
+      },
+      {
+        "trial": 71,
+        "item": "minify-reset",
+        "condition": "c3",
+        "repetition": 2
+      },
+      {
+        "trial": 72,
+        "item": "minify-reset",
+        "condition": "c1",
+        "repetition": 2
+      },
+      {
+        "trial": 73,
+        "item": "minify-view",
+        "condition": "c1",
+        "repetition": 2
+      },
+      {
+        "trial": 74,
+        "item": "minify-view",
+        "condition": "c3",
+        "repetition": 2
+      },
+      {
+        "trial": 75,
+        "item": "pointer-byte",
+        "condition": "c3",
+        "repetition": 2
+      },
+      {
+        "trial": 76,
+        "item": "pointer-byte",
+        "condition": "c1",
+        "repetition": 2
+      },
+      {
+        "trial": 77,
+        "item": "pointer-reset",
+        "condition": "c1",
+        "repetition": 2
+      },
+      {
+        "trial": 78,
+        "item": "pointer-reset",
+        "condition": "c3",
+        "repetition": 2
+      },
+      {
+        "trial": 79,
+        "item": "pointer-view",
+        "condition": "c3",
+        "repetition": 2
+      },
+      {
+        "trial": 80,
+        "item": "pointer-view",
+        "condition": "c1",
+        "repetition": 2
+      },
+      {
+        "trial": 81,
+        "item": "right-count",
+        "condition": "c1",
+        "repetition": 2
+      },
+      {
+        "trial": 82,
+        "item": "right-count",
+        "condition": "c3",
+        "repetition": 2
+      },
+      {
+        "trial": 83,
+        "item": "scale-empty",
+        "condition": "c3",
+        "repetition": 2
+      },
+      {
+        "trial": 84,
+        "item": "scale-empty",
+        "condition": "c1",
+        "repetition": 2
+      },
+      {
+        "trial": 85,
+        "item": "xxh32-byte",
+        "condition": "c1",
+        "repetition": 2
+      },
+      {
+        "trial": 86,
+        "item": "xxh32-byte",
+        "condition": "c3",
+        "repetition": 2
+      },
+      {
+        "trial": 87,
+        "item": "xxh32-reset",
+        "condition": "c3",
+        "repetition": 2
+      },
+      {
+        "trial": 88,
+        "item": "xxh32-reset",
+        "condition": "c1",
+        "repetition": 2
+      },
+      {
+        "trial": 89,
+        "item": "xxh32-view",
+        "condition": "c1",
+        "repetition": 2
+      },
+      {
+        "trial": 90,
+        "item": "xxh32-view",
+        "condition": "c3",
+        "repetition": 2
+      },
+      {
+        "trial": 91,
+        "item": "xxh64-byte",
+        "condition": "c3",
+        "repetition": 2
+      },
+      {
+        "trial": 92,
+        "item": "xxh64-byte",
+        "condition": "c1",
+        "repetition": 2
+      },
+      {
+        "trial": 93,
+        "item": "xxh64-reset",
+        "condition": "c1",
+        "repetition": 2
+      },
+      {
+        "trial": 94,
+        "item": "xxh64-reset",
+        "condition": "c3",
+        "repetition": 2
+      },
+      {
+        "trial": 95,
+        "item": "xxh64-view",
+        "condition": "c3",
+        "repetition": 2
+      },
+      {
+        "trial": 96,
+        "item": "xxh64-view",
+        "condition": "c1",
+        "repetition": 2
+      },
+      {
+        "trial": 97,
+        "item": "adler-byte",
+        "condition": "c3",
+        "repetition": 3
+      },
+      {
+        "trial": 98,
+        "item": "adler-byte",
+        "condition": "c1",
+        "repetition": 3
+      },
+      {
+        "trial": 99,
+        "item": "adler-reset",
+        "condition": "c1",
+        "repetition": 3
+      },
+      {
+        "trial": 100,
+        "item": "adler-reset",
+        "condition": "c3",
+        "repetition": 3
+      },
+      {
+        "trial": 101,
+        "item": "adler-view",
+        "condition": "c3",
+        "repetition": 3
+      },
+      {
+        "trial": 102,
+        "item": "adler-view",
+        "condition": "c1",
+        "repetition": 3
+      },
+      {
+        "trial": 103,
+        "item": "crc-byte",
+        "condition": "c1",
+        "repetition": 3
+      },
+      {
+        "trial": 104,
+        "item": "crc-byte",
+        "condition": "c3",
+        "repetition": 3
+      },
+      {
+        "trial": 105,
+        "item": "crc-reset",
+        "condition": "c3",
+        "repetition": 3
+      },
+      {
+        "trial": 106,
+        "item": "crc-reset",
+        "condition": "c1",
+        "repetition": 3
+      },
+      {
+        "trial": 107,
+        "item": "crc-view",
+        "condition": "c1",
+        "repetition": 3
+      },
+      {
+        "trial": 108,
+        "item": "crc-view",
+        "condition": "c3",
+        "repetition": 3
+      },
+      {
+        "trial": 109,
+        "item": "increment-limit",
+        "condition": "c3",
+        "repetition": 3
+      },
+      {
+        "trial": 110,
+        "item": "increment-limit",
+        "condition": "c1",
+        "repetition": 3
+      },
+      {
+        "trial": 111,
+        "item": "left-count",
+        "condition": "c1",
+        "repetition": 3
+      },
+      {
+        "trial": 112,
+        "item": "left-count",
+        "condition": "c3",
+        "repetition": 3
+      },
+      {
+        "trial": 113,
+        "item": "magnitude-limit",
+        "condition": "c3",
+        "repetition": 3
+      },
+      {
+        "trial": 114,
+        "item": "magnitude-limit",
+        "condition": "c1",
+        "repetition": 3
+      },
+      {
+        "trial": 115,
+        "item": "mean-empty",
+        "condition": "c1",
+        "repetition": 3
+      },
+      {
+        "trial": 116,
+        "item": "mean-empty",
+        "condition": "c3",
+        "repetition": 3
+      },
+      {
+        "trial": 117,
+        "item": "minify-byte",
+        "condition": "c3",
+        "repetition": 3
+      },
+      {
+        "trial": 118,
+        "item": "minify-byte",
+        "condition": "c1",
+        "repetition": 3
+      },
+      {
+        "trial": 119,
+        "item": "minify-reset",
+        "condition": "c1",
+        "repetition": 3
+      },
+      {
+        "trial": 120,
+        "item": "minify-reset",
+        "condition": "c3",
+        "repetition": 3
+      },
+      {
+        "trial": 121,
+        "item": "minify-view",
+        "condition": "c3",
+        "repetition": 3
+      },
+      {
+        "trial": 122,
+        "item": "minify-view",
+        "condition": "c1",
+        "repetition": 3
+      },
+      {
+        "trial": 123,
+        "item": "pointer-byte",
+        "condition": "c1",
+        "repetition": 3
+      },
+      {
+        "trial": 124,
+        "item": "pointer-byte",
+        "condition": "c3",
+        "repetition": 3
+      },
+      {
+        "trial": 125,
+        "item": "pointer-reset",
+        "condition": "c3",
+        "repetition": 3
+      },
+      {
+        "trial": 126,
+        "item": "pointer-reset",
+        "condition": "c1",
+        "repetition": 3
+      },
+      {
+        "trial": 127,
+        "item": "pointer-view",
+        "condition": "c1",
+        "repetition": 3
+      },
+      {
+        "trial": 128,
+        "item": "pointer-view",
+        "condition": "c3",
+        "repetition": 3
+      },
+      {
+        "trial": 129,
+        "item": "right-count",
+        "condition": "c3",
+        "repetition": 3
+      },
+      {
+        "trial": 130,
+        "item": "right-count",
+        "condition": "c1",
+        "repetition": 3
+      },
+      {
+        "trial": 131,
+        "item": "scale-empty",
+        "condition": "c1",
+        "repetition": 3
+      },
+      {
+        "trial": 132,
+        "item": "scale-empty",
+        "condition": "c3",
+        "repetition": 3
+      },
+      {
+        "trial": 133,
+        "item": "xxh32-byte",
+        "condition": "c3",
+        "repetition": 3
+      },
+      {
+        "trial": 134,
+        "item": "xxh32-byte",
+        "condition": "c1",
+        "repetition": 3
+      },
+      {
+        "trial": 135,
+        "item": "xxh32-reset",
+        "condition": "c1",
+        "repetition": 3
+      },
+      {
+        "trial": 136,
+        "item": "xxh32-reset",
+        "condition": "c3",
+        "repetition": 3
+      },
+      {
+        "trial": 137,
+        "item": "xxh32-view",
+        "condition": "c3",
+        "repetition": 3
+      },
+      {
+        "trial": 138,
+        "item": "xxh32-view",
+        "condition": "c1",
+        "repetition": 3
+      },
+      {
+        "trial": 139,
+        "item": "xxh64-byte",
+        "condition": "c1",
+        "repetition": 3
+      },
+      {
+        "trial": 140,
+        "item": "xxh64-byte",
+        "condition": "c3",
+        "repetition": 3
+      },
+      {
+        "trial": 141,
+        "item": "xxh64-reset",
+        "condition": "c3",
+        "repetition": 3
+      },
+      {
+        "trial": 142,
+        "item": "xxh64-reset",
+        "condition": "c1",
+        "repetition": 3
+      },
+      {
+        "trial": 143,
+        "item": "xxh64-view",
+        "condition": "c1",
+        "repetition": 3
+      },
+      {
+        "trial": 144,
+        "item": "xxh64-view",
+        "condition": "c3",
+        "repetition": 3
+      }
+    ],
+    "temperature": 0,
+    "max_tokens": 16384,
+    "reasoning": {
+      "effort": "low"
+    },
+    "prompt_file": "tools/experiment/prompt.txt",
+    "cost_cap_usd": 2.0,
+    "max_requests": 144,
+    "max_http_attempts": 288,
+    "harness": {
+      "deadline_seconds": 300,
+      "socket_timeout_seconds": 120,
+      "retry_delay_seconds": 2,
+      "body_limit_bytes": 1048576,
+      "capture_stop_mib": 400,
+      "disk_start_gib": 25,
+      "disk_stop_gib": 15,
+      "unknown_cost_input_tokens": 2000
+    }
+  },
+  "provenance": {
+    "commit": "0b9cef894a1237bbe37848d0494a9615e6ae2b60",
+    "uncommitted_inputs": [],
+    "hashes": {
+      "tools/experiment/silent_chat.py": "f482a2240177d910a2bc0b0ecde28e04815afdde672125d588f0a71e848b003d",
+      "tools/experiment/budget.py": "a255eb7ce9a3b53efd02ddfcc47301d4f0151aee8f84470ddd627a93896778f5",
+      "tools/experiment/repair.py": "4979683aae02a4ca44756f1fcfdef255af45ba8cb19e69bdb6fc2471a32f3854",
+      "tools/experiment/qualify_silent.py": "c0c407ed3fb200d060e55d3acaa29d3cec05afaae014df33d43619b003bc5f68",
+      "tools/experiment/report.py": "c674522b87eee68a26968e908615a6c893131e32dc2fe8f5292629a2603f866e",
+      "tools/experiment/protocol-8.json": "6c3c1dbb1b2bf918837a4c58ee90bff9a9c6a975c8bc47f10b3be57093ec3dd7",
+      "tools/experiment/prompt.txt": "eaa8197fe9f298ea2ba2c2a9647aef665148f0f37066711e3cbaf044cd0fe3a1",
+      "tests/fixtures/agent-repair-4/qualification.json": "9c98c41cc4d9942a013e49bfa07181b112382c6e2d29a6168f7df99e19471fef"
+    },
+    "image": "evo-nexlab:sealed",
+    "image_digest": "sha256:e8d52bdced1fa49a5a56cde7e1173c54bd81832cc111441f6a31148ec03ead93",
+    "python": "3.9.6"
+  },
+  "runs": [
+    {
+      "trial": 1,
+      "item": "adler-byte",
+      "condition": "c3",
+      "repetition": 1,
+      "code": "E3011",
+      "started_at": "2026-10-29T10:36:14.306431+00:00",
+      "status": "completed",
+      "error": null,
+      "deviation": null,
+      "feedback_sha256": "5ba2adbb6d88f0ff69183f52ebfd5a9ea4507893485a25bdac2cbc14996b7438",
+      "payload_sha256": "2aaece97af0240c6a38063377e02b5bcb02311c554c7e36931e57d5af30dac06",
+      "attempts": [
+        {
+          "attempt": 1,
+          "started_at": "2026-10-29T10:36:14.306482+00:00",
+          "seconds": 3.148,
+          "http_status": 429,
+          "transport_error": null,
+          "response_file": "001-a1.body",
+          "response_bytes": 895,
+          "response_sha256": "2a9c239ca0ab01593d65afd767d2ee2bbbe628722b6d0a115a8dc6237318c343",
+          "cost": null,
+          "provider": null,
+          "model": null,
+          "verdict": "retry",
+          "reason": "http_429"
+        },
+        {
+          "attempt": 2,
+          "started_at": "2026-10-29T10:36:19.457862+00:00",
+          "seconds": 12.047,
+          "http_status": 200,
+          "transport_error": null,
+          "response_file": "001-a2.body",
+          "response_bytes": 13393,
+          "response_sha256": "3b709779a45e14e9e8491abd94f40ad3e9cc410209c45627368560854b8fe8ae",
+          "cost": 0.00131787,
+          "provider": "Mistral",
+          "model": "mistralai/mistral-small-2603",
+          "verdict": "response",
+          "reason": null
+        }
+      ],
+      "cost": 0.00131787,
+      "provider": "Mistral",
+      "model": "mistralai/mistral-small-2603",
+      "response_id": "gen-1793270180-ChWoHm2H4RxyTWNQj6j2",
+      "prompt_tokens": 1321,
+      "completion_tokens": 1949,
+      "reasoning_tokens": 1366,
+      "answer_tokens": 583,
+      "cached_tokens": 368,
+      "finish_reason": "stop",
+      "native_finish_reason": "stop",
+      "delivered": true,
+      "valid": true,
+      "correct": true,
+      "undelivered": null,
+      "invalid": null,
+      "score_error": null,
+      "builds": {
+        "gcc-14-O0": true,
+        "gcc-14-O2": true,
+        "clang-19-O2": true
+      },
+      "answer_sha256": "0a001c1520cb2ec8b292678a603890b6bd2559626e8d3098fd938a1b80715821",
+      "reasoning_sha256": "5dd59f55403b2889a6fe88739e635cf17a8d91d98e88751b36ec9386bf8503f3",
+      "candidate_sha256": "64d6797e181546030a541ec8e3565708ffb1eac1d4f249650df2b05fdf0a6eb1",
+      "transcript": "001.json.gz",
+      "seconds": 24.895
+    },
+    {
+      "trial": 2,
+      "item": "adler-byte",
+      "condition": "c1",
+      "repetition": 1,
+      "code": "E3011",
+      "started_at": "2026-10-29T10:36:39.203544+00:00",
+      "status": "completed",
+      "error": null,
+      "deviation": null,
+      "feedback_sha256": "188650dd96dc0280658477e23849a596ee702af3def19be9e76fc59eaf257c73",
+      "payload_sha256": "21faa7c2db8ab067860c007bb7d1e5247869709d4a7a9d37c015a5626ef065b2",
+      "attempts": [
+        {
+          "attempt": 1,
+          "started_at": "2026-10-29T10:36:39.203603+00:00",
+          "seconds": 8.935,
+          "http_status": 200,
+          "transport_error": null,
+          "response_file": "002-a1.body",
+          "response_bytes": 9827,
+          "response_sha256": "d0a13b3b00fd7bbaa42171ec14c856831a79b839f051c1c7a55e29dc8bc71da0",
+          "cost": 0.00083625,
+          "provider": "Mistral",
+          "model": "mistralai/mistral-small-2603",
+          "verdict": "response",
+          "reason": null
+        }
+      ],
+      "cost": 0.00083625,
+      "provider": "Mistral",
+      "model": "mistralai/mistral-small-2603",
+      "response_id": "gen-1793270200-SeiguroYJFhN8xg6uXsN",
+      "prompt_tokens": 763,
+      "completion_tokens": 1365,
+      "reasoning_tokens": 782,
+      "answer_tokens": 583,
+      "cached_tokens": 720,
+      "finish_reason": "stop",
+      "native_finish_reason": "stop",
+      "delivered": true,
+      "valid": true,
+      "correct": true,
+      "undelivered": null,
+      "invalid": null,
+      "score_error": null,
+      "builds": {
+        "gcc-14-O0": true,
+        "gcc-14-O2": true,
+        "clang-19-O2": true
+      },
+      "answer_sha256": "0a001c1520cb2ec8b292678a603890b6bd2559626e8d3098fd938a1b80715821",
+      "reasoning_sha256": "bca5bf58edcee4cffb4d56a65f64c7538913d892f234fa263823b87400404134",
+      "candidate_sha256": "64d6797e181546030a541ec8e3565708ffb1eac1d4f249650df2b05fdf0a6eb1",
+      "transcript": "002.json.gz",
+      "seconds": 11.216
+    },
+    {
+      "trial": 3,
+      "item": "adler-reset",
+      "condition": "c1",
+      "repetition": 1,
+      "code": "E3001",
+      "started_at": "2026-10-29T10:36:50.421818+00:00",
+      "status": "completed",
+      "error": null,
+      "deviation": null,
+      "feedback_sha256": "188650dd96dc0280658477e23849a596ee702af3def19be9e76fc59eaf257c73",
+      "payload_sha256": "96f43dc2862930e9e431ad7ac0b0ebb24c04c345708a0716a1be3a31d2039b27",
+      "attempts": [
+        {
+          "attempt": 1,
+          "started_at": "2026-10-29T10:36:50.421875+00:00",
+          "seconds": 1.357,
+          "http_status": 429,
+          "transport_error": null,
+          "response_file": "003-a1.body",
+          "response_bytes": 895,
+          "response_sha256": "2a9c239ca0ab01593d65afd767d2ee2bbbe628722b6d0a115a8dc6237318c343",
+          "cost": null,
+          "provider": null,
+          "model": null,
+          "verdict": "retry",
+          "reason": "http_429"
+        },
+        {
+          "attempt": 2,
+          "started_at": "2026-10-29T10:36:53.784044+00:00",
+          "seconds": 39.749,
+          "http_status": 200,
+          "transport_error": null,
+          "response_file": "003-a2.body",
+          "response_bytes": 48846,
+          "response_sha256": "34b338ec46c9311822151231ef20cfe9b9be39d0afc5c946ef4c6aacd1b6e01f",
+          "cost": 0.0047256,
+          "provider": "Mistral",
+          "model": "mistralai/mistral-small-2603",
+          "verdict": "response",
+          "reason": null
+        }
+      ],
+      "cost": 0.0047256,
+      "provider": "Mistral",
+      "model": "mistralai/mistral-small-2603",
+      "response_id": "gen-1793270214-KgsPdSo8iA6WsYJvFKwj",
+      "prompt_tokens": 760,
+      "completion_tokens": 7686,
+      "reasoning_tokens": 7070,
+      "answer_tokens": 616,
+      "cached_tokens": 0,
+      "finish_reason": "stop",
+      "native_finish_reason": "stop",
+      "delivered": true,
+      "valid": true,
+      "correct": false,
+      "undelivered": null,
+      "invalid": null,
+      "score_error": null,
+      "builds": {
+        "gcc-14-O0": false,
+        "gcc-14-O2": true,
+        "clang-19-O2": false
+      },
+      "answer_sha256": "a0a0dd092823b2cd6ae2ebeac2c0dc27a8c7057a887499badbd1294c73edccda",
+      "reasoning_sha256": "1b07066f4a87efc775803cabe90255355ddbedf4ab173c3b6e15c5575221462a",
+      "candidate_sha256": "9a4907c07c7c9c42433cf3e290530cf1ba125f65fbadcd98774824d730659268",
+      "transcript": "003.json.gz",
+      "seconds": 46.167
+    },
+    {
+      "trial": 4,
+      "item": "adler-reset",
+      "condition": "c3",
+      "repetition": 1,
+      "code": "E3001",
+      "started_at": "2026-10-29T10:37:36.601170+00:00",
+      "status": "completed",
+      "error": null,
+      "deviation": null,
+      "feedback_sha256": "a0f4a5b2b676473ca0ce7936f57947527f7e1c1b30e0ad4e830d654c6515f942",
+      "payload_sha256": "1259782c25bcabf095b9e34c59a1eefe370e0101775418b66ed46ffcdeade1f8",
+      "attempts": [
+        {
+          "attempt": 1,
+          "started_at": "2026-10-29T10:37:36.601256+00:00",
+          "seconds": 8.424,
+          "http_status": 200,
+          "transport_error": null,
+          "response_file": "004-a1.body",
+          "response_bytes": 8959,
+          "response_sha256": "6604b0d50a67c185a8334372aa7271664b0d65c6d304c7552f20c73f9fe38065",
+          "cost": 0.00093015,
+          "provider": "Mistral",
+          "model": "mistralai/mistral-small-2603",
+          "verdict": "response",
+          "reason": null
+        }
+      ],
+      "cost": 0.00093015,
+      "provider": "Mistral",
+      "model": "mistralai/mistral-small-2603",
+      "response_id": "gen-1793270258-qgPmqoSLlyKXaFFCtoMO",
+      "prompt_tokens": 1289,
+      "completion_tokens": 1228,
+      "reasoning_tokens": 645,
+      "answer_tokens": 583,
+      "cached_tokens": 0,
+      "finish_reason": "stop",
+      "native_finish_reason": "stop",
+      "delivered": true,
+      "valid": true,
+      "correct": true,
+      "undelivered": null,
+      "invalid": null,
+      "score_error": null,
+      "builds": {
+        "gcc-14-O0": true,
+        "gcc-14-O2": true,
+        "clang-19-O2": true
+      },
+      "answer_sha256": "0a001c1520cb2ec8b292678a603890b6bd2559626e8d3098fd938a1b80715821",
+      "reasoning_sha256": "a41e7dba4961901407d4ac7137327a05c0078bcab51bdbf9b4fbdb2169efaa3b",
+      "candidate_sha256": "64d6797e181546030a541ec8e3565708ffb1eac1d4f249650df2b05fdf0a6eb1",
+      "transcript": "004.json.gz",
+      "seconds": 9.771
+    },
+    {
+      "trial": 5,
+      "item": "adler-view",
+      "condition": "c3",
+      "repetition": 1,
+      "code": "E3010",
+      "started_at": "2026-10-29T10:37:46.376611+00:00",
+      "status": "completed",
+      "error": null,
+      "deviation": null,
+      "feedback_sha256": "b514a651fdc8277389c5dd2606efcfa4654a3301867d5d7d29b903370523a249",
+      "payload_sha256": "22176932a7c52d34c793ca823dc9e9b5a8e2aeac5d3cf03eb33733884f7f016b",
+      "attempts": [
+        {
+          "attempt": 1,
+          "started_at": "2026-10-29T10:37:46.376682+00:00",
+          "seconds": 6.781,
+          "http_status": 200,
+          "transport_error": null,
+          "response_file": "005-a1.body",
+          "response_bytes": 6315,
+          "response_sha256": "259925ae61ab935be4fd972b06ca7d1d866c27e35bef9ed0a108082e823deab4",
+          "cost": 0.00079185,
+          "provider": "Mistral",
+          "model": "mistralai/mistral-small-2603",
+          "verdict": "response",
+          "reason": null
+        }
+      ],
+      "cost": 0.00079185,
+      "provider": "Mistral",
+      "model": "mistralai/mistral-small-2603",
+      "response_id": "gen-1793270267-r1X8kcmdIqLyDLHK21Az",
+      "prompt_tokens": 1419,
+      "completion_tokens": 965,
+      "reasoning_tokens": 345,
+      "answer_tokens": 620,
+      "cached_tokens": 0,
+      "finish_reason": "stop",
+      "native_finish_reason": "stop",
+      "delivered": true,
+      "valid": true,
+      "correct": true,
+      "undelivered": null,
+      "invalid": null,
+      "score_error": null,
+      "builds": {
+        "gcc-14-O0": true,
+        "gcc-14-O2": true,
+        "clang-19-O2": true
+      },
+      "answer_sha256": "5bc04daf2c534c27ef0a1a80ec222b691da65ea01186a70b5b27d3bbab8c0a9c",
+      "reasoning_sha256": "b7d0d4a318c490e4e9b45a50f096bd0961b3a83a20e956d1378603b8116bfc99",
+      "candidate_sha256": "32516572c175e3733b6f52bd4294e41812364c2fc15129a04c38af2f51587c87",
+      "transcript": "005.json.gz",
+      "seconds": 8.632
+    },
+    {
+      "trial": 6,
+      "item": "adler-view",
+      "condition": "c1",
+      "repetition": 1,
+      "code": "E3010",
+      "started_at": "2026-10-29T10:37:55.010218+00:00",
+      "status": "request_error",
+      "error": "http_429",
+      "deviation": null,
+      "feedback_sha256": "188650dd96dc0280658477e23849a596ee702af3def19be9e76fc59eaf257c73",
+      "payload_sha256": "4eaa2256f6cb7bedd1c27f7e24d15e0edf6f513c6cc090281a87206e78ad69ee",
+      "attempts": [
+        {
+          "attempt": 1,
+          "started_at": "2026-10-29T10:37:55.010277+00:00",
+          "seconds": 1.328,
+          "http_status": 429,
+          "transport_error": null,
+          "response_file": "006-a1.body",
+          "response_bytes": 895,
+          "response_sha256": "2a9c239ca0ab01593d65afd767d2ee2bbbe628722b6d0a115a8dc6237318c343",
+          "cost": null,
+          "provider": null,
+          "model": null,
+          "verdict": "retry",
+          "reason": "http_429"
+        },
+        {
+          "attempt": 2,
+          "started_at": "2026-10-29T10:37:58.342396+00:00",
+          "seconds": 1.31,
+          "http_status": 429,
+          "transport_error": null,
+          "response_file": "006-a2.body",
+          "response_bytes": 895,
+          "response_sha256": "2a9c239ca0ab01593d65afd767d2ee2bbbe628722b6d0a115a8dc6237318c343",
+          "cost": null,
+          "provider": null,
+          "model": null,
+          "verdict": "retry",
+          "reason": "http_429"
+        }
+      ],
+      "cost": 0.0,
+      "provider": null,
+      "model": null,
+      "response_id": null,
+      "prompt_tokens": null,
+      "completion_tokens": null,
+      "reasoning_tokens": null,
+      "answer_tokens": null,
+      "cached_tokens": null,
+      "finish_reason": null,
+      "native_finish_reason": null,
+      "delivered": false,
+      "valid": false,
+      "correct": false,
+      "undelivered": null,
+      "invalid": null,
+      "score_error": null,
+      "builds": null,
+      "answer_sha256": null,
+      "reasoning_sha256": null,
+      "candidate_sha256": null,
+      "transcript": "006.json.gz",
+      "seconds": 4.642
+    }
+  ],
+  "totals": {
+    "trials": 6,
+    "completed": 5,
+    "requests": 9,
+    "retries": 3,
+    "cost_usd": 0.00860172,
+    "unknown_cost_attempts": 4,
+    "unknown_cost_reserve_usd": 0.0405216,
+    "correct": 4,
+    "cells": {
+      "c3-silent": {
+        "trials": 3,
+        "completed": 3,
+        "delivered": 3,
+        "valid": 3,
+        "correct": 3,
+        "length": 0
+      },
+      "c1-silent": {
+        "trials": 3,
+        "completed": 2,
+        "delivered": 2,
+        "valid": 2,
+        "correct": 1,
+        "length": 0
+      }
+    },
+    "prompt_tokens": 5552,
+    "completion_tokens": 13193,
+    "reasoning_tokens": 10208,
+    "answer_tokens": 2985
+  },
+  "go": null,
+  "stop_reason": "retry_failed:http_429",
+  "unattempted": 138
+}
