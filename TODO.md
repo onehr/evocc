@@ -164,10 +164,11 @@ from named fixes.
   `evocc-parser/src/lib.rs`, `evocc-lower/src/lib.rs`, `evocc-chir/src/interp.rs` and
   `evocc-evoir/src/lib.rs` become modules of at most 1,500 lines. Exit: the AArch64 identity check
   and the full gate.
-  The parser now has 31 responsibility files; its root is 1,448 lines. The 504 function
-  token sequences and all literal contents are preserved. All 792 full-object hashes match
-  the start baseline, with matching twins and native results on Darwin/Linux. The remaining
-  three source roots are still open; the parser's commit also requires its full workspace gate.
+  The parser now has 31 responsibility files with a 1,448-line root; lowering has 33 files
+  with a 713-line root. The moves preserve their 504 and 256 function token sequences and
+  all literal contents. Each move matches all 792 full-object hashes of the start baseline,
+  with matching twins and native results on Darwin/Linux. Each commit requires the full
+  workspace gate. The C-HIR interpreter and EvoIR source roots remain open.
 - [ ] **Q03 — Split the long functions of the backend path** — `OPEN`, P1.
   `parse_options`, `emit_inst`, `lower_inst` and `lower_block` become functions of at most 150
   lines. Exit: the AArch64 identity check and the full gate.
