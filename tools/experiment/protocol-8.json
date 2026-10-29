@@ -1,0 +1,114 @@
+{
+  "schema": "agent-repair.protocol.c1",
+  "name": "Experiment 8: chat models repair silent undefined behavior with frozen feedback",
+  "status": "unregistered",
+  "status_note": "Pilot first. The owner approves the measured run after the pilot. Registration is a commit of this file with status registered and the tag agent-repair-experiment-8; the measured run starts from that clean commit. Registration changes only status and status_note. Any other change of the harness or of this file after the pilot needs a new pilot. Pilot data stay out of the measured analysis.",
+  "question": "When GCC 14's warnings and UBSan report nothing, does EvoCC's feedback help a chat model repair the defect in one response? Experiments 4 and 5 asked this of a coding agent that could test its own changes; this experiment asks it of chat models that cannot.",
+  "items_root": "tests/fixtures/agent-repair-4",
+  "corpus_tag": "agent-repair-experiment-4",
+  "corpus_commit": "5b765db0467dc92a94077e3f37617c04e16f24b0",
+  "qualification": {
+    "path": "tests/fixtures/agent-repair-4/qualification.json",
+    "sha256": "9c98c41cc4d9942a013e49bfa07181b112382c6e2d29a6168f7df99e19471fef"
+  },
+  "items": ["adler-byte", "adler-reset", "adler-view", "crc-byte", "crc-reset", "crc-view", "increment-limit", "left-count", "magnitude-limit", "mean-empty", "minify-byte", "minify-reset", "minify-view", "pointer-byte", "pointer-reset", "pointer-view", "right-count", "scale-empty", "xxh32-byte", "xxh32-reset", "xxh32-view", "xxh64-byte", "xxh64-reset", "xxh64-view"],
+  "silent_codes": ["E3001", "E3010", "E3011"],
+  "control_codes": ["E3002", "E3004", "E3005"],
+  "conditions": {
+    "c1": "The frozen experiment 4 C1 record of the original program.c: GCC 14 at O0 with -Wall -Wextra -fsanitize=undefined, build and run.",
+    "c3": "The frozen experiment 4 C3 record of the original program.c: the EvoCC build and run, evo check, one evo explain record for each code and the evo fix plan."
+  },
+  "feedback_source": "items[].feedback[\"program.c\"][condition] of the qualification file. The harness checks the file hash, and each program.c against the hash that the qualification recorded. No compiler runs while a request is open.",
+  "prompt_file": "tools/experiment/prompt.txt",
+  "prompt_sha256": "eaa8197fe9f298ea2ba2c2a9647aef665148f0f37066711e3cbaf044cd0fe3a1",
+  "message_layout": "repair.messages: the prompt is the system message; the user message is 'Current program.c:', the source in a fenced c block, 'Feedback:' and the frozen record.",
+  "models": [
+    {
+      "model": "deepseek/deepseek-v4.1-flash",
+      "reported_models": ["deepseek/deepseek-v4.1-flash", "deepseek/deepseek-v4.1-flash-20260910"],
+      "provider_name": "AtlasCloud",
+      "provider": {"order": ["atlas-cloud"], "allow_fallbacks": false},
+      "price_usd_per_million": {"input": 0.135, "output": 0.54},
+      "cost_cap_usd": {"pilot": 0.1, "measured": 1.5}
+    },
+    {
+      "model": "qwen/qwen3.5-9b",
+      "reported_models": ["qwen/qwen3.5-9b"],
+      "provider_name": "DeepInfra",
+      "provider": {"order": ["deepinfra"], "allow_fallbacks": false},
+      "price_usd_per_million": {"input": 0.1, "output": 0.15},
+      "cost_cap_usd": {"pilot": 0.1, "measured": 0.75}
+    }
+  ],
+  "provider_basis": "On 2026-10-29 the public endpoint lists of OpenRouter gave AtlasCloud (atlas-cloud/fp8, the P17a provider) for DeepSeek V4.1 Flash and DeepInfra (deepinfra/bf16) for Qwen3.5 9B; both list the reasoning parameter. In experiment 2, Qwen3.5 9B on DeepInfra had no response error.",
+  "temperature": 0,
+  "max_tokens": 8192,
+  "reasoning": {"effort": "low"},
+  "reasoning_basis": "Experiment 2 sent no reasoning control, and most answers used the whole 16,384-token budget. This experiment limits the reasoning effort and the output tokens.",
+  "repetitions": 3,
+  "responses_per_trial": 1,
+  "scoring": {
+    "builds": [["gcc-14", "-O0"], ["gcc-14", "-O2"], ["clang-19", "-O2"]],
+    "correct": "Delivered and valid under repair.extract, and the hidden driver passes under all three sealed builds (qualify_silent.score_builds), as in experiments 4 and 5."
+  },
+  "outcomes": {
+    "delivered": "finish_reason is stop and the answer is exactly one complete fenced c block (budget.judge).",
+    "valid": "Delivered, and the candidate profile of repair.extract accepts the block.",
+    "correct": "Valid, and the candidate passes the hidden driver under all three builds."
+  },
+  "order": {
+    "rule": "Repetitions 1 to 3 in turn. Items in sorted order. For item index i (from 0) and repetition r, c1 runs first when i + r is even, else c3.",
+    "processes": "One process for each model. Each process runs the whole order for its model, one request at a time."
+  },
+  "harness": {
+    "deadline_seconds": 300,
+    "socket_timeout_seconds": 120,
+    "retry_delay_seconds": 2,
+    "body_limit_bytes": 1048576,
+    "capture_stop_mib": 400,
+    "disk_start_gib": 25,
+    "disk_stop_gib": 15,
+    "unknown_cost_input_tokens": 2000
+  },
+  "stopping": {
+    "cost_cap": "Each model has its own cap (cost_cap_usd). The harness checks it before each request; the last request can cross it.",
+    "unknown_cost": "An attempt of unknown cost counts against the cap at unknown_cost_input_tokens times the input price plus max_tokens times the output price.",
+    "refusal": "HTTP 401, 402 or 403 stops the run.",
+    "retry": "One retry after retry_delay_seconds for HTTP 429, a 5xx status or a transport error. No retry of a delivered answer, a length stop or any other status.",
+    "deviation": "A response from another provider or an unregistered model name stops the run.",
+    "disk": "No run starts below disk_start_gib free; a run stops below disk_stop_gib."
+  },
+  "predictions": {
+    "P1": "For each model separately: on the 18 silent items, C3 repairs more than C1. The unit is the item. The statistic for an item is its correct C3 repetitions minus its correct C1 repetitions. Exact one-sided Wilcoxon signed-rank test (report.exact_wilcoxon: zero differences dropped, midranks for ties, all signs enumerated). P1 holds for a model when p < 0.05.",
+    "P2": "For each model separately: on the 6 controls, C3 loses at most 2 of the 18 control trials: correct C1 trials minus correct C3 trials is at most 2. Descriptive; no test.",
+    "complete_run": "P1 and P2 use a run that completed all 144 trials of its model. A run that stops early tests nothing, as in experiment 2. A score error counts as not correct, and the report lists it.",
+    "reporting": [
+      "Report delivered, valid and correct counts for each model, condition and class.",
+      "Report undelivered reasons separately: length stops, deadlines and request errors.",
+      "Report prompt, completion and reasoning tokens and the reported cost.",
+      "State the limits: chat models, one response, no tool use, injected defects in shared kernels, three repetitions at temperature 0."
+    ]
+  },
+  "phases": {
+    "pilot": {
+      "trials": [
+        {"item": "adler-reset", "condition": "c3"},
+        {"item": "crc-view", "condition": "c1"},
+        {"item": "minify-byte", "condition": "c3"},
+        {"item": "increment-limit", "condition": "c1"},
+        {"item": "xxh64-view", "condition": "c3"}
+      ],
+      "go_criteria": [
+        "Every pilot trial completes with HTTP 200 from the pinned provider and a registered model name.",
+        "Every final attempt reports the cost and the prompt, completion and reasoning tokens.",
+        "No answer stops for length, and the largest completion stays below max_tokens.",
+        "Every delivered and valid candidate is scored on all three builds without a score error.",
+        "The pilot cost stays below the pilot cap, and the projected measured cost (the mean pilot cost of a trial times 144, plus the unknown-cost reserve of the pilot) stays below the measured cap.",
+        "The median request time is at most 120 seconds."
+      ]
+    },
+    "measured": {
+      "trials_per_model": 144
+    }
+  }
+}
