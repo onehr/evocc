@@ -139,7 +139,7 @@ was found in the read-only process check at this planning checkpoint.
 | REVIEW |  | No rule decision is open. The 2026-10-13 decisions for K07, L03 to L10 and L11a to L11c are in docs/archive/notebook/rules-20261013/DECISIONS.md. |
 | AUDIT | D33 | D24 to D28 closed the follow-ups of D22, D23, L04 and L05; D33 changes the alignment model. D01-D15 are closed in their recorded scope. Keep the T03 audit boundary; kernel/application acceptance and deferred proof domains remain separate. |
 | ACCEPTANCE | T04, T02, K13, K14, R05, R05k | On 2026-10-27 the compiler of `08bf09bd` passed the frozen acceptance (B10 and the direct Kbuild replay), the final gate T05 passed, and both archives were built (R05a). Next: the owner's R05k: the dating commit, the rebuild of both archives from it, the tag and the publication. |
-| RELEASE | Q02, Q03, Q04, Q05, R04, R04a, R07 | Release 0.2.0, foundation: Q01 to Q05 and R04a; R07a's measured design is complete. Then x86-64 (R04b to R04e), RISC-V (R07b to R07e), Lean core-v2 (V09 to V13), the EqSat kit (E01 to E03) and the release (R05m). |
+| RELEASE | Q03, Q04, Q05, R04, R04a, R07 | Release 0.2.0, foundation: Q01 to Q05 and R04a; R07a's measured design is complete. Then x86-64 (R04b to R04e), RISC-V (R07b to R07e), Lean core-v2 (V09 to V13), the EqSat kit (E01 to E03) and the release (R05m). |
 | LATER | R05m, R01, R02, R03, R03a, R03b, R03c, R03d, R03e, R03f, R03g, R03h, R04b, R04c, R04d, R04e, N06, N06a, N06b, N06c, N06d, N06e, R07b, R07c, R07d, R07e, V09, V10, V11, V12, V13, E01, E02, E03 | S1–S5 and R02e first slice are closed; S6 stays with R01's two G2 builds. R03 V1 negative-admission study is frozen; positive Q3 remains unachieved and R03a/b/c/d NOT_ADMITTED, R03e deferred. No VM timing or audit expansion; x86-64 and release stay separate. The bounded N01–N05/N07 batch is dispositioned, not a complete optimizing compiler: N03b/N03e preflights are negative, N07 E3 has zero SMT proofs, and all five library size targets remain missed. N03d C5 has size/correctness evidence but three compile-cost misses; C2/C5 remain outside the admitted cumulative configuration, and T1's misses stay frozen. All new defaults remain OFF. Retain N02's 70 admitted/187 opaque inputs and source-bridge mismatch. Broader inlining, mid-level and allocator work need newly scoped designs; no paused R activity is automatically reopened. |
 <!-- closure-queues:end -->
 
@@ -160,17 +160,21 @@ from named fixes.
   and nested comments. The baseline comes from committed source and updates cannot add or
   raise an exception. Both gate modes stop before Cargo on a size failure. The isolated gate
   fixture supplies the checker stand-in authorized by the resume instruction; assertions stay.
-- [ ] **Q02 — Split the four largest source files** — `OPEN`, P1.
+- [x] **Q02 — Split the four largest source files** — `DONE`, P1, 2026-10-29.
   `evocc-parser/src/lib.rs`, `evocc-lower/src/lib.rs`, `evocc-chir/src/interp.rs` and
   `evocc-evoir/src/lib.rs` become modules of at most 1,500 lines. Exit: the AArch64 identity check
   and the full gate.
   The parser now has 31 responsibility files with a 1,448-line root; lowering has 33 files
-  with a 713-line root; the C-HIR interpreter has 28 files with a 1,208-line root. Function
-  comparisons cover 504, 256 and 212 items. All production function tokens and literal
+  with a 713-line root; the C-HIR interpreter has 28 files with a 1,208-line root; EvoIR has
+  18 files with a 1,457-line root. Function comparisons cover 504, 256, 212 and 188 items.
+  All production function tokens and literal
   contents stay unchanged; two C-HIR unit calls lose only optional trailing commas under
   rustfmt. Each move matches all 792 full-object hashes of the start baseline, with matching
   twins and native results on Darwin/Linux. Each commit requires the full workspace gate.
-  The EvoIR source root remains open.
+  The source-path lists add only the new modules. The diagnostic inventory follows
+  InterpreterError to errors.rs; its original eight checks pass. The instruction inventory
+  still reads the unchanged Inst declaration at the EvoIR root. The stale validator path
+  in spec/evoir.md stays unchanged under the goal's specification-edit boundary.
 - [ ] **Q03 — Split the long functions of the backend path** — `OPEN`, P1.
   `parse_options`, `emit_inst`, `lower_inst` and `lower_block` become functions of at most 150
   lines. Exit: the AArch64 identity check and the full gate.

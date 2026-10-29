@@ -111,7 +111,7 @@ def templates(source, path='crates/evocc/src/main.rs'):
                                             ['evocc-cpp', 'evocc-parser', 'evocc-chir', 'evocc-evoir', 'evocc-eqopt'])
                 # InterpreterError.message delegates unclassified errors to
                 # Display. Its fallback strings are headers too.
-                fallback = display and path == 'crates/evocc-evoir/src/lib.rs'
+                fallback = display and path == 'crates/evocc-evoir/src/errors.rs'
                 if fallback:
                     # The explicit message arms replace these Display strings.
                     # Derive the variants from the method, not a skip list.
