@@ -13,8 +13,10 @@ session runs in one shell, in a temporary directory. The GCC session runs in the
 are drawn from it. The scoreboard reads the receipts of the release campaign. The explicit-check
 figure shows the EvoIR and the assembly that the release compiler makes for `examples/abs.c`.
 The stages figure follows line 7 of `examples/mean.c`: the record of `evo check`, then the EvoIR
-and the assembly of that line, and it refuses facts that do not match the source.
-`--check` runs no session: it draws every figure again from the transcript, the receipts and the
+and the assembly of that line, and it refuses facts that do not match the source. The agent
+results figure reads the receipts and the registered analyses of experiments 5 and 8. The book
+shows it as a card on its own surface, because a reader can choose a book theme that differs from
+the system theme. `--check` runs no session: it draws every figure again from the transcript, the receipts and the
 release compiler, and it names each file that differs. Each figure has a light and a dark variant.
 """
 import argparse
@@ -32,6 +34,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / "docs" / "images" / "readme"
 PAPER = ROOT / "docs" / "images" / "paper"
+BOOK = ROOT / "book" / "src" / "images"
 TRANSCRIPT = OUT / "highlights.json"
 EXAMPLES = ROOT / "examples"
 BIN = ROOT / "target" / "frontend" / "release"
@@ -265,18 +268,26 @@ EFFORT = [("Silent bugs, short programs", "18 programs, 2 runs each", "agent-rep
 CONTROL_CODES = {"E3002", "E3004", "E3005"}
 
 
+def kimi_cells(name, corpus, silent):
+    """Steps and repaired sessions with C1 and C3 in one experiment 5 receipt. `silent` keeps
+    the silent items (True), the controls (False) or every item (None)."""
+    cells = {condition: dict(effort=0, repaired=0, runs=0) for condition in ("c1", "c3")}
+    for run in receipt(name)["runs"]:
+        code = (ROOT / "tests" / "fixtures" / corpus / run["item"] / "class").read_text().strip()
+        if silent is not None and (code in CONTROL_CODES) == silent:
+            continue
+        cell = cells[run["condition"]]
+        cell["effort"] += run["steps"]
+        cell["repaired"] += run["passed"] is True
+        cell["runs"] += 1
+    return cells
+
+
 def effort_totals():
-    import json
     rows = []
-    for label, sub, receipt, corpus, silent in EFFORT:
-        runs = json.loads((ROOT / "tests" / "contracts" / receipt).read_text())["runs"]
-        total = {"c1": 0, "c3": 0}
-        for run in runs:
-            code = (ROOT / "tests" / "fixtures" / corpus / run["item"] / "class").read_text().strip()
-            if silent is not None and (code in CONTROL_CODES) == silent:
-                continue
-            total[run["condition"]] += run["steps"]
-        rows.append((label, sub, total["c1"], total["c3"]))
+    for label, sub, name, corpus, silent in EFFORT:
+        cells = kimi_cells(name, corpus, silent)
+        rows.append((label, sub, cells["c1"]["effort"], cells["c3"]["effort"]))
     return rows
 
 
@@ -307,6 +318,159 @@ def effort_chart(theme):
     out.append(f'<rect x="{x0 + 200}" y="{y}" width="14" height="14" rx="2" fill="{t["prove"]}"/>'
                f'<text x="{x0 + 220}" y="{y + 12}" fill="{t["sub"]}" font-family="{SANS}" font-size="13">'
                f'EvoCC</text>')
+    out.append("</svg>")
+    return "\n".join(out) + "\n"
+
+
+# The chat models of experiment 8 that completed every run, and the one run that stopped.
+CHAT_MODELS = [("Qwen3.8 27B", "agent-repair-8-qwen3.8-27b-20261029.json"),
+               ("DeepSeek V4.1 Flash", "agent-repair-8-deepseek-v4.1-flash-20261029.json"),
+               ("MiniMax M3.1 Flash", "agent-repair-8-minimax-m3.1-flash-20261029.json")]
+STOPPED_CHAT = ("Mistral Small 4", "agent-repair-8-mistral-small-2603-20261029.json")
+
+
+def chat_cells(runs, silent):
+    """Mean output tokens per answer and repaired answers with C1 and C3 in one experiment 8
+    receipt, on the silent items or on the controls."""
+    cells = {}
+    for condition in ("c1", "c3"):
+        chosen = [run for run in runs
+                  if run["condition"] == condition and (run["code"] in CONTROL_CODES) != silent]
+        tokens = [run["completion_tokens"] for run in chosen if type(run["completion_tokens"]) is int]
+        cells[condition] = dict(effort=sum(tokens) / len(tokens), runs=len(chosen),
+                                repaired=sum(run["correct"] is True for run in chosen))
+    return cells
+
+
+def agent_results():
+    """The rows of the agent results figure, and the registered p of each silent saving."""
+    five, eight = receipt("agent-repair-5-20261010.json"), receipt("agent-repair-8-20261029.json")
+    tests = {row["model"]: row for row in eight}
+    kimi, a, b = "Kimi K3, coding agent", EFFORT[0][2], EFFORT[1][2]
+    silent = [(kimi, "18 short programs", "steps", kimi_cells(a, "agent-repair-4", True)),
+              (kimi, "12 programs of 722 lines", "steps", kimi_cells(b, "agent-repair-5", None))]
+    controls = [(kimi, "6 programs", "steps", kimi_cells(a, "agent-repair-4", False))]
+    held = [five["P1"], five["P3"]]
+    for model, name in CHAT_MODELS:
+        record = receipt(name)
+        if record["stop_reason"] != "completed":
+            raise ValueError(f"{name}: the run stopped ({record['stop_reason']})")
+        held.append(tests[record["plan"]["model"]["model"]]["P3"])
+        silent.append((f"{model}, chat model", "18 short programs", "tokens",
+                       chat_cells(record["runs"], True)))
+        controls.append((f"{model}, chat model", "6 programs", "tokens",
+                         chat_cells(record["runs"], False)))
+    if not all(test["held"] and test["p"] < 0.01 for test in held):
+        raise ValueError("a silent saving is not a registered result with p < 0.01")
+    stopped = receipt(STOPPED_CHAT[1])
+    return dict(groups=[("Silent bugs: GCC 14's warnings and UBSan report nothing", silent),
+                        ("Control bugs: GCC and UBSan report them", controls)],
+                stopped=(STOPPED_CHAT[0], len(stopped["runs"]), len(stopped["plan"]["trials"])))
+
+
+def change(before, after):
+    """The relative change from C1 to C3, as the figures print it."""
+    return f"{100 * (after - before) / before:+.0f}%".replace("-", "\u2212")
+
+
+def repaired(cells):
+    """The repaired runs with C1 and C3, as the agent results figure prints them."""
+    c1, c3 = cells["c1"], cells["c3"]
+    if (c1["repaired"], c1["runs"]) == (c3["repaired"], c3["runs"]):
+        return f"{c3['repaired']} of {c3['runs']}, both"
+    return f"{c1['repaired']} \u2192 {c3['repaired']} of {c3['runs']}"
+
+
+def data_bar(x, y, width, height, color):
+    """A bar that grows from x: square at the baseline, with a 4px rounded data end."""
+    r = min(4, width, height / 2)
+    return (f'<path d="M{x} {y} H{x + width - r:.1f} A{r} {r} 0 0 1 {x + width:.1f} {y + r} '
+            f'V{y + height - r} A{r} {r} 0 0 1 {x + width - r:.1f} {y + height} H{x} Z" fill="{color}"/>')
+
+
+def agent_notes(data):
+    """The notes under the agent results figure."""
+    name, ran, planned = data["stopped"]
+    return ("Kimi K3: total agent steps over 2 runs of each program. Chat models: mean output "
+            "tokens per answer over 3 runs.",
+            "Each saving on silent bugs is a registered prediction that held, with p < 0.01.",
+            f"{name} stopped after {ran} of {planned} runs and is not shown.")
+
+
+def agent_results_alt(data):
+    """The alt text of the agent results figure, with every value that the figure draws."""
+    parts = ["The same bugs, with GCC 14's warnings and UBSan or with EvoCC: the effort with EvoCC "
+             "as a share of the effort with GCC and UBSan, and the share of runs that repaired the bug."]
+    for title, group in data["groups"]:
+        parts.append(title + ".")
+        for agent, population, unit, cells in group:
+            c1, c3 = cells["c1"], cells["c3"]
+            same = (c1["repaired"], c1["runs"]) == (c3["repaired"], c3["runs"])
+            fixed = (f"{c3['repaired']} of {c3['runs']} with both" if same
+                     else f"{c1['repaired']} to {c3['repaired']} of {c3['runs']}")
+            parts.append(f"{agent}, {population}: {c1['effort']:,.0f} to {c3['effort']:,.0f} {unit} "
+                         f"({change(c1['effort'], c3['effort'])}), repaired {fixed}.")
+    return " ".join(parts + list(agent_notes(data)))
+
+
+def agent_results_chart(data, theme, card=False):
+    """Effort and repairs of each agent on the same bugs, with GCC and UBSan and with EvoCC. A card
+    adds a margin and the surface of its theme under the same figure."""
+    t = THEMES[theme]
+    surface, base, grid = (("#ffffff", "#818b98", "#d1d9e0") if theme == "light"
+                           else ("#0d1117", "#6e7681", "#3d444d"))
+    width, a0, a100, change_x, b0, b100, count_x = 830, 292, 472, 500, 572, 700, 712
+    bands, y = [], 92
+    for _, group in data["groups"]:
+        bands.append((y + 36, y + 36 + 46 * len(group)))
+        y = bands[-1][1]
+    bottom = bands[-1][1]
+    height = bottom + 102
+    pad = 16 if card else 0
+    box_w, box_h = width + 2 * pad, height + 2 * pad
+    out = [f'<svg xmlns="http://www.w3.org/2000/svg" width="{box_w}" height="{box_h}" '
+           f'viewBox="{-pad} {-pad} {box_w} {box_h}" role="img" aria-label="Effort and repairs of each '
+           f'agent, with GCC 14\'s warnings and UBSan and with EvoCC">']
+    if card:
+        out.append(f'<rect x="{-pad}" y="{-pad}" width="{box_w}" height="{box_h}" rx="6" fill="{surface}"/>')
+    out.append(text(0, 22, "The same bugs, with GCC 14\'s warnings and UBSan or with EvoCC", t["title"], 15, 600))
+    for x, color, name in ((600, base, "GCC and UBSan"), (730, t["prove"], "EvoCC")):
+        out.append(f'<rect x="{x}" y="11" width="14" height="14" rx="2" fill="{color}"/>')
+        out.append(text(x + 20, 22, name, t["sub"], 13))
+    out += [text(a0, 58, "Effort with EvoCC", t["title"], 14, 600),
+            text(a0, 76, "GCC and UBSan = 100% in each row", t["sub"], 13),
+            text(b0, 58, "Bugs repaired", t["title"], 14, 600),
+            text(b0, 76, "share of runs", t["sub"], 13)]
+    for top, end in bands:
+        for x in (a0, (a0 + a100) / 2, b0, (b0 + b100) / 2, b100):
+            out.append(f'<path d="M{x} {top} V{end}" stroke="{grid}" stroke-width="1"/>')
+    y, marks = 92, []
+    for title, group in data["groups"]:
+        out.append(f'<path d="M0 {y + 0.5} H{width}" stroke="{grid}" stroke-width="1"/>')
+        out.append(text(0, y + 24, title, t["sub"], 13, 600))
+        y += 36
+        for agent, population, unit, cells in group:
+            c1, c3 = cells["c1"], cells["c3"]
+            out.append(text(0, y + 16, agent, t["title"], 14, 600))
+            out.append(text(0, y + 34, f"{population} \u00b7 {c1['effort']:,.0f} \u2192 "
+                                       f"{c3['effort']:,.0f} {unit}", t["sub"], 13))
+            out.append(data_bar(a0, y + 4, (a100 - a0) * c3["effort"] / c1["effort"], 16, t["prove"]))
+            out.append(text(change_x, y + 17, change(c1["effort"], c3["effort"]), t["title"], 13))
+            gcc = b0 + (b100 - b0) * c1["repaired"] / c1["runs"]
+            evo = b0 + (b100 - b0) * c3["repaired"] / c3["runs"]
+            marks.append(f'<path d="M{gcc:.1f} {y + 12} H{evo:.1f}" stroke="{base}" stroke-width="2"/>')
+            marks.append(f'<circle cx="{gcc:.1f}" cy="{y + 12}" r="6" fill="{surface}" '
+                         f'stroke="{base}" stroke-width="2"/>')
+            marks.append(f'<circle cx="{evo:.1f}" cy="{y + 12}" r="4" fill="{t["prove"]}"/>')
+            out.append(text(count_x, y + 17, repaired(cells), t["title"], 13))
+            y += 46
+    out += [f'<path d="M{a100} {top} V{end}" stroke="{base}" stroke-width="2"/>' for top, end in bands]
+    out += marks
+    for x, label in ((a0, "0%"), ((a0 + a100) / 2, "50%"), (a100, "100%"),
+                     (b0, "0%"), ((b0 + b100) / 2, "50%"), (b100, "100%")):
+        out.append(text(x, bottom + 20, label, t["sub"], 13, anchor="middle"))
+    for i, note in enumerate(agent_notes(data)):
+        out.append(text(0, bottom + 52 + 20 * i, note, t["sub"], 13))
     out.append("</svg>")
     return "\n".join(out) + "\n"
 
@@ -828,6 +992,7 @@ def rendered(transcript, with_compiler=True):
     """Every generated figure: its path and its text."""
     files = {}
     board = scoreboard_data()
+    agents = agent_results()
     check = ub_data() if with_compiler else None
     line = stages_data() if with_compiler else None
     for theme in THEMES:
@@ -840,6 +1005,8 @@ def rendered(transcript, with_compiler=True):
             files[OUT / f"explicit-check-{theme}.svg"] = explicit_check(check, theme)
             files[OUT / f"stages-{theme}.svg"] = stages(line, theme)
         files[PAPER / f"agent-effort-{theme}.svg"] = effort_chart(theme)
+        files[OUT / f"agent-results-{theme}.svg"] = agent_results_chart(agents, theme)
+        files[BOOK / f"agent-results-{theme}.svg"] = agent_results_chart(agents, theme, card=True)
     return files
 
 
@@ -870,10 +1037,11 @@ def main(argv=None):
                 print(f"stale: {path.relative_to(ROOT)}", file=sys.stderr)
             if differ:
                 return 1
-            print("README and paper figures match their transcript, receipts and compiler output")
+            print("README, paper and book figures match their transcript, receipts and compiler output")
             return 0
         OUT.mkdir(parents=True, exist_ok=True)
         PAPER.mkdir(parents=True, exist_ok=True)
+        BOOK.mkdir(parents=True, exist_ok=True)
         if not args.render_only:
             TRANSCRIPT.write_text(json.dumps(transcript, indent=2, ensure_ascii=False) + "\n",
                                   encoding="utf-8")
@@ -882,7 +1050,7 @@ def main(argv=None):
     except (ValueError, OSError, subprocess.CalledProcessError) as error:
         print(f"render-readme: {error}", file=sys.stderr)
         return 1
-    print("wrote docs/images/readme and docs/images/paper")
+    print("wrote docs/images/readme, docs/images/paper and book/src/images")
     return 0
 
 

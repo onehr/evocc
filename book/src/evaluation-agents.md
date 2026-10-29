@@ -25,6 +25,16 @@ with GCC and UBSan (p = 0.004). DeepSeek V4.1 Flash and MiniMax M3.1 Flash
 repaired nearly all of them with both records, so their repair counts did
 not differ significantly. On the controls, EvoCC lost at most one trial.
 
+The figure shows the registered results of experiments 5 and 8.
+`tools/render-readme.py` draws it from their receipts and analyses.
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="images/agent-results-dark.svg">
+    <img src="images/agent-results-light.svg" alt="The same bugs, with GCC 14's warnings and UBSan or with EvoCC: the effort with EvoCC as a share of the effort with GCC and UBSan, and the share of runs that repaired the bug. Silent bugs: GCC 14's warnings and UBSan report nothing. Kimi K3, coding agent, 18 short programs: 325 to 206 steps (−37%), repaired 33 to 36 of 36. Kimi K3, coding agent, 12 programs of 722 lines: 241 to 156 steps (−35%), repaired 24 of 24 with both. Qwen3.8 27B, chat model, 18 short programs: 2,717 to 1,103 tokens (−59%), repaired 30 to 54 of 54. DeepSeek V4.1 Flash, chat model, 18 short programs: 6,421 to 1,534 tokens (−76%), repaired 50 to 54 of 54. MiniMax M3.1 Flash, chat model, 18 short programs: 1,108 to 932 tokens (−16%), repaired 54 of 54 with both. Control bugs: GCC and UBSan report them. Kimi K3, coding agent, 6 programs: 63 to 60 steps (−5%), repaired 11 of 12 with both. Qwen3.8 27B, chat model, 6 programs: 959 to 886 tokens (−8%), repaired 18 of 18 with both. DeepSeek V4.1 Flash, chat model, 6 programs: 979 to 746 tokens (−24%), repaired 18 to 17 of 18. MiniMax M3.1 Flash, chat model, 6 programs: 701 to 770 tokens (+10%), repaired 15 to 16 of 18. Kimi K3: total agent steps over 2 runs of each program. Chat models: mean output tokens per answer over 3 runs. Each saving on silent bugs is a registered prediction that held, with p < 0.01. Mistral Small 4 stopped after 6 of 144 runs and is not shown." width="862">
+  </picture>
+</p>
+
 | # | Model and programs | Result |
 | --- | --- | --- |
 | [1](#experiment-1-a-chat-model-and-30-short-programs) | DeepSeek V4.1 Flash, as a chat model; 30 short programs | no difference: every success came on the first response, a ceiling |

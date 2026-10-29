@@ -15,6 +15,9 @@ All notable changes to EvoCC are listed in this file. The format follows
   on the silent bugs (p < 0.01), and Qwen3.8 27B repaired 54 of 54 against 30 of 54. The
   protocol and the harness are in `tools/experiment/`; the receipts, the wire logs and the
   analysis are in `tests/contracts/agent-repair-8-*`.
+- A figure in the README and the book shows the effort and the repairs of each agent with a
+  registered result. `tools/render-readme.py` draws it from the receipts and refuses a stopped
+  run or a failed prediction.
 
 ### Changed
 
@@ -22,6 +25,8 @@ All notable changes to EvoCC are listed in this file. The format follows
   history is in `docs/archive/todo-0.1.0.md`.
 - The book chapter on the agent experiments is now "Agent Experiments", and it reports
   experiment 8.
+- The README section "Built for agents" shows the record that an agent gets from GCC and from
+  EvoCC for the same bug, what EvoCC gives an agent, and the measured results.
 
 ### Fixed
 

@@ -1,0 +1,108 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="830" height="680" viewBox="0 0 830 680" role="img" aria-label="Effort and repairs of each agent, with GCC 14's warnings and UBSan and with EvoCC">
+<text x="0" y="22" fill="#f0f6fc" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="15" font-weight="600">The same bugs, with GCC 14&#x27;s warnings and UBSan or with EvoCC</text>
+<rect x="600" y="11" width="14" height="14" rx="2" fill="#6e7681"/>
+<text x="620" y="22" fill="#9198a1" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13">GCC and UBSan</text>
+<rect x="730" y="11" width="14" height="14" rx="2" fill="#4493f8"/>
+<text x="750" y="22" fill="#9198a1" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13">EvoCC</text>
+<text x="292" y="58" fill="#f0f6fc" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" font-weight="600">Effort with EvoCC</text>
+<text x="292" y="76" fill="#9198a1" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13">GCC and UBSan = 100% in each row</text>
+<text x="572" y="58" fill="#f0f6fc" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" font-weight="600">Bugs repaired</text>
+<text x="572" y="76" fill="#9198a1" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13">share of runs</text>
+<path d="M292 128 V358" stroke="#3d444d" stroke-width="1"/>
+<path d="M382.0 128 V358" stroke="#3d444d" stroke-width="1"/>
+<path d="M572 128 V358" stroke="#3d444d" stroke-width="1"/>
+<path d="M636.0 128 V358" stroke="#3d444d" stroke-width="1"/>
+<path d="M700 128 V358" stroke="#3d444d" stroke-width="1"/>
+<path d="M292 394 V578" stroke="#3d444d" stroke-width="1"/>
+<path d="M382.0 394 V578" stroke="#3d444d" stroke-width="1"/>
+<path d="M572 394 V578" stroke="#3d444d" stroke-width="1"/>
+<path d="M636.0 394 V578" stroke="#3d444d" stroke-width="1"/>
+<path d="M700 394 V578" stroke="#3d444d" stroke-width="1"/>
+<path d="M0 92.5 H830" stroke="#3d444d" stroke-width="1"/>
+<text x="0" y="116" fill="#9198a1" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="600">Silent bugs: GCC 14&#x27;s warnings and UBSan report nothing</text>
+<text x="0" y="144" fill="#f0f6fc" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" font-weight="600">Kimi K3, coding agent</text>
+<text x="0" y="162" fill="#9198a1" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13">18 short programs · 325 → 206 steps</text>
+<path d="M292 132 H402.1 A4 4 0 0 1 406.1 136 V144 A4 4 0 0 1 402.1 148 H292 Z" fill="#4493f8"/>
+<text x="500" y="145" fill="#f0f6fc" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13">−37%</text>
+<text x="712" y="145" fill="#f0f6fc" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13">33 → 36 of 36</text>
+<text x="0" y="190" fill="#f0f6fc" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" font-weight="600">Kimi K3, coding agent</text>
+<text x="0" y="208" fill="#9198a1" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13">12 programs of 722 lines · 241 → 156 steps</text>
+<path d="M292 178 H404.5 A4 4 0 0 1 408.5 182 V190 A4 4 0 0 1 404.5 194 H292 Z" fill="#4493f8"/>
+<text x="500" y="191" fill="#f0f6fc" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13">−35%</text>
+<text x="712" y="191" fill="#f0f6fc" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13">24 of 24, both</text>
+<text x="0" y="236" fill="#f0f6fc" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" font-weight="600">Qwen3.8 27B, chat model</text>
+<text x="0" y="254" fill="#9198a1" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13">18 short programs · 2,717 → 1,103 tokens</text>
+<path d="M292 224 H361.1 A4 4 0 0 1 365.1 228 V236 A4 4 0 0 1 361.1 240 H292 Z" fill="#4493f8"/>
+<text x="500" y="237" fill="#f0f6fc" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13">−59%</text>
+<text x="712" y="237" fill="#f0f6fc" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13">30 → 54 of 54</text>
+<text x="0" y="282" fill="#f0f6fc" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" font-weight="600">DeepSeek V4.1 Flash, chat model</text>
+<text x="0" y="300" fill="#9198a1" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13">18 short programs · 6,421 → 1,534 tokens</text>
+<path d="M292 270 H331.0 A4 4 0 0 1 335.0 274 V282 A4 4 0 0 1 331.0 286 H292 Z" fill="#4493f8"/>
+<text x="500" y="283" fill="#f0f6fc" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13">−76%</text>
+<text x="712" y="283" fill="#f0f6fc" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13">50 → 54 of 54</text>
+<text x="0" y="328" fill="#f0f6fc" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" font-weight="600">MiniMax M3.1 Flash, chat model</text>
+<text x="0" y="346" fill="#9198a1" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13">18 short programs · 1,108 → 932 tokens</text>
+<path d="M292 316 H439.4 A4 4 0 0 1 443.4 320 V328 A4 4 0 0 1 439.4 332 H292 Z" fill="#4493f8"/>
+<text x="500" y="329" fill="#f0f6fc" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13">−16%</text>
+<text x="712" y="329" fill="#f0f6fc" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13">54 of 54, both</text>
+<path d="M0 358.5 H830" stroke="#3d444d" stroke-width="1"/>
+<text x="0" y="382" fill="#9198a1" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="600">Control bugs: GCC and UBSan report them</text>
+<text x="0" y="410" fill="#f0f6fc" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" font-weight="600">Kimi K3, coding agent</text>
+<text x="0" y="428" fill="#9198a1" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13">6 programs · 63 → 60 steps</text>
+<path d="M292 398 H459.4 A4 4 0 0 1 463.4 402 V410 A4 4 0 0 1 459.4 414 H292 Z" fill="#4493f8"/>
+<text x="500" y="411" fill="#f0f6fc" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13">−5%</text>
+<text x="712" y="411" fill="#f0f6fc" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13">11 of 12, both</text>
+<text x="0" y="456" fill="#f0f6fc" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" font-weight="600">Qwen3.8 27B, chat model</text>
+<text x="0" y="474" fill="#9198a1" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13">6 programs · 959 → 886 tokens</text>
+<path d="M292 444 H454.2 A4 4 0 0 1 458.2 448 V456 A4 4 0 0 1 454.2 460 H292 Z" fill="#4493f8"/>
+<text x="500" y="457" fill="#f0f6fc" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13">−8%</text>
+<text x="712" y="457" fill="#f0f6fc" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13">18 of 18, both</text>
+<text x="0" y="502" fill="#f0f6fc" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" font-weight="600">DeepSeek V4.1 Flash, chat model</text>
+<text x="0" y="520" fill="#9198a1" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13">6 programs · 979 → 746 tokens</text>
+<path d="M292 490 H425.2 A4 4 0 0 1 429.2 494 V502 A4 4 0 0 1 425.2 506 H292 Z" fill="#4493f8"/>
+<text x="500" y="503" fill="#f0f6fc" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13">−24%</text>
+<text x="712" y="503" fill="#f0f6fc" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13">18 → 17 of 18</text>
+<text x="0" y="548" fill="#f0f6fc" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" font-weight="600">MiniMax M3.1 Flash, chat model</text>
+<text x="0" y="566" fill="#9198a1" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13">6 programs · 701 → 770 tokens</text>
+<path d="M292 536 H485.8 A4 4 0 0 1 489.8 540 V548 A4 4 0 0 1 485.8 552 H292 Z" fill="#4493f8"/>
+<text x="500" y="549" fill="#f0f6fc" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13">+10%</text>
+<text x="712" y="549" fill="#f0f6fc" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13">15 → 16 of 18</text>
+<path d="M472 128 V358" stroke="#6e7681" stroke-width="2"/>
+<path d="M472 394 V578" stroke="#6e7681" stroke-width="2"/>
+<path d="M689.3 140 H700.0" stroke="#6e7681" stroke-width="2"/>
+<circle cx="689.3" cy="140" r="6" fill="#0d1117" stroke="#6e7681" stroke-width="2"/>
+<circle cx="700.0" cy="140" r="4" fill="#4493f8"/>
+<path d="M700.0 186 H700.0" stroke="#6e7681" stroke-width="2"/>
+<circle cx="700.0" cy="186" r="6" fill="#0d1117" stroke="#6e7681" stroke-width="2"/>
+<circle cx="700.0" cy="186" r="4" fill="#4493f8"/>
+<path d="M643.1 232 H700.0" stroke="#6e7681" stroke-width="2"/>
+<circle cx="643.1" cy="232" r="6" fill="#0d1117" stroke="#6e7681" stroke-width="2"/>
+<circle cx="700.0" cy="232" r="4" fill="#4493f8"/>
+<path d="M690.5 278 H700.0" stroke="#6e7681" stroke-width="2"/>
+<circle cx="690.5" cy="278" r="6" fill="#0d1117" stroke="#6e7681" stroke-width="2"/>
+<circle cx="700.0" cy="278" r="4" fill="#4493f8"/>
+<path d="M700.0 324 H700.0" stroke="#6e7681" stroke-width="2"/>
+<circle cx="700.0" cy="324" r="6" fill="#0d1117" stroke="#6e7681" stroke-width="2"/>
+<circle cx="700.0" cy="324" r="4" fill="#4493f8"/>
+<path d="M689.3 406 H689.3" stroke="#6e7681" stroke-width="2"/>
+<circle cx="689.3" cy="406" r="6" fill="#0d1117" stroke="#6e7681" stroke-width="2"/>
+<circle cx="689.3" cy="406" r="4" fill="#4493f8"/>
+<path d="M700.0 452 H700.0" stroke="#6e7681" stroke-width="2"/>
+<circle cx="700.0" cy="452" r="6" fill="#0d1117" stroke="#6e7681" stroke-width="2"/>
+<circle cx="700.0" cy="452" r="4" fill="#4493f8"/>
+<path d="M700.0 498 H692.9" stroke="#6e7681" stroke-width="2"/>
+<circle cx="700.0" cy="498" r="6" fill="#0d1117" stroke="#6e7681" stroke-width="2"/>
+<circle cx="692.9" cy="498" r="4" fill="#4493f8"/>
+<path d="M678.7 544 H685.8" stroke="#6e7681" stroke-width="2"/>
+<circle cx="678.7" cy="544" r="6" fill="#0d1117" stroke="#6e7681" stroke-width="2"/>
+<circle cx="685.8" cy="544" r="4" fill="#4493f8"/>
+<text x="292" y="598" fill="#9198a1" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" text-anchor="middle">0%</text>
+<text x="382.0" y="598" fill="#9198a1" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" text-anchor="middle">50%</text>
+<text x="472" y="598" fill="#9198a1" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" text-anchor="middle">100%</text>
+<text x="572" y="598" fill="#9198a1" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" text-anchor="middle">0%</text>
+<text x="636.0" y="598" fill="#9198a1" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" text-anchor="middle">50%</text>
+<text x="700" y="598" fill="#9198a1" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" text-anchor="middle">100%</text>
+<text x="0" y="630" fill="#9198a1" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13">Kimi K3: total agent steps over 2 runs of each program. Chat models: mean output tokens per answer over 3 runs.</text>
+<text x="0" y="650" fill="#9198a1" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13">Each saving on silent bugs is a registered prediction that held, with p &lt; 0.01.</text>
+<text x="0" y="670" fill="#9198a1" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13">Mistral Small 4 stopped after 6 of 144 runs and is not shown.</text>
+</svg>
