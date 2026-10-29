@@ -1,8 +1,8 @@
 {
   "schema": "agent-repair.protocol.c1",
   "name": "Experiment 8: chat models repair silent undefined behavior with frozen feedback",
-  "status": "unregistered",
-  "status_note": "Pilot first. The owner approved the measured run on 2026-10-29 for each model whose last pilot meets every go criterion. Registration is a commit of this file with status registered and the tag agent-repair-experiment-8; the measured run starts from that clean commit. Registration changes only status, status_note, reported_models (when the pilot shows another name of the same model) and the models list (it removes each model whose last pilot failed). Any other change of the harness or of this file after the pilot needs a new pilot. Pilot data stay out of the measured analysis.",
+  "status": "registered",
+  "status_note": "Registered on 2026-10-29. The owner approved the measured run on 2026-10-29 for each model whose last pilot meets every go criterion. The fourth pilot, at the clean commit 6a3ded5e, met every go criterion for all four models; its receipts have these SHA-256 values: deepseek/deepseek-v4.1-flash 1d8d7d57768f80c4dd6e3c5543a8783e3e6870c5ab26c38867f0431d15b1abd3; mistralai/mistral-small-2603 add90e48a9dbaf22126c7d3447f60cd6d60643a123a87d0007c43f328a09e233; minimax/minimax-m3.1-flash c9e10d6f164a6c7112cdc324416c2e526b0c0550da0e68d0f83072264f3863a6; qwen/qwen3.8-27b c7d7c59112d7f9f382be482fb232dbde4299f9f2602622da3e25641becf5c886. The registration commit carries the local tag agent-repair-experiment-8, and the measured run starts from it. Registration changed only status and status_note. Pilot data stay out of the measured analysis.",
   "question": "When GCC 14's warnings and UBSan report nothing, does EvoCC's feedback help a chat model repair the defect in one response? Experiments 4 and 5 asked this of a coding agent that could test its own changes; this experiment asks it of chat models that cannot.",
   "items_root": "tests/fixtures/agent-repair-4",
   "corpus_tag": "agent-repair-experiment-4",
