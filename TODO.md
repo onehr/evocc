@@ -135,7 +135,7 @@ was found in the read-only process check at this planning checkpoint.
 | Queue | Open IDs | Next deliverable |
 | --- | --- | --- |
 | KERNEL | K01, K02, K03, K04, K10, K11, K11f, K12, N08, N09, N11 | Start with K02/K03's existing current-Image profiles; produce a cause-backed hot-path reduction, then address BPF/pidfd budgets and intermittent sched_ext/ublk failures. |
-| APPLICATION | L11a, P17a, P22 | P21 completed 144 registered sessions: P1-P3 held; P4 and the earlier control penalty did not. P22's pilot of 2026-10-20 failed two go criteria on a false escape record. P01 through P20 retain their completed scope: P20 had no repair-count advantage; P18 stopped at the provider key limit. Existing application tasks keep separate exits. |
+| APPLICATION | L11a, P17a, P22 | P21 completed 144 registered sessions: P1-P3 held; P4 and the earlier control penalty did not. P23 (experiment 8) completed for three chat models: P2 and P3 held for each, P1 for Qwen3.8 27B only; the Mistral Small 4 run stopped on a rate limit and tests nothing. P22's pilot of 2026-10-20 failed two go criteria on a false escape record. P01 through P20 retain their completed scope: P20 had no repair-count advantage; P18 stopped at the provider key limit. Existing application tasks keep separate exits. |
 | REVIEW |  | No rule decision is open. The 2026-10-13 decisions for K07, L03 to L10 and L11a to L11c are in docs/archive/notebook/rules-20261013/DECISIONS.md. |
 | AUDIT | D33 | D24 to D28 closed the follow-ups of D22, D23, L04 and L05; D33 changes the alignment model. D01-D15 are closed in their recorded scope. Keep the T03 audit boundary; kernel/application acceptance and deferred proof domains remain separate. |
 | ACCEPTANCE | T04, T02, K13, K14, R05, R05k | On 2026-10-27 the compiler of `08bf09bd` passed the frozen acceptance (B10 and the direct Kbuild replay), the final gate T05 passed, and both archives were built (R05a). Next: the owner's R05k: the dating commit, the rebuild of both archives from it, the tag and the publication. |
@@ -339,6 +339,17 @@ retain the original scope where one copy has a truncated sentence.
   October 22: the owner unfroze the release binaries, which had stayed at commit
   7fec1ce5 for the agent experiments. The pilots of 2026-10-20 used that
   compiler, so a measured run now needs a new pilot with the current compiler.
+- [x] **P23 — Give the silent bugs to chat models (experiment 8)** — `DONE`, P2, 2026-10-29.
+  Registered at `0b9cef89` (tag `agent-repair-experiment-8`): the 24 items of
+  experiment 4 with its frozen GCC 14 and EvoCC records, one response for each
+  trial and 144 trials for each model. DeepSeek V4.1 Flash, MiniMax M3.1 Flash
+  and Qwen3.8 27B completed. P3 (fewer completion tokens on the silent items)
+  and P2 (a control loss of at most two) held for each. P1 (more repairs) held
+  for Qwen3.8 27B only: 30 to 54 of 54. Mistral Small 4 stopped at trial 6 on
+  HTTP 429 from the shared provider pool, so it tests nothing; a rerun needs
+  the owner's approval and a registered amendment. Measured cost USD 0.887.
+  [Book](book/src/evaluation-agents.md#experiment-8-chat-models-and-silent-bugs),
+  [analysis](tests/contracts/agent-repair-8-20261029.json).
 
 - [x] **P20 — Agent repairs of silent undefined behavior** — `DONE`. [History](docs/archive/todo-0.1.0.md#p20).
 - [x] **P19 — Consistent options and checkout defaults** — `DONE`. [History](docs/archive/todo-0.1.0.md#p19).

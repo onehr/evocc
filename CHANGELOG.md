@@ -10,11 +10,18 @@ All notable changes to EvoCC are listed in this file. The format follows
 - A RISC-V64 Linux backend design with measured RV64GC/LP64D layout, ABI, floating-point
   environment and assembler behavior. It shares its section structure with the x86-64 design;
   both designs are in `docs/design/`. Neither backend is implemented by this change.
+- Experiment 8 gives the bugs of experiment 4 to chat models, with the frozen record of GCC 14
+  and UBSan or of EvoCC. Three models completed it. With EvoCC, each one used fewer output tokens
+  on the silent bugs (p < 0.01), and Qwen3.8 27B repaired 54 of 54 against 30 of 54. The
+  protocol and the harness are in `tools/experiment/`; the receipts, the wire logs and the
+  analysis are in `tests/contracts/agent-repair-8-*`.
 
 ### Changed
 
 - The task tracker keeps active work and one-line references to closed work. The full closed
   history is in `docs/archive/todo-0.1.0.md`.
+- The book chapter on the agent experiments is now "Agent Experiments", and it reports
+  experiment 8.
 
 ### Fixed
 

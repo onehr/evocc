@@ -13,7 +13,7 @@
 - [Your First Proved Optimization](first-optimization.md)
 - [How EvoCC Works](how-it-works.md)
 - [Evaluating EvoCC](evaluate.md)
-- [Agent Repair Experiment](evaluation-agents.md)
+- [Agent Experiments](evaluation-agents.md)
 - [Retained Compatibility](compatibility.md)
 - [Reproducing a Release](release.md)
 - [Contributing](contributing.md)
