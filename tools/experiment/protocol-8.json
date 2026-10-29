@@ -34,13 +34,13 @@
     {
       "model": "qwen/qwen3.5-9b",
       "reported_models": ["qwen/qwen3.5-9b"],
-      "provider_name": "DeepInfra",
-      "provider": {"order": ["deepinfra"], "allow_fallbacks": false},
-      "price_usd_per_million": {"input": 0.1, "output": 0.15},
+      "provider_name": "Parasail",
+      "provider": {"order": ["parasail"], "allow_fallbacks": false},
+      "price_usd_per_million": {"input": 0.1, "output": 0.25},
       "cost_cap_usd": {"pilot": 0.1, "measured": 0.75}
     }
   ],
-  "provider_basis": "On 2026-10-29 the public endpoint lists of OpenRouter gave AtlasCloud (atlas-cloud/fp8, the P17a provider) for DeepSeek V4.1 Flash and DeepInfra (deepinfra/bf16) for Qwen3.5 9B; both list the reasoning parameter. In experiment 2, Qwen3.5 9B on DeepInfra had no response error.",
+  "provider_basis": "On 2026-10-29 the public endpoint lists of OpenRouter gave AtlasCloud (atlas-cloud/fp8, the P17a provider) for DeepSeek V4.1 Flash and Parasail (parasail/bf16) for Qwen3.5 9B; both list the reasoning parameter. The first pilot pinned Qwen3.5 9B to DeepInfra; both of its attempts got HTTP 429 (engine_overloaded, a shared upstream pool), the run stopped at no cost, and DeepInfra then showed status -2. Parasail serves the same bf16 weights with status 0.",
   "temperature": 0,
   "max_tokens": 8192,
   "reasoning": {"effort": "low"},
