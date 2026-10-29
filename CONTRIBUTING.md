@@ -53,6 +53,13 @@ Each change follows the same steps, in this order:
 
 A gate that cannot find its evidence fails. A skip, a timeout or a missing result is not a pass.
 
+## Size limits
+
+Rust source under `crates/*/src/` and Python under `tools/` have limits of 1,500 lines per file
+and 150 lines per function. Run `python3 tools/check-size.py`; `--report` lists the largest items.
+`tools/size-baseline.json` records older exceptions. `--update` only lowers or removes them;
+it never adds an exception or raises its size. Both the gate and CI run this check.
+
 ## Specifications
 
 The documents in [`spec/`](spec/README.md) are pinned by SHA-256 in `spec/pins.json`. When you

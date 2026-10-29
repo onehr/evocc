@@ -15,11 +15,17 @@ GATE = Path(__file__).resolve().parents[2] / "gate-changed.sh"
 
 class ChangedGateTest(unittest.TestCase):
     def run_gate(self, changed="", status="", fail_test=False, sources=None, full=False, extra=(),
-                 generator_exit=0):
+                 generator_exit=0, size_exit=0):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             (root / "tools").mkdir()
             shutil.copy2(GATE, root / "tools/gate-changed.sh")
+            (root / "tools/check-size.py").write_text(
+                "import sys\n"
+                "assert sys.argv[1:] == []\n"
+                "print('source-size-checked')\n"
+                f"sys.exit({size_exit})\n"
+            )
             (root / "tools/generate-target.py").write_text(
                 "import sys\n"
                 "assert sys.argv[1:] == ['--check']\n"
@@ -83,6 +89,15 @@ class ChangedGateTest(unittest.TestCase):
         failed, calls = self.run_gate(full=True, fail_test=True)
         self.assertNotEqual(failed.returncode, 0)
         self.assertEqual(len(calls), 1)
+
+    def test_a_size_failure_stops_before_cargo(self):
+        for full in (True, False):
+            with self.subTest(full=full):
+                result, calls = self.run_gate(full=full, size_exit=1,
+                                              changed="crates/leaf/src/lib.rs")
+                self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+                self.assertIn("source-size-checked", result.stdout)
+                self.assertEqual(calls, [])
 
     def test_stale_generated_target_facts_fail_before_any_cargo_gate(self):
         for full in (True, False):

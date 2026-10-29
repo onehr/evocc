@@ -13,6 +13,9 @@ All notable changes to EvoCC are listed in this file. The format follows
 
 ### Changed
 
+- The source-size check limits new Rust and Python files to 1,500 lines and functions to 150
+  lines. Older exceptions have a baseline that can only shrink. The local gate and CI check it.
+
 - The task tracker keeps active work and one-line references to closed work. The full closed
   history is in `docs/archive/todo-0.1.0.md`.
 

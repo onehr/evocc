@@ -130,6 +130,8 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v5
+      - name: Source size limits
+        run: python3 tools/check-size.py
       - name: docs/status.md matches the receipts
         run: python3 tools/render-status.py --check > /dev/null
       - name: spec/ matches spec/pins.json
