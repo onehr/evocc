@@ -2,7 +2,7 @@
   "schema": "agent-repair.protocol.c1",
   "name": "Experiment 8: chat models repair silent undefined behavior with frozen feedback",
   "status": "unregistered",
-  "status_note": "Pilot first. The owner approves the measured run after the pilot. Registration is a commit of this file with status registered and the tag agent-repair-experiment-8; the measured run starts from that clean commit. Registration changes only status, status_note and, when the pilot shows another name of the same model, reported_models. Any other change of the harness or of this file after the pilot needs a new pilot. Pilot data stay out of the measured analysis.",
+  "status_note": "Pilot first. The owner approved the measured run on 2026-10-29 for each model whose last pilot meets every go criterion. Registration is a commit of this file with status registered and the tag agent-repair-experiment-8; the measured run starts from that clean commit. Registration changes only status, status_note, reported_models (when the pilot shows another name of the same model) and the models list (it removes each model whose last pilot failed). Any other change of the harness or of this file after the pilot needs a new pilot. Pilot data stay out of the measured analysis.",
   "question": "When GCC 14's warnings and UBSan report nothing, does EvoCC's feedback help a chat model repair the defect in one response? Experiments 4 and 5 asked this of a coding agent that could test its own changes; this experiment asks it of chat models that cannot.",
   "items_root": "tests/fixtures/agent-repair-4",
   "corpus_tag": "agent-repair-experiment-4",
@@ -121,28 +121,28 @@
       }
     },
     {
-      "model": "qwen/qwen3.8-flash",
+      "model": "qwen/qwen3.8-27b",
       "reported_models": [
-        "qwen/qwen3.8-flash"
+        "qwen/qwen3.8-27b"
       ],
-      "provider_name": "Alibaba",
+      "provider_name": "Cerebras",
       "provider": {
         "order": [
-          "alibaba"
+          "cerebras"
         ],
         "allow_fallbacks": false
       },
       "price_usd_per_million": {
-        "input": 0.15,
-        "output": 0.47
+        "input": 0.99,
+        "output": 1.49
       },
       "cost_cap_usd": {
         "pilot": 0.15,
-        "measured": 1.5
+        "measured": 3.0
       }
     }
   ],
-  "provider_basis": "On 2026-10-29 the public endpoint lists of OpenRouter gave these providers, each with status 0 and the reasoning parameter: AtlasCloud (atlas-cloud/fp8, the P17a provider) for DeepSeek V4.1 Flash, and the first-party endpoints of Mistral, MiniMax and Alibaba for the other three models. Qwen3.5 9B left the protocol: its first pilot on DeepInfra and its second on Parasail stopped on HTTP 429 from shared upstream pools, at no cost. The owner chose the replacements: a Mistral, a MiniMax and a new small Qwen model.",
+  "provider_basis": "On 2026-10-29 the public endpoint lists of OpenRouter gave these providers, each with status 0 and the reasoning parameter: AtlasCloud (atlas-cloud/fp8, the P17a provider) for DeepSeek V4.1 Flash, the first-party endpoints of Mistral and MiniMax, and Cerebras (cerebras/fp16) for Qwen3.8 27B. Qwen3.5 9B left the protocol: its first pilot on DeepInfra and its second on Parasail stopped on HTTP 429 from shared upstream pools, at no cost. The owner chose the replacements: a Mistral, a MiniMax and a new small Qwen model. Qwen3.8 Flash also left: in the third pilot it used 11,500 to 12,900 reasoning tokens at low effort, its median request took 296 s, and a third trial reached the 300 s deadline twice. The owner chose Qwen3.8 27B on Cerebras instead, with a USD 3 measured cap.",
   "temperature": 0,
   "max_tokens": 16384,
   "reasoning": {
