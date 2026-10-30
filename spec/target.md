@@ -1,6 +1,6 @@
 # EvoCC Target Description
 
-**Revision 1.1.1** | **Pinned ground truth** | Editorial corrections on 2026-10-30
+**Revision 1.1.1** | **Pinned ground truth** | Corrections on 2026-10-30
 
 ## Status and scope
 
@@ -130,13 +130,16 @@ derived from encoding facts and are not widened to the architectural maximum.
    upstream commit. A new slice is a reviewed change that reruns the emulator
    differential.
 6. **Migration is behavior-preserving.** Moving a fact from code into a table
-   must leave every emitted object byte-identical: the two-build identity on
-   the six translation units of the codegen size comparison
-   (`docs/archive/codegen-quality-plan.md`) and on both native corpora is the test.
-   Moving `encodings` also requires that the generated instances assemble;
-   moving `isa-semantics`, that the emulator agrees with the native run and
-   the interpreters on the corpus; moving `patterns`, that every existing rule
-   gets a verdict, where a failing row is a bug report.
+   must leave every emitted object byte-identical. Two checks compare the
+   objects built before the move with those built after it:
+   `compare_codegen_object_baseline` in `tools/ladder/eqsat_size.py` for the
+   six translation units of `UNITS` in `tools/ladder/codegen_trend.py`, and
+   the `compare` mode of `crates/evocc-mir/tests/support/object_capture.rs` in
+   the C-corpus tests `crates/evocc-mir/tests/section8_linux_profile.rs` and
+   `section9_c_corpus.rs`. Moving `encodings` also requires that the generated
+   instances assemble; moving `isa-semantics`, that the emulator agrees with the
+   native run and the interpreters on the corpus; moving `patterns`, that every
+   existing rule gets a verdict, where a failing row is a bug report.
 
 ## 5. What "this backend operation is correct" means
 
@@ -175,24 +178,16 @@ pattern add_imm
           and the state is unchanged outside X[d]
 ```
 
-Four artifacts are generated from an entry:
+`tools/generate-target.py` accepts only the rows that it knows, each with its
+fixed fields, and refuses every other row. From them it generates the
+selection tables of `crates/evocc-mir/src/isa/aarch64/patterns.rs` and the
+pattern table of EvoMIR Section 5.6. No tool generates the obligations B1
+and B6 of a row.
 
-```text
-  gen_rust   -> selection table entry and its guard (isa/aarch64/patterns.rs)
-  gen_docs   -> a row in the pattern table of EvoMIR Section 5.6
-  gen_tests  -> bounded SMT query per width; assembler round-trip instance
-  gen_lean   -> the theorem statement (proof by fixed template, or UNKNOWN)
-```
-
-Patterns are data. An agent can therefore propose one without being trusted:
-the proposal is typed data, and the verdict comes from the generated
-obligations, as with the EvoIR registry `g0.ub.v1`.
-
-*Informative.* `tools/generate-target.py` writes `gen_rust` and `gen_docs`.
-`tools/isa_model_smt.py` qualifies the SMT translation of the pinned model;
-the pinned decoder does not yet translate, so no pattern row has a B1 or B6
-proof, and the selection variants that use the rows stay optional (EvoMIR
-Section 5.5).
+*Informative.* `tools/isa_model_smt.py` qualifies the SMT translation of the
+pinned model; the pinned decoder does not yet translate, so no pattern row has
+a B1 or B6 proof, and the selection variants that use the rows stay optional
+(EvoMIR Section 5.5).
 
 ## 6. Non-goals
 
@@ -243,14 +238,27 @@ constant names are the anchors.
   `IMM12` duplicates the one in `emit.rs` (Rule 1). The boundary test of
   Rule 2 finds neither. Its named-constant check identifies a generated owner
   by its path, not by a first-line comment.
-- The AAPCS64 variadic save areas and the even-register rounding of a
-  `bits<128>` argument apply under both ABI profiles without a table fact;
-  EvoMIR Sections 6.1 and 6.5 state the resulting Darwin limits.
+- Both ABI tables give the AAPCS64 variadic save areas and `va_list` offsets.
+  No table fact selects the Apple convention of EvoMIR Sections 6.6 and 6.12;
+  `TargetDataLayout::aarch64_apple_darwin` (`crates/evocc-types/src/lib.rs`)
+  does, and under it nothing reads the save areas.
+- `aligned-record-pair-rounding` (`false` in `abi-darwin`) decides the
+  even-register rounding of a `bits<128>` argument and of a record aligned to
+  16 in `isa/aarch64/lower/classification.rs` (`record_plan`), and of a
+  `bits<128>` lane argument in `lane.rs` (`observe_entry_for`). Under the
+  Apple convention `record_plan` starts an anonymous one at an even stack slot
+  whatever the fact (EvoMIR Section 6.5). `call_args` in
+  `isa/aarch64/lower/calls.rs` rounds without the fact, but its callers put no
+  `bits<128>` at an odd position. The rounding branch of `read_scalar` in
+  `isa/aarch64/lower/arguments.rs` never runs: every entry block has a plan.
 
 ## Revision
 
 **Revision 1.1.1, 2026-10-30.** Appendix A and the change procedure are
-corrected, and redundant text is removed. No rule changes.
+corrected, and redundant text is removed. Section 5, Rule 6 and Appendix A
+state what the code does: the two generated pattern artifacts, the object
+checks of Rule 6, and where the pair rounding and the Apple convention are
+decided.
 
 **Revision 1.1.0, 2026-10-16.** A terminator's `forwarding` fact can name
 `body.fixed`: it prevents forwarding only when its assembly body has a fixed

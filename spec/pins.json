@@ -15,11 +15,11 @@
     },
     "spec/target.md": {
       "revision": "1.1.1",
-      "sha256": "d848d3e43baa7b0455b973d2da1afc7bd83fce8c8019b00a5d6ae16b725bf90d"
+      "sha256": "7bba449b51d6dee2390db0f53c368b194b2f6117f88e971c7421d109b290ae33"
     },
     "spec/verification.md": {
       "revision": "1.1.4",
-      "sha256": "17285f2c3364770a57b09193ea8534a71c8218df049e9fe6a8175fed7c63fe00"
+      "sha256": "2a71ef32772cea8de1c8372b28575d465ce25f1b041aa4d839174b81176721c4"
     }
   }
 }

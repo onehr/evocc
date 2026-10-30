@@ -424,11 +424,13 @@ The driver writes these files to `NEW_DIR/inputs/`; `ENTRY` is an entry, `NNN` a
 | `evoir-rewritten.evo` | `ir` | EvoIR after the last step; only with steps | `evocc_evoir::render_module` | `Core.IR.Reader.readProgram` |
 | `ssa-evomir.json`, `post-ssa-evomir.json` | `ssa`, `postssa` | `core-mir-v1`, mode `ssa` or `post-ssa` | `evocc_mir::core_machine_export::export_core_machine` | `Machine.Reader.readProgram` (`MachineReader.lean`) |
 | `allocation.json` | `allocation` | `core-alloc-pair-v1`: post-SSA copy, allocated program, hints | `evocc_mir::verify_alloc::export_core_allocation` | `Alloc.Reader.readPair` (`Alloc/Reader.lean`) |
-| `asm-ast.json` | `asm` | `core-asm-v1`: assembly AST and frame hints | `evocc_mir::asm_ast::export_core_asm` | `Asm.Reader.readFile` (`Asm/Reader.lean`) |
+| `asm-ast.json` | `asm` | `core-asm-v1`: assembly AST and frame hints | `evocc_mir::asm_ast::export_core_asm_with_entries` | `Asm.Reader.readFile` (`Asm/Reader.lean`) |
 | `assembly.s` | `text` | The text that the driver publishes | `assemble` (`crates/evocc/src/main.rs`) | Compared with `Asm.File.print` |
 
 The SSA and post-SSA programs must come from the ordinary backend
-(`evocc_mir::lower_module_for_profile`, checked UB profile, then `evocc_mir::out_of_ssa`).
+(`evocc_mir::lower_module_for_profile`, checked UB profile, then
+`evocc_mir::regalloc::checked_out_of_ssa`, which validates its SSA input and runs the E4021
+transport check on the result).
 Snapshots, hints and proposals are untrusted. The readers are trusted (section 8): they decode,
 refuse unknown forms, and do not repair. They do not refuse every noncanonical spelling. The JSON
 readers parse with Lean's `Json.parse`, which skips spaces, tabs, carriage returns and line feeds
@@ -490,10 +492,10 @@ with `-Oeq-scalar`); `entries` (`entry` and `closure`, its function names); `sta
 row of the driver table); `chain` (one link per pair of section 7.3: `sha256` and `read_by`, two
 objects with `stage`, `role`, `path`); `output` (`path`, `sha256`, `checked`, `note`:
 "frame-emission checked these bytes: the printed assembly AST is equal to them."); `trusted`
-(section 8). A checked stage row has `id` (the stage identifier of 4.1, or `pipeline`), `status`
-(`CHECKED`), `theorem` and `results`; each result has `entry`, `step` (row `rewrite`), `result`
-(`ACCEPTED`), `inputs` (`role`, `path`, `sha256`) and `report` (the acceptance line). Other rows
-have `id`, `status`, `reason`. A stage row has no other name field.
+(parts 1 to 7 of section 8). A checked stage row has `id` (the stage identifier of 4.1, or
+`pipeline`), `status` (`CHECKED`), `theorem` and `results`; each result has `entry`, `step` (row
+`rewrite`), `result` (`ACCEPTED`), `inputs` (`role`, `path`, `sha256`) and `report` (the
+acceptance line). Other rows have `id`, `status`, `reason`. A stage row has no other name field.
 
 ### 7.5 Result labels
 
@@ -514,9 +516,9 @@ rewrite step to check, and the row `pipeline` checks a chain of zero steps (5.1,
 | 0 | Each row accepted each entry. `output.s` and `record.json` exist; the text is on standard output. |
 | 1 | An incorrect command line, a refused admission, or a compilation error before the proof inputs exist, a refusal of a rewrite step by the Rust certificate checker included. |
 | 3 | A stage checker rejected an entry (checker exit 1). Standard error names the row: `stage STAGE for entry ...`, where `STAGE` is a stage identifier or `pipeline`. |
-| 4 | A proof input is missing, changed, not readable or not writable; the chain has a gap; `NEW_DIR` exists; the checker reported an unsupported input (checker exit 2); or `-Oeq-scalar` gave no step. |
+| 4 | A proof input is missing, changed, not readable or not writable; the chain has a gap; `NEW_DIR` exists; the checker reported an unsupported input (checker exit 2); `-Oeq-scalar` gave no step; or `checked_out_of_ssa` refused the SSA removal of the export (section 6). |
 | 5 | The checker is missing or not readable, has another digest than the pinned one, failed, timed out, or gave no acceptance line. |
-| 6 | The source or the output is outside `core-v1`, or the driver refused to lower or export a snapshot. |
+| 6 | The source or the output is outside `core-v1`, or the driver refused to lower the module or to export a snapshot, except the exit 4 of `checked_out_of_ssa`. |
 
 ### 7.7 Fail-closed rule
 
@@ -529,7 +531,7 @@ must hold exactly the bytes that `frame-emission` and `pipeline` read.
 
 ## 8. Trusted base
 
-The record field `trusted` lists these parts. Tests check them but do not prove them.
+The record field `trusted` lists parts 1 to 7. Tests check the parts but do not prove them.
 
 1. **Preprocessing, parsing, elaboration and the typed source export**: no checker compares the tree
    with the C text. Tested by the GCC 14 and Clang 19 differential tests (`tests/acceptance/`), the
@@ -544,9 +546,15 @@ The record field `trusted` lists these parts. Tests check them but do not prove 
 6. **The ABI entry assumption `Asm.Proof.AbiSourceEntry`**: tested by the upper-bits probe.
 7. **The assembler, the linker, the runtime libraries and the hardware**: outside the theorem.
    Tested by the native run with GNU as and ld, and with clang and ld.lld.
+8. **The publication path of the driver** in `crates/evocc/src/proof_required.rs`: the checker run
+   and its acceptance line (`locate_checker`, `check`), the digest chain (`chain`, section 7.3), the
+   second digest of each input (section 7.2, step 8) and the writes of `output.s` and `record.json`.
+   The rule of section 7.7, that `output.s` holds the bytes that the checker read, rests on this
+   code alone. Tested by the checker-response, chain, changed-input and publication-failure tests
+   of `proof_required.rs`.
 
-Not trusted: the Rust compiler, the snapshots, hints and proposals, the Lean semantics of EvoIR,
-EvoMIR and allocated EvoMIR, and the Rust certificate checker, which runs in addition.
+Not trusted: the rest of the Rust compiler, the snapshots, hints and proposals, the Lean semantics
+of EvoIR, EvoMIR and allocated EvoMIR, and the Rust certificate checker, which runs in addition.
 
 ## 9. Certificates and rewrites
 
@@ -599,7 +607,9 @@ refresh each receipt that it makes stale.
 
 ## 11. Revision
 
-Revision 1.1.4 of 2026-10-30 drops tracker IDs, archive pointers and repeated text; no rule changes.
+Revision 1.1.4 of 2026-10-30 drops tracker IDs, archive pointers and repeated text. Sections 6 and
+7.6 name the functions and exit codes that the driver uses, and Section 8 adds the publication path
+of the driver as part 8 of the trusted base, which the record field `trusted` does not list.
 
 Revision 1.1.3 of 2026-10-27 names the modules that now hold the `bv_decide` rows of the
 transfer table: `Proofs/TransferCarry.lean`, `Proofs/TransferMul.lean` and `Proofs/TransferCompare.lean`. `Proofs/Transfer.lean` keeps the
