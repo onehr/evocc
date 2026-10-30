@@ -3,10 +3,9 @@
 An optimizer changes your program to make it smaller or faster. It must not change what the
 program means. In most compilers, you trust the optimizer on this point. EvoCC checks it.
 
-EvoCC has the usual levels `-O0` to `-O3`. `-O0` keeps the control flow of the source, and `-O1`
-to `-O3` simplify integer control flow and remove unused functions. This chapter is about one more
-option, `-Oeq-scalar`. It runs an optimizer that keeps a certificate of each change, and a separate
-checker replays each certificate before EvoCC writes output.
+EvoCC has the usual levels `-O0` to `-O3` ([Driver options](hello.md#driver-options)). The option
+`-Oeq-scalar` runs an optimizer that keeps a certificate of each change. A separate checker replays
+each certificate before EvoCC writes output.
 
 ## Multiply by one
 
@@ -34,8 +33,8 @@ func @f(%arg0: bits<32>) -> (bits<32>) cc = target_default
 }
 ```
 
-You know `signed_mul_defined` and `ub.assume` from [chapter 4](undefined-behavior.md). Now try
-`-Oeq-scalar`:
+[Undefined Behavior](undefined-behavior.md#undefined-behavior-in-the-ir) explains
+`signed_mul_defined` and `ub.assume`. Now try `-Oeq-scalar`:
 
 ```console
 $ evocc --emit=evoir -Oeq-scalar times-one.c
@@ -129,8 +128,6 @@ root c0
 endregion
 output 558669f736598e8b474f1a74170ac29da154c702c6dc2231cc5299dd19d89f49
 ```
-
-Read it from the top:
 
 - `registry` names the set of rules, with a digest.
 - `input` and `output` are the digests of the EvoIR before and after.
@@ -231,14 +228,15 @@ f:
 ```
 
 The `mul` instruction is gone. The overflow check, `smull` to `brk #3004`, is still there, because
-the obligation is still there. A separate, opt-in family of guard rules can remove a check when a
-proved fact shows that it can never fail. Those rules go through the same checked chain.
+the obligation is still there. A separate family of guard rules, `g0.ub.v1`, can remove a check
+when a proved fact shows that it can never fail. `--eq-policy=guard-known-true` selects them, and
+they go through the same checked chain.
 
 ## Optimization and proof together
 
-You can combine `-Oeq-scalar` with `--proof-required` from [chapter 5](proof.md). Then the Lean
-checker also checks each rewrite step, in the stage `rewrite`. The option `--eq-checker-sha256` is
-required in this mode:
+You can combine `-Oeq-scalar` with `--proof-required` from [Compiling with Proof](proof.md). Then
+the Lean checker also checks each rewrite step, in the stage `rewrite`. The option
+`--eq-checker-sha256` is required in this mode:
 
 ```console
 $ evocc --target=aarch64-unknown-linux-gnu --emit=asm --proof-required=proof-times-one \
@@ -254,4 +252,5 @@ unoptimized program, and `times-one-checked.s` is empty. A checker may refuse a 
 It must never accept a wrong one.
 
 The project has checked optimized cases on this path, for example a guard rule in the `FixedMul`
-function of Doom. [Chapter 8](evaluate.md) tells you where those results are.
+function of Doom
+([evidence](https://github.com/onehr/evocc/blob/main/docs/evidence.md#acceptance-sweep-2026-10-06)).

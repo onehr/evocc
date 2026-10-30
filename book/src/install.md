@@ -44,8 +44,8 @@ four programs of EvoCC:
 |---|---|
 | `evo` | The commands to run, check, explain, prove and build. |
 | `evocc` | The compiler. You use it like `cc`. |
-| `evocc-checker` | The certificate checker. It replays each change of the optimizer ([chapter 6](optimization.md)). |
-| `evoir-sem` | The Lean checker. It checks a compilation with proof ([chapter 5](proof.md)). |
+| `evocc-checker` | The certificate checker. It replays each change of the optimizer ([Checked Optimization](optimization.md)). |
+| `evoir-sem` | The Lean checker. It checks a compilation with proof ([Compiling with Proof](proof.md)). |
 
 Add its `bin/` directory to your `PATH`, and check that the shell finds `evocc`:
 
@@ -87,26 +87,24 @@ The Linux headers in the archive come from glibc 2.41. When a program that you c
 defines `_GNU_SOURCE`, these headers change the names of `strtol`, `scanf` and related functions to
 new names, such as `__isoc23_strtol`. Only glibc 2.38 or later has these names. Such a program
 needs glibc 2.38 or later to link and to run. On Debian 12, with glibc 2.36, the link stops with
-``undefined reference to `__isoc23_strtol'``. [Hello, World!](hello.md) shows how to give
-another header root with `--sysroot`.
+``undefined reference to `__isoc23_strtol'``. [Hello, World!](hello.md#cross-compile-for-linux)
+shows how to give another header root with `--sysroot`.
 
 ## Nightly builds
 
-Nightly builds are paused. The daily schedule starts again when a hosted CI run passes;
-until then, use a stable release. When it runs, the
-[rolling nightly prerelease](https://github.com/onehr/evocc/releases/tag/nightly)
-is the download location for daily and manual builds of `main`. The workflow uses
-the same packaging, native smoke checks and cross-host object check as stable
-releases. A successful run replaces two archives named
-`evocc-nightly-<target>.tar.gz` and their `SHA256SUMS`; it does not create a new
-release each day. The directory inside each archive still names the compiler's
-version. Verify its checksum before unpacking, as for a stable release.
+Nightly builds are paused until a hosted CI run passes. Use a stable release.
 
-Nightly is not a stable release. Its release notes identify the source commit,
-and `evocc --version` retains the version and commit built into the compiler.
-Stable releases keep `vX.Y.Z` tags. The current package version policy is
-`0.y.z`; packaging requires an exact matching `## [0.y.z]` heading in
-`CHANGELOG.md` before it writes an archive.
+When the workflow runs, the
+[rolling nightly prerelease](https://github.com/onehr/evocc/releases/tag/nightly) holds the
+daily and manual builds of `main`. The workflow uses the packaging, the native smoke checks and
+the cross-host object check of the stable releases. A run replaces the two archives
+`evocc-nightly-<target>.tar.gz` and their `SHA256SUMS`. It does not make a new release each day.
+The directory inside each archive names the version of the compiler. Check the digest before you
+unpack an archive, as for a stable release.
+
+A nightly build is not a stable release. Its release notes name the source commit, and
+`evocc --version` prints the version and the commit of the compiler. Stable releases have
+`vX.Y.Z` tags.
 
 ## Build from source
 
@@ -160,8 +158,9 @@ Your build prints the commit and the date of your checkout.
 A source build looks for Linux headers in `sysroot/aarch64-unknown-linux-gnu/` of the checkout. On
 Linux, when that directory is absent, `evocc` reads the headers of your system. On macOS,
 `--target=aarch64-unknown-linux-gnu` needs that directory or another root that `--sysroot` names.
-`tools/export-sysroot.sh` writes the directory from the sealed build image. The script needs Apple `container` and the image
-`evo-nexlab:sealed-20260810`. It stops when the image has another digest than
+`tools/export-sysroot.sh` writes the directory from the sealed build image. The script needs the
+image `evo-nexlab:sealed-20260810`, and Apple `container` on macOS or Docker on Linux. It stops
+when the image has another digest than
 [the contract](https://github.com/onehr/evocc/blob/main/contracts/sysroot-aarch64-unknown-linux-gnu.json)
 pins:
 

@@ -1,9 +1,11 @@
 # Editor diagnostics
 
-`evo lsp` provides syntax diagnostics and safe repair actions for C files.
-It checks the open buffer without saving it, executing C, emitting objects or
-applying repairs on disk. This is not runtime undefined-behavior detection or a
-proof of the program. Use `evo check` separately for an executed-path check.
+`evo lsp` gives syntax diagnostics and safe repair actions for C files. It checks
+the open buffer. It does not save the buffer, run the C code, write objects or
+apply repairs on disk. Thus it does not find undefined behavior at run time and
+does not prove the program: use `evo check` for an executed-path check. It gives
+no completion, hover, formatting, navigation or rename service, and it has no
+network listener.
 
 ## Zed using project settings
 
@@ -16,7 +18,7 @@ your absolute `evo` path and keep the matching `evocc` executable beside it.
   "lsp": {
     "clangd": {
       "binary": {
-        "path": "/absolute/path/to/evocc/target/debug/evo",
+        "path": "/absolute/path/to/evocc/target/release/evo",
         "arguments": ["lsp"]
       }
     }
@@ -28,12 +30,10 @@ your absolute `evo` path and keep the matching `evocc` executable beside it.
 ```
 
 Restart the project's language server after changing the setting, then open a
-C file. This uses Zed's existing `clangd` adapter slot but replaces the project's
-clangd executable with EvoCC; it does not run both servers. EvoCC supplies only
-diagnostics and safe code actions, not clangd's completion, hover or navigation.
-The examples below can be used to check diagnostics and repair actions. See
+C file. This setting uses Zed's `clangd` adapter slot, but it replaces the
+project's clangd executable with `evo`, so Zed does not run both servers.
 [Zed's language configuration documentation](https://zed.dev/docs/configuring-languages)
-for binary overrides and project-local settings.
+describes binary overrides and project-local settings.
 
 ## VS Code from a checkout
 
@@ -52,8 +52,8 @@ no TypeScript compiler, language-client library or downloaded package is needed.
 This launches an Extension Development Host, not a Marketplace installation.
 
 In that window, set **Evo: Path** (`evo.path`) to the absolute path of the `evo`
-executable. For the repository's usual build directory, use
-`/absolute/path/to/evocc/target/debug/evo`. Keep its sibling `evocc`
+executable. For a source build, use
+`/absolute/path/to/evocc/target/release/evo`. Keep its sibling `evocc`
 executable available. Reload the window after changing this setting. The default
 is `evo` from the extension host's `PATH`, which can differ from a terminal's.
 The extension runs only in trusted workspaces and handles local `file:` C
@@ -68,8 +68,6 @@ int main(void) { return 0; }
 
 The constant-expression error appears as an editor diagnostic. Change the
 denominator to `1`; the error clears after the change is checked, before saving.
-An ordinary runtime expression such as `return 1 / 0;` is not the example for
-this syntax-only service: it does not execute that expression to find runtime UB.
 
 For a safe Quick Fix, replace the buffer with:
 
@@ -100,8 +98,7 @@ available; invoke `vim.lsp.buf.code_action()` to request an action.
 
 The server uses the matching `compile_commands.json` entry when available,
 including supported include-path and macro-definition flags. Without an entry,
-it uses the ordinary syntax-check defaults with warnings enabled. This is not a
-build-system generator, a shell-command executor or a replacement for a build.
+it uses the ordinary syntax-check defaults with warnings enabled.
 Included headers come from disk: separate unsaved header buffers are not merged
 into another document's compilation. Save a changed header before rechecking
 its source file.
@@ -113,5 +110,4 @@ positions. Send `initialize`, then `initialized`; use full-text `didOpen` and
 `didChange` synchronization, `didSave`, and `didClose`. Saves check the current
 open buffer. The server publishes versioned diagnostics and answers
 `textDocument/codeAction` with safe, versioned `WorkspaceEdit.documentChanges`.
-End with `shutdown`, then `exit`. It has no network listener and provides no
-completion, formatting, navigation or rename service.
+End with `shutdown`, then `exit`.

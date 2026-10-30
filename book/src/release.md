@@ -23,6 +23,9 @@ The script sorts the entries. It writes 0 as the owner and the group of each ent
 time as the time of each entry. The gzip header has no name and no time. Thus the path of the
 checkout, the user and the time of the run do not change the archive.
 
+The script writes no archive unless the version has the form `0.y.z` and `CHANGELOG.md` has the
+heading `## [0.y.z]` of that version.
+
 ## Package the programs of a release again
 
 These steps make the archive again from the programs of a published archive. If the SHA-256 is
@@ -50,9 +53,9 @@ the check compares the headers of the archive with the contract of the release c
 not export them again.
 
 Put the programs where `tools/release.sh --skip-build` looks for them. `evo`, `evocc` and
-`evocc-checker` go in `dist/` of `CARGO_TARGET_DIR`, and `evoir-sem` goes in
-`lean/.lake/build/bin/` of the checkout. These commands take them from the archive that you
-unpacked beside the checkout:
+`evocc-checker` go in `dist/` of the Cargo target directory: `target/`, or the directory that
+`CARGO_TARGET_DIR` names. `evoir-sem` goes in `lean/.lake/build/bin/` of the checkout. These
+commands take them from the archive that you unpacked beside the checkout:
 
 ```console
 $ mkdir -p ../programs/dist lean/.lake/build/bin
@@ -68,8 +71,8 @@ writes the digest to `../repack/SHA256SUMS`.
 These steps were checked with the macOS archive. Three checkouts of the same commit, at three
 paths, gave archives with the same SHA-256, with the exported headers and with the headers of the
 archive. For the Linux archive, put `evo`, `evocc` and `evocc-checker` in
-`aarch64-unknown-linux-musl/dist/` of `CARGO_TARGET_DIR`, and give
-`--target aarch64-unknown-linux-gnu`. No Linux archive was available to check these steps.
+`aarch64-unknown-linux-musl/dist/` of the Cargo target directory, and give
+`--target aarch64-unknown-linux-gnu`.
 
 ## Build the programs again
 
@@ -86,5 +89,7 @@ of the checkout or of the Cargo target directory, and a Cargo program that holds
 the release, so the script does not look for `$HOME` in it.
 
 On an Apple silicon Mac with macOS 26.6 and Rust 1.97.1, two checkouts at two paths, each with its
-own target directory, gave byte-identical programs and archives. The Linux archive was not built;
-it needs an AArch64 Linux host.
+own target directory, gave byte-identical programs and archives.
+
+Neither check used a Linux archive: none was available to repack, and a Linux build needs an
+AArch64 Linux host.

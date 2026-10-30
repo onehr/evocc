@@ -1,9 +1,5 @@
 # How EvoCC Works
 
-This chapter opens the compiler. It follows a C file from its bytes to the assembly, and it shows
-where each check happens. It also tells how the project decided what counts as a correct answer,
-before the compiler could read a single token.
-
 ## The pipeline
 
 EvoCC has three intermediate representations, or IRs. Each IR answers one question. C-HIR says
@@ -27,13 +23,14 @@ AArch64 assembly ──► system assembler and linker ──► native program
 Lean 4, offline: rule proofs · stage checkers · the pipeline theorem
 ```
 
-The rest of this chapter walks down this picture.
+[ARCHITECTURE.md](https://github.com/onehr/evocc/blob/main/ARCHITECTURE.md) gives the crate of each
+stage.
 
 ## From bytes to tokens
 
 Before the parser sees anything, the preprocessor turns bytes into *preprocessing tokens*, reads
-directives and expands macros. This sounds simple. It is not, because each step removes
-information, and the order of the steps changes the program.
+directives and expands macros. Each step removes information, and the order of the steps changes
+the program.
 
 ### Spaces can matter
 
@@ -55,9 +52,8 @@ int f(int x){return x+ +1;}int g(int x,int*y){return x/ *y;}
 
 The output drops every space that it can, but it keeps the space in `x+ +1` and in `x/ *y`. Without
 it, `x++1` would be an increment, and `x/*y` would start a comment that eats the rest of the
-program. An early version of EvoCC made exactly these two mistakes. The fix was a general rule, not
-a list of special cases: before the writer drops a space, it lexes the result again and checks that
-it gets the same tokens.
+program. One general rule keeps both spaces, not a list of special cases: before the writer drops
+a space, it lexes the result again and checks that it gets the same tokens.
 
 ### Macro expansion is an evaluator
 
@@ -86,10 +82,9 @@ and `##` pastes two tokens into one.
 ### Tokens remember where they came from
 
 Each token has a kind, a spelling and a source span: a file, a byte range, a line and a column.
-A token that comes from a header points into the header, not into your file. An early version of
-the parser read the spelling of a header token from the main file. A long name in a header then
-pointed past the end of the main file, and the parser crashed. Now a token from another file owns
-its spelling, and its span still points at the header for diagnostics.
+A token that comes from a header points into the header, not into your file. Each token owns its
+spelling, so no part of the compiler reads a header token from the buffer of another file. The span
+still points at the header for diagnostics.
 
 A missing header is a numbered diagnostic, not a crash. Make a file `missing.c` that includes a
 header that does not exist:
@@ -113,9 +108,10 @@ exit status 1
 How do you know that the preprocessor is right? You compare it with another one. But GCC and EvoCC
 place spaces differently, so their text differs even when their tokens agree. And if you remove all
 spaces, you hide the very mistakes of the last section. So the project compares *tokens*. A small,
-separate program lexes the output of both compilers into a list of tokens. A fixed corpus of 34
-cases must give the same tokens under EvoCC and GCC 14. The number 34 is part of the test: a run
-with 33 cases is a different test, and it fails.
+separate program lexes the output of both compilers into a list of tokens. In
+[`tests/acceptance/cpp-differential.sh`](https://github.com/onehr/evocc/blob/main/tests/acceptance/cpp-differential.sh),
+a fixed corpus of 34 cases must give the same tokens under EvoCC and GCC 14. The number 34 is part
+of the test: a run with 33 cases is a different test, and it fails.
 
 ## C-HIR
 
@@ -141,7 +137,7 @@ function max
 C-HIR has its own interpreter, `--interpret-c-hir`. The interpreter tracks two extra facts. Each
 byte of memory knows whether it was written, and each pointer knows the object that it points into,
 its *provenance*. That is how the interpreter can report a read of an uninitialized variable or a
-read past the end of an array, as in [chapter 4](undefined-behavior.md).
+read past the end of an array, as in [Undefined Behavior](undefined-behavior.md).
 
 ## EvoIR
 
@@ -171,23 +167,25 @@ EvoIR is in *static single assignment* form: each value has one definition. A va
 from one block to another is an explicit argument of the block. Here `^b3` receives the result of
 the conditional as `%v9`. EvoIR has four more properties:
 
-- **Values are bit vectors.** `bits<32>` has no sign. An operation such as `icmp.slt` says how it
+- Values are bit vectors. `bits<32>` has no sign. An operation such as `icmp.slt` says how it
   reads the bits.
-- **Undefined behavior is an instruction.** Each condition that C requires is a `ub.assume`
-  obligation, as you saw in [chapter 4](undefined-behavior.md).
-- **Effects are values.** Memory and the outside world travel as the tokens `mem` and `world`.
-  A function that touches neither, like `max`, has no tokens, and its `effects` line says so.
-- **Pointers have provenance.** Each pointer carries the thing that it points into: an object, a
+- Undefined behavior is an instruction. Each condition that C requires is a `ub.assume`
+  obligation, as in [Undefined Behavior](undefined-behavior.md#undefined-behavior-in-the-ir).
+- Effects are values. Memory and the outside world travel as the tokens `mem` and `world`. The
+  `effects` line says what a function reads and writes. `max` touches neither, and here it has no
+  tokens. A function can also carry the tokens without a use, as `scale` does in
+  [Undefined Behavior](undefined-behavior.md#undefined-behavior-in-the-ir).
+- Pointers have provenance. Each pointer carries the thing that it points into: an object, a
   function or null.
 
 Two EvoIR terms are *equal* only if they have the same value and the same effects. Two terms with
 the same value but different trap conditions are not equal. The optimizer of
-[chapter 6](optimization.md) uses exactly this equality.
+[Checked Optimization](optimization.md) uses exactly this equality.
 
 EvoIR has its own interpreter, `--interpret-evoir`. It is a second, separate implementation of the
 meaning of your program. Each test program must give the same result in both interpreters, and the
 same result as GCC 14 and Clang 19. When the two interpreters reach the same mistake, they report
-the same code. Here is `uninit.c` from chapter 4:
+the same code. Here is `uninit.c` from [Undefined Behavior](undefined-behavior.md#four-mistakes):
 
 ```console
 $ evocc --interpret-c-hir uninit.c
@@ -206,8 +204,8 @@ program.
 
 The facts about the machine are data, not code. The directory `targets/aarch64/` holds versioned
 tables of registers, calling conventions, instructions, encodings, selection patterns and costs.
-A generator turns them into the tables of the backend, and the gate checks that the generated
-tables are current.
+`tools/generate-target.py` turns them into the tables of the backend, and
+`tools/gate-changed.sh` checks that the generated tables are current.
 
 ## The Lean checkers
 
@@ -221,14 +219,13 @@ The last part of the picture runs offline. In Lean 4, the project proves three k
 Lean compiles the checkers into one program, `evoir-sem`. In proof-required mode, EvoCC writes the
 input and the output of each stage to files, and `evoir-sem` checks them. The compiler proposes; the
 checker decides. So the theorems hold for each accepted compilation, and the compiler can change
-without a change to a proof. The cost is that a checker can refuse a correct program, as you saw in
-[chapter 5](proof.md).
+without a change to a proof. The cost is that a checker can refuse a correct program, as in
+[Compiling with Proof](proof.md#see-a-refusal).
 
 ## Before the first token
 
-The project did not start with a lexer. It started with a question: when the compiler gives an
-answer, who says that the answer is right? A compiler that cannot name its inputs cannot explain its
-output. So the first work was to pin everything that can change a result.
+When the compiler gives an answer, who says that the answer is right? A compiler that cannot name
+its inputs cannot explain its output. So the project pins everything that can change a result.
 
 ### Who decides what is correct
 
@@ -248,8 +245,8 @@ by siding with one of them. A kernel that boots cannot overrule the language con
 
 One detail shows why this matters. On macOS, `/usr/bin/gcc` is Apple Clang. Two commands, one
 compiler: treating them as two oracles gives one implementation two votes. So the reference
-compilers, GCC 14.2 and Clang 19.1, run in a sealed Linux image with no network, and their versions
-and digests are checked on each run.
+compilers run in a sealed Linux image, and each run checks their versions and digests
+([The ladder](evaluate.md#the-ladder)).
 
 ### Pin what can change the answer
 
@@ -260,9 +257,9 @@ change of the environment. So each of them is pinned in a contract file in `cont
 named as an observation only.
 
 "Reproducible" is a claim that needs evidence. The project builds each reference kernel twice from
-a clean state and compares the bytes. This found a real defect: a bare epoch time stamp made one
-build helper drop its time option, and the two kernel images differed. The fix pinned the
-time stamp in the form that the build expects.
+a clean state and compares the bytes. `contracts/build-environment.json` pins
+`KBUILD_BUILD_TIMESTAMP` as a date string: with a bare epoch number, `usr/gen_initramfs.sh` drops
+its time option, and the two kernel images differ.
 
 ### A boot that cannot be faked
 
@@ -273,21 +270,19 @@ image, the value exactly once, the markers in order, an orderly power-off, and n
 
 ### Red is a valid answer
 
-On the first day, EvoCC compiled nothing. A dishonest skeleton could return success and produce
-nothing. EvoCC instead failed each request with a named `NOT_IMPLEMENTED` result. A missing feature
-is a precise failure. A crash, a timeout, missing evidence or a silent success is a failure of the
-test itself. This rule stayed: each change still starts with a failing test, a RED test, and a gate
-that cannot find its evidence fails.
+A missing feature fails with a named result, such as `NOT_IMPLEMENTED`, not with a silent
+success. A crash, a timeout, missing evidence or a silent success is a failure of the test itself.
+Each change starts with a failing test, a RED test. A gate that cannot find its evidence fails.
 
-Green can lie too. Early reviews found a test corpus that had become smaller when a hard case was
-removed, and a check that tested an example instead of the real files. The repair was not more
-green results. It was a stronger link between the result and the evidence: a fixed number of cases,
-no result other than PASS, and a check that rejects changed, missing and extra files.
+Green can lie too: a corpus can lose a hard case, and a check can read an example instead of the
+real files. So a result needs a strong link to its evidence: a fixed number of cases, no result
+other than PASS, and a check that rejects changed, missing and extra files.
 
 ## The specifications
 
-Four documents in `spec/` define the IRs and the checked path. Each is pinned by SHA-256, and a
-change needs a new revision:
+Five documents in `spec/` define the IRs, the target description, the checked path and the
+diagnostic records. `spec/pins.json` pins each of them by SHA-256, and a change needs a new
+revision:
 
 - [EvoIR](https://github.com/onehr/evocc/blob/main/spec/evoir.md): types, SSA form, instructions,
   effects, memory, undefined behavior and diagnostics, equality saturation and the rule registries;
@@ -296,7 +291,9 @@ change needs a new revision:
 - [The target description](https://github.com/onehr/evocc/blob/main/spec/target.md): the tables in
   `targets/aarch64/`;
 - [The verification contract](https://github.com/onehr/evocc/blob/main/spec/verification.md): the
-  checked subset, the semantics, the stage checkers, the pipeline theorem and the trusted base.
+  checked subset, the semantics, the stage checkers, the pipeline theorem and the trusted base;
+- [Diagnostics](https://github.com/onehr/evocc/blob/main/spec/diagnostics.md): spans, text and JSON
+  records, source repairs and exit status.
 
 When the code and a specification disagree, one of them has a defect. The
 [index of the specifications](https://github.com/onehr/evocc/blob/main/spec/README.md) explains how

@@ -36,7 +36,8 @@ compiler that you built elsewhere. A full run of all lanes takes many hours. Sta
 ## Retained results
 
 For a local Make project, `evo build` runs its configure script, if present,
-then Make with EvoCC. Copy the pinned cJSON tree to `cjson`, then run:
+then Make with EvoCC. Copy the cJSON 1.7.19 source tree of the `cjson` lane to
+`cjson`, then run:
 
 ```console
 $ make -C cjson clean > /dev/null
@@ -45,9 +46,9 @@ build exit 0; log: $PWD/cjson/evo-build.log
 ```
 
 The log path follows your directory; `$PWD` stands for its absolute path.
-`cjson/evo-build-receipt.json` records the compiler version, target, compiled
-C files, coded warning counts, failed build command and exit status. It is not
-a proof or a frozen ladder result.
+`cjson/evo-build-receipt.json` records the build
+([fields](agents.md#command-records)). It is not a proof or a frozen ladder
+result.
 
 Each lane keeps its last result. `--status` prints it without running anything:
 
@@ -76,8 +77,8 @@ $ jq '{subject, summaryLine, url, tarballSha256, target, driverSha256, run}' tes
   "url": "https://zlib.net/zlib-1.3.2.tar.gz",
   "tarballSha256": "bb329a0a2cd0274d05519d61c667c062e06990d72e125ee2dfa8de64f0119d16",
   "target": "aarch64-unknown-linux-gnu",
-  "driverSha256": "ff5f51e540abf40d9f660ade9193a5930ce2f9a274e18fe43d77b4f74c691882",
-  "run": "20260919T231524Z"
+  "driverSha256": "ab0c90437192d6824ce884c71d80a028e1d785ae89a11fe58ecb0145d76de525",
+  "run": "20261027T114544Z"
 }
 $ jq '.test | {command, passed}' tests/contracts/ladder-zlib-receipt.json
 {
@@ -86,9 +87,8 @@ $ jq '.test | {command, passed}' tests/contracts/ladder-zlib-receipt.json
 }
 ```
 
-The receipt names the source archive and its digest, the digest of the `evocc` that built it, and
-the exact test command. Anyone can download the same archive, build it with the same compiler and
-run the same command.
+With these fields, anyone can download the same archive, build it with the same compiler and run
+the same command.
 
 ## Kernel acceptance inputs
 
@@ -125,10 +125,10 @@ $ python3 tools/render-status.py --check > /dev/null; echo $?
 
 Each word in a result has a narrow meaning:
 
-- **PASS** holds for the configuration, the objects and the test selection that the lane records.
+- `PASS` holds for the configuration, the objects and the test selection that the lane records.
   It does not mean that every configuration of the program works.
-- **INCOMPLETE** means that some part did not finish or could not be judged. It is not a pass.
-- **PROFILE_CLEAN** means that every case passed or has a recorded, evidenced reason to be left
+- `INCOMPLETE` means that some part did not finish or could not be judged. It is not a pass.
+- `PROFILE_CLEAN` means that every case passed or has a recorded, evidenced reason to be left
   out. It is not a pass of every program.
 - A skip, a timeout and a missing result are never a pass.
 
@@ -153,7 +153,9 @@ qualifier of these numbers, and the
 
 ## The showcase
 
-The README of the project opens with a gallery: images that programs built by EvoCC produced, from
-a Doom frame to a Mandelbrot set computed by Lua. Each image links to its receipt, and the README
-gives the command that reproduces it. For example, the zlib image shows six sprites that the
+The [gallery of the README](https://github.com/onehr/evocc/blob/main/README.md#what-it-compiles-correctly)
+shows images that programs built by EvoCC produced, from a Doom frame to a Mandelbrot set computed
+by Lua. Each image links to its receipt or to its capture notes. The
+[capture notes](https://github.com/onehr/evocc/blob/main/docs/images/showcase/README.md#reproduce)
+give the commands that reproduce the images. For example, the zlib image shows six sprites that the
 EvoCC-built zlib compressed and restored without a changed pixel.

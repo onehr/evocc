@@ -7,13 +7,11 @@ happen, the program can do anything, often with no sign of a problem.
 
 EvoCC keeps each supported undefined-behavior obligation as an explicit check. Its interpreters
 stop at the first check that fails and report a diagnostic. Checked native code keeps the
-supported scalar checks. `--check` does not check the same-object or exact-element obligations of
-pointer subtraction, or same-object ordering, and a completed run covers only the path that it
-took.
+supported scalar checks.
 
 ## Four mistakes
 
-Here are four small programs. Each has one mistake. Save each in the file named above it.
+Each of these four programs has one mistake. Save each in the file named above it.
 
 `overflow.c` multiplies past the largest `int`:
 
@@ -64,8 +62,8 @@ int main(void) {
 
 ## Find them with `evo check`
 
-`evo check` runs `main` through the existing check command. It reports the first
-undefined operation on the executed path. Each command below exits with status 1:
+`evo check` runs `main` with `evocc --check`. It reports the first undefined operation on the
+executed path. Each command below exits with status 1:
 
 ```console
 $ evo check overflow.c
@@ -130,9 +128,9 @@ int main(void) {
 The conversion must occur before addition, not after an overflowing result.
 ```
 
-The authority is the table of diagnostics in the EvoIR specification. The
-[EvoIR specification, section 6.3](https://github.com/onehr/evocc/blob/main/spec/evoir.md#63-diagnostic-authority)
-lists every code.
+The [Error Index](error-index.md) holds the explanation of every code. The table in
+[section 6.3 of the EvoIR specification](https://github.com/onehr/evocc/blob/main/spec/evoir.md#63-diagnostic-authority)
+is the authority for each code.
 
 ## Diagnostics for tools
 
@@ -144,7 +142,8 @@ $ evocc --check --error-format=json overflow.c
 ```
 
 The record contains source spans, notes, help and the rendered text. When the run completes with no
-finding, `--check` writes a record of the result instead. Here is `sum.c` from chapter 3:
+finding, `--check` writes a record of the result instead. Here is `sum.c` from
+[Hello, World!](hello.md#run-a-program-without-compiling-it):
 
 ```console
 $ evocc --check --error-format=json sum.c
@@ -154,9 +153,10 @@ $ evocc --check --error-format=json sum.c
 ## What `--check` does not tell you
 
 Read the claim in the last record: `executed-path-only`. `--check` runs your program once, on the
-path that its inputs select. A clean run does not prove that other inputs are safe. If the
-interpreter reaches its step limit or a call that it cannot run, the check is incomplete. It is not
-a pass.
+path that its inputs select. A clean run does not prove that other inputs are safe. `--check` does
+not check the same-object or exact-element obligations of pointer subtraction, or same-object
+ordering. If the interpreter reaches its step limit or a call that it cannot run, the check is
+incomplete. It is not a pass.
 
 ## Undefined behavior in the IR
 
@@ -176,8 +176,6 @@ func @scale(%arg0: bits<32>, %arg1: mem<all>, %arg2: world) -> (bits<32>, mem<al
 }
 ```
 
-Three lines do the work:
-
 - `signed_mul_defined %v0, %v3` computes a truth value: is `x * 1000` defined for this `x`?
 - `ub.assume.signed_overflow %v4` is an *obligation*. It states that the program requires this
   truth value to be true.
@@ -190,7 +188,7 @@ drop it.
 
 ## The check in the machine code
 
-The backend turns each obligation into a check. Here is the start of the assembly for `scale`:
+The backend turns each obligation into a check:
 
 ```console
 $ evocc --target=aarch64-unknown-linux-gnu --emit=asm overflow.c | head -n 21

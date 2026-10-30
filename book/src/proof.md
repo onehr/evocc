@@ -5,18 +5,10 @@ on the next one. For a small subset of C, EvoCC can do more. It checks the actua
 by stage, with checkers that are proved in Lean. One theorem covers the whole chain, from the C
 function to the final assembly text. If any check refuses, EvoCC writes no output.
 
-This chapter compiles a function with proof, reads the record of the proof, and shows what a
-refusal looks like.
-
 ## What you need
 
-You need the Lean checker, `evoir-sem`. It is in the release archive. If you built EvoCC from
-source, build it with Lake, as in [chapter 2](install.md):
-
-```console
-$ (cd lean && lake build 2>&1 | tail -n 1)
-Build completed successfully (728 jobs).
-```
+You need the Lean checker, `evoir-sem`. It is in the release archive. A source build makes it with
+Lake ([Installation](install.md#build-from-source)).
 
 You also need a function in the checked subset. Its name is `core-v1`. In short, it covers
 integer functions:
@@ -49,13 +41,12 @@ $ evo prove abs.c -o abs.s
 checked from typed Core source to final assembly text: $TMPDIR/evo-proof-19627-1791318427250745000/checked/record.json
 ```
 
-`$TMPDIR` stands for the temporary directory of the host. The temporary path
-changes on each run. `abs.s` holds the checked assembly.
-The command selects all defined functions by default. Repeat `--entry NAME`
-to select entries explicitly; the proof contract still requires every output function.
-It uses Linux AArch64, `-O0` and `-fno-builtin`. Put `evoir-sem` next to `evo`,
-or set `EVOCC_PROOF_CHECKER` to its path. Failure keeps and names the proof directory.
-For the commands below, link `proof-abs` to the `checked` directory of your run:
+`$TMPDIR` stands for the temporary directory of the host. The temporary path changes on each run.
+`abs.s` holds the checked assembly. The command selects all defined functions by default. Repeat
+`--entry NAME` to select entries; each function in the output must still be an entry. The command
+uses Linux AArch64, `-O0` and `-fno-builtin`. [Agent Interfaces](agents.md#command-records) gives
+the order in which it looks for `evoir-sem`. After a failure, it keeps the proof directory and
+prints its path. For the commands below, link `proof-abs` to the `checked` directory of your run:
 
 ```console
 $ ln -s $TMPDIR/evo-proof-19627-1791318427250745000/checked proof-abs
@@ -202,7 +193,6 @@ true
 ## See a refusal
 
 A refusal is a normal result. It means that a check did not succeed, so EvoCC publishes nothing.
-Here are four refusals.
 
 A pointer is outside the subset. Make a file `first.c`:
 
@@ -250,8 +240,8 @@ source-to-evoir-sum_to.out
 `sum_to` is in the subset, but the Lean checker refused the first stage. A loop needs *cutpoints*:
 a statement of which values correspond at the head of each loop. You can give them in a proposal
 file with `--proof-proposal=sum_to=PATH`. The proposal is not trusted. The checker checks it, so a
-wrong proposal can make a check fail, but it cannot make a wrong result pass. Section 2.3 of the
-[verification contract](https://github.com/onehr/evocc/blob/main/spec/verification.md#2-the-checked-subset-core-v1)
+wrong proposal can make a check fail, but it cannot make a wrong result pass.
+[Section 2.3 of the verification contract](https://github.com/onehr/evocc/blob/main/spec/verification.md#23-entries-and-proposals)
 describes the format. After a refusal, `inputs/` and `checks/` stay for diagnosis, but there is no
 `output.s` and no `record.json`.
 

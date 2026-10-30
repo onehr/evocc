@@ -26,8 +26,7 @@ args = ["mcp"]
 ```
 
 Restart the client after a configuration change. Approve the local server when
-the client asks. Use it only in a workspace where source and output access is allowed.
-The [EvoCC skill](https://github.com/onehr/evocc/blob/main/skills/evocc/SKILL.md)
+the client asks. The [EvoCC skill](https://github.com/onehr/evocc/blob/main/skills/evocc/SKILL.md)
 gives the check, repair and proof rules.
 
 Claude Code 2.1.292 used all five tools in the
@@ -69,10 +68,11 @@ The build receipt keeps the first version line. `version` returns the full text,
 without outer whitespace. Diagnostic and repair fields are defined in
 [the diagnostic specification](https://github.com/onehr/evocc/blob/main/spec/diagnostics.md).
 
-`run` returns main's low eight bits. The interpreter does not implement arbitrary
-external libc calls. A nonzero main return is not a check failure. `check` returns
-0 when its path completes, even if main returns 7. Its completion object keeps
-`schema`, `kind`, `status`, `main_return` and `claim` from the compiler.
+`run` returns main's low eight bits.
+[Hello, World!](hello.md#run-a-program-without-compiling-it) shows a call that the
+interpreter cannot run. A nonzero main return is not a check failure. `check`
+returns 0 when its path completes, even if main returns 7. Its completion object
+keeps `schema`, `kind`, `status`, `main_return` and `claim` from the compiler.
 
 `prove` reads the retained `record.json`. It does not infer success from a log.
 Its stage summary preserves `NOT_CHECKED` rows. When no record exists, `result`

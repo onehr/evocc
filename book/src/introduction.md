@@ -1,8 +1,8 @@
 # Introduction
 
 EvoCC is an experimental C compiler for 64-bit Arm (AArch64), written from scratch by AI agents in
-Rust and Lean 4. It compiles a Linux kernel that boots. It also builds SQLite, Lua, zlib, Mbed TLS
-and Doom, and those programs pass their own tests.
+Rust and Lean 4. It compiles a Linux kernel that boots. It also builds SQLite, Lua, zlib and
+Mbed TLS, which pass their own tests, and Doom, which replays its demos.
 
 This program divides by zero:
 
@@ -26,24 +26,24 @@ divide.c: error[E3002]: integer-division-by-zero
 One rule runs through EvoCC: an untrusted part proposes, and a small checker decides. You meet it
 in three places:
 
-- The interpreters stop at undefined behavior and name it with a numbered diagnostic. In the
-  compiled program, each condition that C requires stays as an explicit check
-  ([chapter 4](undefined-behavior.md)).
-- The optimizer `-Oeq-scalar` writes a certificate for each change. A separate, pinned checker
-  replays the certificate before EvoCC writes any output. Lean proves each of its 62 rewrite rules
-  ([chapter 6](optimization.md)).
-- For a small subset of C, `--proof-required` checks the actual compilation, stage by stage, with
-  checkers proved in Lean. One theorem covers the whole chain. If a check refuses, EvoCC writes no
-  output ([chapter 5](proof.md)).
+- The interpreters stop at undefined behavior and name it with a numbered diagnostic. The
+  compiled program keeps each condition that C requires as an explicit check
+  ([Undefined Behavior](undefined-behavior.md)).
+- The optimizer `-Oeq-scalar` writes a certificate for each change, and a separate, pinned checker
+  replays it before EvoCC writes output. Lean proves each rewrite rule
+  ([Checked Optimization](optimization.md)).
+- For a small subset of C, `--proof-required` checks each stage of the compilation with checkers
+  that Lean proves. If a check refuses, EvoCC writes no output
+  ([Compiling with Proof](proof.md)).
 
-You need to know C and the command line, not Lean. Start with [chapter 2](install.md), which
-installs EvoCC, and [chapter 3](hello.md), which builds a program.
+You need to know C and the command line, not Lean. [Installation](install.md) installs EvoCC, and
+[Hello, World!](hello.md) builds a first program.
 
 ## Limits
 
-On the library code that we measured, EvoCC's code is 1.8 to 2.3 times the size of the code that
-GCC 14 makes at `-O2`. The proofs cover small integer functions only. A program outside that subset
-is checked by tests, not by the theorem. [Chapter 8](evaluate.md) gives the numbers.
+EvoCC's code is larger than the code of GCC 14 at `-O2`. The proofs cover small integer functions
+only. Tests, not the theorem, check a program outside that subset.
+[Evaluating EvoCC](evaluate.md#read-the-results-honestly) gives the numbers.
 
 Each output in this book is the output that we saw when we ran the command on macOS on Apple
 silicon, or on Linux on AArch64 where the text says so. A newer version of EvoCC can print slightly

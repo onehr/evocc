@@ -3,10 +3,7 @@
 Start with `x + 0 → x`. In EqSat mode, you specify an equality instead of writing a new pass
 over the whole program. Lean proves the rule. A separate checker checks each use of it.
 
-This tutorial follows a rule that EvoCC **already ships**. You can run it without changing the
-compiler. It also shows the source changes needed to add a different rule. There is no rule
-plugin or automatic Rust matcher generator yet: a new rule needs both a producer implementation
-and an independent checker implementation.
+EvoCC ships this rule, so you can follow each step without a change to the compiler.
 
 ## 1. Choose an equality with a clear scope
 
@@ -75,8 +72,8 @@ There is no `sorry`, new axiom or `native_decide` in this proof.
 
 ## 3. Connect the rule to the compiler and checker
 
-These are the existing integration points for this rule. Use them as a model for your own rule;
-do not add the same rule a second time.
+Use the integration points of the shipped rule as a model for your own rule. Do not add the same
+rule a second time.
 
 | Part | Where to look | What it does |
 |---|---|---|
@@ -98,7 +95,7 @@ The checker separately uses `identity_binary` with `operation: "add"`, `constant
 and `constant: 0`. It also checks the binding, types and replacement. The producer does not get
 to declare its own proposal correct.
 
-For a **new** rule, first add a failing test. Add the rule to a new reviewed registry revision;
+For a new rule, first add a failing test. Add the rule to a new reviewed registry revision;
 keep previous IDs and meanings unchanged. Update the producer, certificate mapping, independent
 checker and registry digests. Generate `lean/EvoIR/Registry.lean` with
 [`registry_to_lean.py`](https://github.com/onehr/evocc/blob/main/tools/lean/registry_to_lean.py); do not edit that generated file. Add the
@@ -188,9 +185,11 @@ before: 0
 after: 0
 ```
 
-This is four bytes of instructions removed from one function, not a claim about executable file
-size or speed. Alignment and linking can change the final size. `-Oeq-scalar` checks the EvoIR
-rewrite chain; it does **not** by itself prove C lowering or machine-code emission. The separate
-[proof-required path](https://github.com/onehr/evocc/blob/main/spec/verification.md) checks those stages within its supported Core profile.
-The example adds no new rule and makes no claim about AI rule discovery. When you finish,
-remove the temporary directory printed by `echo "$out"`; no generated files belong in Git.
+The change removes four bytes of instructions from one function. Alignment and linking can change
+the size of the executable, and the tutorial measures no speed. `-Oeq-scalar` checks the EvoIR
+rewrite chain only. It does not prove C lowering or machine-code emission; the
+[proof-required path](https://github.com/onehr/evocc/blob/main/spec/verification.md) checks those
+stages for its Core profile. A new rule needs its own producer code and its own independent checker
+code: EvoCC has no rule plugin and no generator of Rust matchers.
+
+When you finish, remove the temporary directory `$out`. Generated files do not belong in Git.

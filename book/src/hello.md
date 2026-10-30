@@ -1,8 +1,5 @@
 # Hello, World!
 
-Now that you have installed EvoCC, it is time to write your first program. It is a tradition to
-start with a program that prints `Hello, world!`, so we do the same here.
-
 Make a directory for the programs in this book, and go into it:
 
 ```console
@@ -31,8 +28,7 @@ $ ./hello
 Hello, world!
 ```
 
-If you have used `gcc` or `clang`, this looks the same, and that is the intent: `evocc` takes the
-options of a usual C compiler.
+`evocc` takes the usual options of a C compiler ([Driver options](#driver-options)).
 
 ## One step at a time
 
@@ -60,15 +56,14 @@ EvoCC makes code for the host by default: `aarch64-apple-darwin` on macOS and
 the next chapters, such as `--emit=asm` and the interpreters, use `aarch64-unknown-linux-gnu` when
 you do not give `--target`.
 
-`evo help`, `evo --help` and `evo VERB --help` print usage and exit 0.
-With no arguments, `evo` prints the same general usage and exits 64.
-Append `--json` to a help request for one JSON line with `usage` (string)
-and `exit_code` (integer). Help does not start the compiler.
+`evo help`, `evo --help` and `evo VERB --help` print usage and exit 0. With no arguments, `evo`
+prints the same general usage and exits 64. Help does not start the compiler. With `--json`, help
+writes one JSON line ([Agent Interfaces](agents.md#command-records)).
 
 ## Cross-compile for Linux
 
-The Linux headers go in `sysroot/aarch64-unknown-linux-gnu/`, beside `bin/`.
-With this layout, the compiler finds them without an include flag:
+The Linux headers go in `sysroot/aarch64-unknown-linux-gnu/`: beside `bin/` in a release, and at
+the root of a source checkout. With this layout, the compiler finds them without an include flag:
 
 ```console
 $ evocc --target=aarch64-unknown-linux-gnu -c hello.c -o hello.o
@@ -89,11 +84,10 @@ The paths below are relative to `usr/include/`:
 To use another root, give `--sysroot=DIR` or set `EVOCC_SYSROOT`. The explicit
 option takes priority. `-v` prints the selected root.
 
-These commands also need an AArch64 Linux assembler. On the tested macOS host,
-the default assembler runs in the existing `evo-nexlab:sealed` container.
-Use `--assembler=COMMAND` to select another assembler. The header bundle
-contains no linker, libc or runtime. Linux linking on a non-Linux host requires
-an explicit `--linker=COMMAND`; without it, stop at `-c`.
+These commands also need an AArch64 Linux assembler. On macOS, the default assembler is the GCC
+of the image `evo-nexlab:sealed`, which runs in Apple `container`. `--assembler=COMMAND` or the
+variable `EVOCC_AS` selects another assembler. The header bundle contains no linker, libc or
+runtime. To link for Linux on macOS, give `--linker=COMMAND`. Without it, stop at `-c`.
 
 ## More than one file
 
@@ -161,7 +155,7 @@ For example, build cJSON 1.7.19 with its utility tests:
 ```sh
 cmake -S /path/to/cJSON-1.7.19 -B build/cjson \
   -DCMAKE_TOOLCHAIN_FILE=/path/to/evocc/cmake/evocc.cmake \
-  -DCMAKE_C_COMPILER=/path/to/evocc/bin/evocc \
+  -DCMAKE_C_COMPILER=/path/to/evocc/target/release/evocc \
   -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DENABLE_CJSON_UTILS=ON
 cmake --build build/cjson --parallel 2
 ctest --test-dir build/cjson --output-on-failure
@@ -185,7 +179,7 @@ Configure and build with the bundled Linux headers:
 export EVOCC_AS='clang --target=aarch64-linux-gnu'
 cmake -S . -B build/linux \
   -DCMAKE_TOOLCHAIN_FILE=/path/to/evocc/cmake/evocc.cmake \
-  -DCMAKE_C_COMPILER=/path/to/evocc/bin/evocc \
+  -DCMAKE_C_COMPILER=/path/to/evocc/target/release/evocc \
   -DEVOCC_TARGET=aarch64-unknown-linux-gnu \
   -DCMAKE_SYSROOT=/path/to/evocc/sysroot/aarch64-unknown-linux-gnu
 cmake --build build/linux --parallel 2
@@ -196,9 +190,11 @@ header bundle does not support an executable link by itself. A Linux link
 still needs target libraries and an explicit linker. The toolchain preserves
 user compilation flags and uses the supplied sysroot during compiler detection.
 
-The default zlib 1.3.2 CMake build and all 16 CTest commands pass on this macOS
-host. EvoCC does not produce coverage data. Apple's `gcov` reports the missing
-`.gcno` file but exits 0, so the coverage-summary test does not prove coverage support.
+With this toolchain file on macOS, the release compiler of commit `08bf09bd` passed 22 of 22 CTest
+tests of the cJSON build above and 16 of 16 of the default zlib 1.3.2 build
+([evidence](https://github.com/onehr/evocc/blob/main/docs/evidence.md#readme-examples-and-reproduction-rows)).
+The zlib coverage-summary test passes only because Apple's `gcov` exits 0 when the `.gcno` file is
+missing.
 
 ## Run a program without compiling it
 
@@ -227,7 +223,7 @@ $ evo run sum.c; echo $?
 
 Use `evo run FILE.c -- ARGS` to pass arguments to `main(int argc, char **argv)`.
 The developer commands `evocc --interpret-c-hir` and `evocc --interpret-evoir`
-print the return value instead. [Chapter 7](how-it-works.md) explains both IRs.
+print the return value instead. [How EvoCC Works](how-it-works.md) explains both IRs.
 
 The interpreters run only the code in your file. They do not call into the C library. To see
 this, make a file `shout.c` that calls `puts`. It declares `puts` by hand, so it needs no header:
@@ -258,7 +254,7 @@ This is why the interpreters are tools for checking code, not a way to run whole
 
 ## Look at the assembly
 
-`--emit=asm` prints the assembly that EvoCC writes. The first lines for `sum.c` are:
+`--emit=asm` prints the assembly that EvoCC writes:
 
 ```console
 $ evocc --target=aarch64-unknown-linux-gnu --emit=asm sum.c | head -n 24
@@ -290,7 +286,7 @@ sum_to:
 
 Look at `adds` and `b.vs`. The addition `i++` sets the overflow flag, and `b.vs` jumps away if the
 addition overflowed. Signed overflow is undefined behavior in C, so EvoCC keeps a check for it.
-[Chapter 4](undefined-behavior.md) explains these checks.
+[Undefined Behavior](undefined-behavior.md) explains these checks.
 
 On Linux, the system compiler can assemble and link this file. We ran these commands on Linux on
 AArch64 with GCC 14:
@@ -331,10 +327,10 @@ Some Makefiles set `CC` themselves. For those, give the variable on the command 
 
 ## Plan and apply repairs
 
-Use `evo fix input.c --plan` to inspect source repairs. Add `--json` for one
-JSON object on standard output. The object has `file`, `repairs`,
-`diagnostics`, `applied`, and `exit_code`. The repair fields and byte-column
-spans are defined in [`spec/diagnostics.md`](https://github.com/onehr/evocc/blob/main/spec/diagnostics.md).
+Use `evo fix input.c --plan` to inspect source repairs. Add `--json` for one JSON object on
+standard output ([Agent Interfaces](agents.md#command-records)).
+[`spec/diagnostics.md`](https://github.com/onehr/evocc/blob/main/spec/diagnostics.md) defines the
+repair fields and the byte-column spans.
 
 ```console
 $ evo fix input.c --plan --json
@@ -363,8 +359,6 @@ the `evo fix` command uses `-Wall --cap-lints=warn` to collect repair candidates
 
 ## Driver options
 
-`evocc` accepts the options of a usual C compiler:
-
 | Option | What it does |
 |---|---|
 | `-E` | Preprocess only, and write the result. |
@@ -379,22 +373,22 @@ the `evo fix` command uses `-Wall --cap-lints=warn` to collect repair candidates
 | `--target=TARGET` | Make code for `aarch64-apple-darwin` or `aarch64-unknown-linux-gnu`. The default is the host. |
 | `-I DIR`, `-D NAME[=VALUE]`, `-U NAME`, `-include FILE`, `-isystem DIR` | Control the preprocessor, as in GCC. |
 | `-std=gnu11` and other `-std=` values | Select the language standard. |
-| `-O0` to `-O3` | Select the optimization level. `-O0` keeps the control flow of the source. |
+| `-O0` to `-O3` | Select the optimization level. `-O0` keeps the control flow of the source. `-O1` to `-O3` simplify integer control flow and remove unused functions. |
 | `-g` | For `aarch64-unknown-linux-gnu`, write debug information about C types (DWARF). EvoCC does not write line tables yet. For `aarch64-apple-darwin`, `-g` has no effect. |
 | An unknown `-f` or `-m` option | EvoCC prints one warning and continues. `-Werror` makes this an error so build-system probes do not report unsupported features as available. `-w` turns the warning off. |
-| `-fstack-protector`, `-fstack-protector-strong` | Both enable EvoCC's existing strong stack-protection policy. `-fno-stack-protector` disables it. |
+| `-fstack-protector`, `-fstack-protector-strong` | Both select EvoCC's strong stack protection. `-fno-stack-protector` turns it off. |
 | `-ftree-vectorize`, `-fno-tree-vectorize`, `-fno-tree-loop-vectorize`, `-fno-tree-slp-vectorize`, `-fexpensive-optimizations`, `-fno-vect-cost-model`, `-ftrapping-math`, `-fno-trapping-math` | EvoCC accepts them with no warning. They only permit or forbid transforms that EvoCC does not make, so the code does not change. On Linux, a final `-fno-trapping-math` defines `__NO_TRAPPING_MATH__`, as in GCC 14. |
-| `-coverage`, `--coverage`, `-fprofile-arcs`, `-ftest-coverage` | Print the unsupported-option warning; `-Werror` makes it an error and `-w` turns it off. No instrumentation or `.gcno`/`.gcda` files are produced. |
+| `-coverage`, `--coverage`, `-fprofile-arcs`, `-ftest-coverage` | Print the warning of an unknown option, with the same `-Werror` and `-w` rules. EvoCC writes no instrumentation and no `.gcno` or `.gcda` file. |
 | `--version`, `-dumpmachine`, `--help` | Print the version and the target, the target only, or a summary of the options. |
 
-EvoCC also has its own options. You meet them in the next chapters:
+EvoCC also has its own options:
 
 | Option | What it does | Chapter |
 |---|---|---|
-| `--interpret-c-hir`, `--interpret-evoir` | Run `main` in an interpreter. | 3 |
-| `--check` | Report undefined behavior on the path that runs. | 4 |
-| `--explain CODE` | Explain a diagnostic code. | 4 |
-| `--error-format=json` | Write diagnostics as JSON, one record per line. | 4 |
-| `--emit=c-hir`, `--emit=evoir`, `--emit=asm` | Print a representation of the program. | 4, 7 |
-| `--proof-required=DIR` | Compile with proof. | 5 |
-| `-Oeq-scalar` | Run the checked optimizer. | 6 |
+| `--interpret-c-hir`, `--interpret-evoir` | Run `main` in an interpreter. | [Hello, World!](#run-a-program-without-compiling-it) |
+| `--check` | Report undefined behavior on the path that runs. | [Undefined Behavior](undefined-behavior.md) |
+| `--explain CODE` | Explain a diagnostic code. | [Undefined Behavior](undefined-behavior.md#what-a-code-means) |
+| `--error-format=json` | Write diagnostics as JSON, one record per line. | [Undefined Behavior](undefined-behavior.md#diagnostics-for-tools) |
+| `--emit=c-hir`, `--emit=evoir`, `--emit=asm` | Print a representation of the program. | [Undefined Behavior](undefined-behavior.md#undefined-behavior-in-the-ir), [How EvoCC Works](how-it-works.md) |
+| `--proof-required=DIR` | Compile with proof. | [Compiling with Proof](proof.md) |
+| `-Oeq-scalar` | Run the checked optimizer. | [Checked Optimization](optimization.md) |

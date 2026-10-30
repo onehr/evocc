@@ -11,15 +11,14 @@ to `PATH`. No checker override is needed. From the repository root, run
 `sh tools/demo/agent-loop.sh`. The source fixture stays unchanged; the fixed
 source and proof remain in the printed temporary directories.
 
-The captures below retain their original output. Current `prove --json` also
-reports the chosen `checker`; source-checkout discovery was added afterward.
+The captures below keep their original output. Current `prove --json` also
+reports the chosen `checker`.
 
-Recorded on 2026-10-07. The following output is copied from the command. Only
-the host paths are replaced: `$REPO` stands for the repository checkout, and
-`$TMPDIR` for the temporary directory of macOS, in its plain form or in its
-resolved form under `/private`. The diff comes from the same run. The test
-completed in 19.53 seconds on this host; this is not a compiler performance
-claim.
+Recorded on 2026-10-07 with a debug build in `target/frontend/debug/`, and copied
+from the command. Only the host paths are replaced: `$REPO` stands for the
+repository checkout, and `$TMPDIR` for the temporary directory of macOS, in its
+plain form or in its resolved form under `/private`. The diff comes from the same
+run. The run took 19.53 seconds on this host.
 
 ```console
 Scripted agent (no model).
@@ -111,9 +110,9 @@ second case a temporary checker wrapper deletes one exported `ub.assume` line,
 once, inside the driver's proof directory, then runs the real Lean checker.
 This run refuses at lowering. The third case uses the raw driver command from
 [Compiling with Proof](proof.md#pin-the-checker): `evo prove` pins its own checker
-and does not expose a digest override. No new option or checker rule is needed.
+and does not expose a digest override.
 
-Recorded on October 7, 2026. The exit after each command is the actual subprocess
+Recorded on 2026-10-07. The exit after each command is the actual subprocess
 status. `ls` shows retained evidence, not a published output. The output uses the
 same path placeholders. The caret run under the driver command line is as long as
 the line with its placeholders.
