@@ -18,7 +18,7 @@
 </p>
 
 EvoCC is an experimental C compiler for AArch64 Linux and macOS. AI agents wrote it from scratch
-in Rust and Lean 4, in under three months, under the direction of one engineer: about 2,300
+in Rust and Lean 4, in under three months, under the direction of one engineer: about 2,400
 commits, 350,000 lines of Rust and 69,000 lines of Lean by release 0.1.0. It has its own
 preprocessor, parser, three intermediate representations, optimizer, register allocator and
 assembly emitter. It builds a Linux kernel that boots, SQLite, Doom and other real C programs.
@@ -79,7 +79,8 @@ Line 7 of [`mean.c`](examples/mean.c) at four stages of the release compiler:
   </picture>
 </p>
 
-The release compiler of commit `8177cff2` measured these results on 2026-10-27. Records:
+The compiler of commit `8177cff2` measured these results on 2026-10-27. The release compiler writes
+the same bytes for 792 test objects ([record](tests/contracts/object-identity-0.1.0.json)). Records:
 [Linux kernel](tests/contracts/kernel-direct-virt-receipt.json),
 [SQLite test log](docs/images/showcase/captures.json),
 [application lanes, Doom and c-testsuite](tests/contracts/bench-receipt.json),

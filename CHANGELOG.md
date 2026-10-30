@@ -3,35 +3,7 @@
 All notable changes to EvoCC are listed in this file. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [0.2.0] - Unreleased
-
-### Added
-
-- Describe the compiler pipeline and crate interfaces in `ARCHITECTURE.md`.
-- Add the RV64GC/LP64D Linux backend design in `docs/design/`.
-- Experiment 8: with EvoCC's record, three chat models used fewer output tokens on bugs that
-  GCC 14's warnings and UBSan miss (p < 0.01), and Qwen3.8 27B repaired 54 of 54 against 30 of
-  54. Records: `tests/contracts/agent-repair-8-*`.
-- One figure of each registered agent result, in the README and the book. `tools/render-readme.py`
-  draws it from the receipts.
-
-### Changed
-
-- ABI descriptions use ordered argument and result register lists and optional result registers.
-- Limit new Rust and Python files to 1,500 lines and functions to 150, with shrinking older exceptions.
-- Move closed tracker entries to `docs/archive/todo-0.1.0.md`.
-- Cargo builds into its default `target/` directory, so the binaries are in `target/release/`.
-  `tools/release.sh` writes the archives to `target/distrib/`.
-- The book chapter on the agent experiments is now "Agent Experiments", and it reports
-  experiment 8.
-- The README section "Built for agents" shows the record that an agent gets from GCC and from
-  EvoCC for the same bug.
-- The README and the book state each fact once, with its command, record or receipt, and keep the
-  limits in one place. `AGENTS.md` gives the writing rules.
-
-### Fixed
-
-## [0.1.0] - 2026-10-28
+## [0.1.0] - 2026-10-30
 
 The first public version.
 
@@ -232,8 +204,8 @@ The first public version.
   checkers in `evoir-sem` check each stage of the actual compilation, and the theorem
   `checkPipeline_sound` covers the chain from typed Core source to the final assembly text. A
   refusal writes no output.
-- Five pinned specifications in `spec/`: EvoIR 2.39.0, EvoMIR 1.16.0, the target description
-  1.1.0, the verification contract 1.1.3 and the diagnostic format 1.4.1.
+- Five pinned specifications in `spec/`: EvoIR 3.0.0, EvoMIR 1.16.1, the target description
+  2.0.0, the verification contract 2.0.0 and the diagnostic format 1.4.1.
 - The evaluation ladder, `tools/bench.py`: conformance suites, fifteen application lanes and Linux
   build, boot, kselftest and KUnit lanes. Each lane writes a receipt.
 - The EvoCC Book in `book/`: installation, a first program, undefined behavior, compiling with
@@ -250,6 +222,13 @@ The first public version.
 - `#warning` is the warning W0010, which `-Werror` and `-Werror=cpp` turn into an error, as in
   GCC 14. `-pedantic-errors`, `--pedantic-errors` and `-Werror=pedantic` are refused with E2968,
   because EvoCC has no ISO pedantic diagnostics; before, EvoCC accepted them without effect.
+- `ARCHITECTURE.md` describes the compiler pipeline and the interface of each crate.
+- The x86-64 and RV64GC/LP64D Linux backend designs are in `docs/design/`.
+- Experiment 8: with EvoCC's record, three chat models used fewer output tokens on bugs that
+  GCC 14's warnings and UBSan miss (p < 0.01), and Qwen3.8 27B repaired 54 of 54 against 30 of
+  54. Records: `tests/contracts/agent-repair-8-*`.
+- The README and the book show one figure for each registered agent result.
+  `tools/render-readme.py` draws it from the receipts.
 
 ### Changed
 
@@ -293,6 +272,25 @@ The first public version.
 - The sealed build environment is now named nexlab. Its image tags are `evo-nexlab:sealed`
   and `evo-nexlab:sealed-20260810`, with unchanged digests, and new kernel builds use the
   build host `nexlab`. The old tags stay, and historical receipts keep the old names.
+- The parser, C-HIR, lowering and EvoIR crates are split into smaller files, and long functions
+  into helpers. The object code does not change (see the results below).
+- ABI descriptions use ordered argument and result register lists and optional result registers.
+- `tools/check-size.py` limits Rust and Python files to 1,500 lines and functions to 150 lines.
+  `tools/size-baseline.json` lists the older exceptions, which may only shrink.
+- Closed tracker entries moved to `docs/archive/todo-0.1.0.md`.
+- Cargo builds into its default `target/` directory, so the binaries are in `target/release/`.
+  `tools/release.sh` writes the archives to `target/distrib/`.
+- Twelve refusal messages named an internal work day. Each now names the refused construct and
+  the reason, for example E2205 `not-covered: utf16-utf32-string-initializer`. The codes and the
+  refusal paths do not change.
+- The book chapter on the agent experiments is now "Agent Experiments", and it reports
+  experiment 8.
+- The README section "Built for agents" shows the record that an agent gets from GCC and from
+  EvoCC for the same bug.
+- The README and the book state each fact once, with its command, record or receipt, and keep the
+  limits in one place. `AGENTS.md` gives the writing rules.
+- `docs/paper.md` states five contributions and answers five research questions, each from its
+  receipts.
 
 ### Fixed
 
@@ -426,49 +424,58 @@ The first public version.
 - `builtin-argument-type` has its own code, E2951; E2911 named two diagnostics.
 - The EVP certificate reader refuses the epoch marker 0.
 - The EvoMIR text parser reads every form that the writer prints.
+- The README placed `evo check` at C-HIR. `evo check` executes EvoIR, and `evo run` executes
+  C-HIR; the pipeline and stages figures now show this.
+- The five specifications state what the code does where an audit on 2026-10-30 found them stale
+  or wrong. EvoIR 3.0.0 states 15 implemented rules, among them pointer comparison by abstract
+  address, the `aligned` attribute and the certificate rules of Section 11.3. The trusted base of
+  the verification contract 2.0.0 names the publication path of the driver. The target
+  description 2.0.0 drops a pattern-verdict rule that no check enforces. EvoIR, EvoMIR, the target
+  description and the verification contract name the moved source files.
 
 ### Results at this version
 
-The gates, the kernel replay, the 15 application lanes, Doom, the size measurement and the CMake
-builds below ran on 2026-10-27 with the release compiler of commit `8177cff2`. The other results
-give their dates and were not run again on the final commit. [docs/evidence.md](docs/evidence.md)
-keeps their limits.
+The kernel replay, the 15 application lanes, Doom, the size measurement and the CMake builds below
+ran on 2026-10-27 with the compiler of commit `8177cff2`. The compiler of this version differs from
+it by the restructuring under Changed, and it writes the same bytes for 792 objects. The other
+results give their dates and were not run again. [docs/evidence.md](docs/evidence.md) keeps their
+limits.
 
-- On 2026-10-27 the final health gate (T05) passes on the clean tree of `9714aa41`, whose
-  compiler source is that of `8177cff2`: the workspace gate, 1,209 Python tests, Ruff, the
-  textual grammar, both frozen layout corpora (128 and 22 cases), 13 isolated offline replays,
-  the Lean gate, the generated pages, the relative links and the book build.
-
-- On 2026-10-27 both release archives were built from the clean commit `5125cc44`, whose
-  compiler source is that of `8177cff2`: `evocc-0.1.0-aarch64-apple-darwin.tar.gz` on macOS 26.6,
-  and `evocc-0.1.0-aarch64-unknown-linux-gnu.tar.gz` in an AArch64 Debian 13 container with no
+- On 2026-10-30 the final health gate passes on the clean tree of `f0e5e01a`: the offline workspace
+  gate (526 suites, 3,942 tests passed, 0 failed, 62 ignored on request, Clippy and
+  formatting), 1,286 Python tests, Ruff, the textual grammar, both frozen layout corpora (128 and
+  22 cases), 13 isolated offline replays, the Lean gate (62 rule theorems against EvoIR 3.0.0),
+  the generated pages and the commit references. In a clean checkout of the same commit the
+  relative links and the book build pass. Neither gate expands the verified language subset.
+- On 2026-10-30 the compiler of `f0e5e01a` writes the same bytes as the compiler of `c59d21b4`,
+  whose source is that of `8177cff2`, for 792 objects: the 384 corpus programs for Darwin and the
+  384 for Linux, each run and compared with GCC 14, and 24 objects of six library translation units
+  ([record](tests/contracts/object-identity-0.1.0.json)).
+- On 2026-10-30 both release archives were built from the clean commit `f0e5e01a`:
+  `evocc-0.1.0-aarch64-apple-darwin.tar.gz` on macOS 26.6, and
+  `evocc-0.1.0-aarch64-unknown-linux-gnu.tar.gz` in an AArch64 Debian 13 container with no
   network. Both pass the smoke steps of `release.yml`. On Linux, `evocc` and `evocc-checker` are
   static, and `tools/tests/test_sysroot.py` passes on the archive. A second macOS build from a
   checkout at another path gave the same bytes. The release assets are built again from the
   dated commit, and their `SHA256SUMS` is published with them.
-
-- On the clean tree of `8177cff2` the full offline workspace gate passes 522 suites and 3,928
-  tests with zero failures; 62 ignored tests run only on request, such as the sealed Linux lanes.
-  Clippy and formatting pass. The Lean gate passes all its steps: 62 rule theorems against EvoIR
-  2.39.0. Neither gate expands the verified language subset.
 - On 2026-10-07 the recorded agent repair loop reaches checked assembly in 12.41 seconds in the
   workspace gate. Its refusal demo returns the three required failures without publishing
   assembly. Paired JSON/proof-record tests pass three consecutive runs and the final gate;
   both the full offline workspace and Lean gates pass on clean commit `d98cd41e`.
-- Linux 6.18.44 ARM64 boots with 2,799 of 2,799 target C objects compiled by EvoCC. The release
-  compiler built every target C unit of this configuration in a fresh tree, in one uninterrupted
-  Kbuild run. That kernel boots under HVF with pointer authentication and under TCG, as does the
-  GCC reference, and nine paired upstream self-test programs pass with 125 of 125 subtests on
-  each. A second configuration booted with 7,008 objects and 848 modules on 2026-09-28. This is
-  not full Linux acceptance.
-- One release compiler ran all 15 application lanes and Doom. c-testsuite 220/220, zlib, zstd,
-  cJSON, TinyCC, Mbed TLS 382/382, PolyBench/C, jq, Lua, SQLite and Doom pass every program or
-  unit. GCC torture (1,543 of 1,692) and the LLVM test suite (1,066 of 1,735) have no compiler
-  failure; their other programs are not applicable, have an unusable reference, or are
+- Linux 6.18.44 ARM64 boots with 2,799 of 2,799 target C objects compiled by EvoCC. The compiler
+  of `8177cff2` built every target C unit of this configuration in a fresh tree, in one
+  uninterrupted Kbuild run. That kernel boots under HVF with pointer authentication and under
+  TCG, as does the GCC reference, and nine paired upstream self-test programs pass with 125 of
+  125 subtests on each. A second configuration booted with 7,008 objects and 848 modules on
+  2026-09-28. This is not full Linux acceptance.
+- One build of the compiler of `8177cff2` ran all 15 application lanes and Doom. c-testsuite
+  220/220, zlib, zstd, cJSON, TinyCC, Mbed TLS 382/382, PolyBench/C, jq, Lua, SQLite and Doom pass
+  every program or unit. GCC torture (1,543 of 1,692) and the LLVM test suite (1,066 of 1,735) have
+  no compiler failure; their other programs are not applicable, have an unusable reference, or are
   floating-point deferrals. Csmith agrees on 932 of 1,000 programs, and the other 68 have no usable
-  reference; it has no refusal and no mismatch. Toybox and musl give the same test results as
-  their GCC builds. Two Doom demos give the same framebuffer hash for each of 350 frames under
-  EvoCC, GCC 14 and Clang 19.
+  reference; it has no refusal and no mismatch. Toybox and musl give the same test results as their
+  GCC builds. Two Doom demos give the same framebuffer hash for each of 350 frames under EvoCC, GCC
+  14 and Clang 19.
 - On 2026-10-06 (commit `e85f5904`) the proof-required sweep checked 107 of 107 pilot entries to
   the final assembly text. A native run compared 14,194 vectors with the Lean source interpreter
   and found no difference.
@@ -478,7 +485,7 @@ keeps their limits.
   the original zlib 1.3.2 archive without a sysroot flag or manual include paths. Hello, the zlib
   example and a minigzip round trip pass in the sealed Linux environment. The cross-host release
   workflow is configured; these local results do not claim a hosted GitHub Actions run.
-- Original CMake builds on macOS with the release compiler pass cJSON 1.7.19's 22 tests and
+- Original CMake builds on macOS with the compiler of `8177cff2` pass cJSON 1.7.19's 22 tests and
   zlib 1.3.2's 16 default CTest commands. The zlib coverage-summary command reports a missing
   .gcno file, but Apple's gcov returns 0. Its passing exit does not establish coverage support. No
   test was excluded.

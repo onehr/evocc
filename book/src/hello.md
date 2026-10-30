@@ -190,9 +190,9 @@ header bundle does not support an executable link by itself. A Linux link
 still needs target libraries and an explicit linker. The toolchain preserves
 user compilation flags and uses the supplied sysroot during compiler detection.
 
-With this toolchain file on macOS, the release compiler of commit `8177cff2` passed 22 of 22 CTest
+With this toolchain file on macOS, the compiler of commit `8177cff2` passed 22 of 22 CTest
 tests of the cJSON build above and 16 of 16 of the default zlib 1.3.2 build
-([evidence](https://github.com/onehr/evocc/blob/main/docs/evidence.md#readme-examples-and-reproduction-rows)).
+([evidence](https://github.com/onehr/evocc/blob/main/docs/evidence.md#readme-examples)).
 The zlib coverage-summary test passes only because Apple's `gcov` exits 0 when the `.gcno` file is
 missing.
 

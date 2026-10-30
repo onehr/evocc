@@ -14,9 +14,11 @@ Linux 6.18.44 is the kernel target.
 
 ## Status — 2026-10-27
 
-On 2026-10-27, one release compiler, built from commit `8177cff2` (`ab0c9043…` on macOS,
+On 2026-10-27, one compiler, built from commit `8177cff2` (`ab0c9043…` on macOS,
 `3520c267…` for Linux), ran all 15 application lanes and Doom in one serial campaign, and built and
-booted the direct Kbuild kernel. The application lanes have 10 PASS, 2 PROFILE_CLEAN and
+booted the direct Kbuild kernel. The compiler of release 0.1.0 writes the same bytes for 792 test
+objects ([record](../tests/contracts/object-identity-0.1.0.json)); the campaign did not run again
+with it. The application lanes have 10 PASS, 2 PROFILE_CLEAN and
 3 INCOMPLETE, and no lane has a compiler failure. Each invocation started on a clean tree. No
 population, budget, timeout, flag or disposition rule changed. Each receipt keeps its compiler and
 input identity. The [application ledger](archive/notebook/benchmark-evaluation-20260915.md) and the
@@ -65,7 +67,7 @@ separately.
 
 | Scope | Verified result | Limit |
 |---|---|---|
-| Direct Kbuild, retained virtconfig, 2026-10-27 | **2,799/2,799 target-C** and 5 C-to-assembly helpers from one release compiler (`3520c267…`, commit `8177cff2`), compiled through `make CC=evocc` in one full build in a fresh output tree; the banner names EvoCC; stored return addresses signed (`-mbranch-protection=pac-ret`); boot PASS on HVF with pointer authentication and on TCG; 9/9 programs and 125/125 subtests PASS on both kernels | GNU tools assemble the 67 assembly files, link and build host programs; six options have no effect. The original KVM programs pass 10 of 10 modes on GCC; on EvoCC, demand paging and memslot stress both reach the 120-second limit after 6 of 10 modes. Full kselftest and KUnit not rerun |
+| Direct Kbuild, retained virtconfig, 2026-10-27 | **2,799/2,799 target-C** and 5 C-to-assembly helpers from one compiler build (`3520c267…`, commit `8177cff2`), compiled through `make CC=evocc` in one full build in a fresh output tree; the banner names EvoCC; stored return addresses signed (`-mbranch-protection=pac-ret`); boot PASS on HVF with pointer authentication and on TCG; 9/9 programs and 125/125 subtests PASS on both kernels | GNU tools assemble the 67 assembly files, link and build host programs; six options have no effect. The original KVM programs pass 10 of 10 modes on GCC; on EvoCC, demand paging and memslot stress both reach the 120-second limit after 6 of 10 modes. Full kselftest and KUnit not rerun |
 | Same kernels, fixed 256 MiB diagnostics, 2026-10-27 | Demand paging: 65,682 page-fault handler entries on each side, EvoCC/GCC total instructions **2.59x**, kernel instructions **2.77x**. Memslot stress: 65,679 entries each, **2.59x** total and **2.77x** kernel. All four runs complete with verdict PASS | Diagnostic 1,200-second budget, not the original 120-second exit. Full translated blocks are charged at entry; concurrent waits remain. Not native timing or attribution to an individual change. [Recorded counts](../tests/contracts/kernel-direct-virt-receipt.json) |
 | K6 locked configuration, 2026-09-13 | **2,799/2,799 target-C**, complete link, real boot and normal shutdown PASS; uniform EvoCC rebuild, zero GCC target-C fallback | Not every Linux configuration or subsystem |
 | BPF/module configuration, 2026-09-28 | **7,008/7,008 target-C** from compiler `ab2eeb7b…`, generated-input fixed point, complete link/boot PASS; 848 modules linked/BTF/signed/installed | Objects substituted into a GCC Kbuild tree; its raw configuration and runtime pair are no longer available. Not all installed modules runtime-tested; QEMU drift recorded |

@@ -132,8 +132,8 @@ Each word in a result has a narrow meaning:
   out. It is not a pass of every program.
 - A skip, a timeout and a missing result are never a pass.
 
-With these words, here is the state of EvoCC on 2026-10-27. The release compiler of commit
-`8177cff2` measured each item that gives no other date:
+With these words, here is the state of EvoCC on 2026-10-27. The compiler of commit `8177cff2`
+measured each item that gives no other date:
 
 - Linux 6.18.44 boots with all 2,799 target C files compiled by EvoCC. A second configuration
   booted with 7,008 files and 848 modules on 2026-09-28 (EvoCC `ab2eeb7b…`).

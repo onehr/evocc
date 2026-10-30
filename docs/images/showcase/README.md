@@ -6,7 +6,7 @@ command-line program does not mean that the program has a graphical interface. T
 no benchmark verdict, and they need no kernel rebuild and no large disk image.
 
 The six demo captures, the Doom frame and the five log cards come from the builds and the logs of
-the release campaign and the kernel replay of 2026-10-27, with the release compiler of commit
+the release campaign and the kernel replay of 2026-10-27, with the compiler of commit
 `8177cff2`. The three game captures date from 2026-09-29
 ([Three native C games](#three-native-c-games)).
 

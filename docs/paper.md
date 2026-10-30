@@ -5,17 +5,18 @@ Haoran Wang · NexRidge
 ## Abstract
 
 Coding agents can write a large program in weeks, but an agent's report about its work is not
-evidence. We built EvoCC, a C compiler for AArch64 Linux and macOS, in 79 days: coding agents wrote
-351,524 lines of Rust and 68,830 lines of Lean 4 under the direction of one engineer. In both the
+evidence. We built EvoCC, a C compiler for AArch64 Linux and macOS, in 81 days: coding agents wrote
+354,304 lines of Rust and 68,830 lines of Lean 4 under the direction of one engineer. In both the
 compiler and its construction, an untrusted component proposes, and a smaller checker, fixed in
 advance, decides. Tests written first, sealed GCC and Clang oracles and fail-closed gates decide
 which agent changes land. A separate checker replays each optimization certificate against 62 rules
 that Lean proves for every bit width. For a subset of integer C, five Lean checkers and one theorem
-cover each compilation from typed source to assembly text. The IRs keep each undefined-behavior
-rule of C as an obligation. The release compiler compiles all 2,799 target C files of a Linux 6.18
-kernel that boots, and 10 of 15 application test lanes pass. Its code is 1.8 to 2.3 times the size of GCC `-O2` code, and the proved rewrites save
-0.03% of it. With EvoCC's diagnostics, a coding agent repaired bugs that GCC's warnings and UBSan
-miss in 37% fewer steps (p < 0.001). We report the agents' failures and the checks that caught them.
+cover each compilation from typed source to assembly text. The IRs keep each undefined-behavior rule
+of C as an obligation. The compiler of the release campaign compiles all 2,799 target C files of a
+Linux 6.18 kernel that boots, and 10 of 15 application test lanes pass. Its code is 1.8 to 2.3 times
+the size of GCC `-O2` code, and the proved rewrites save 0.03% of it. With EvoCC's diagnostics, a
+coding agent repaired bugs that GCC's warnings and UBSan miss in 37% fewer steps (p < 0.001). We
+report the agents' failures and the checks that caught them.
 
 ## 1 Introduction
 
@@ -143,7 +144,7 @@ static void add(struct stats *s, int x) {
 
 On 2026-10-27, GCC 14 with `-Wall -Wextra -fsanitize=undefined` compiled the program with no
 warning, and the run gave no report. It returned 0 at `-O0`, and 34, 226, 188, 87 and 178 in five
-runs at `-O2`; the correct result is 4 ([evidence](evidence.md#readme-examples-and-reproduction-rows)).
+runs at `-O2`; the correct result is 4 ([evidence](evidence.md#readme-examples)).
 `evo check` reports E3001, `read-of-uninitialized-object`, at `mean.c:7:9`.
 
 ### 3.4 EvoMIR and the executable references
@@ -334,9 +335,9 @@ results are correct." (commit `477a1263`).
 
 The release campaign ran on 2026-10-27 with one build of the compiler of commit `8177cff2` (SHA-256
 `ab0c9043…` on macOS, `3520c267…` for Linux); other results give their own date and commit.
-Release 0.1.0 (`c59d21b4`) has the same compiler source. The current code (`f529fe95`) produces
-AArch64 objects byte-identical to those of the 0.1.0 compiler on a 792-object identity population;
-we did not repeat the campaign at that commit. The Linux lanes run in a sealed AArch64 container on
+The compiler of release 0.1.0, built from `f0e5e01a`, restructures that source and writes the same
+bytes for a population of 792 objects ([record](../tests/contracts/object-identity-0.1.0.json)); we
+did not repeat the campaign with it. The Linux lanes run in a sealed AArch64 container on
 an Apple silicon Mac, and the kernels boot in QEMU.
 
 ### 7.1 RQ1: Does EvoCC compile and run real C software?
@@ -452,7 +453,7 @@ itself. Runs of six or more consecutive frame accesses or moves made up 6.1% of 
 and 2.0% of GCC's ([receipt](../tests/contracts/kernel-direct-virt-receipt.json)).
 
 The Lean development of release 0.1.0 has 68,830 lines in 392 files (`git grep -c ''` at
-`c59d21b4`): 29,854 for the source and EvoIR semantics and `source-to-evoir`, 19,841 for EvoMIR and
+`f0e5e01a`): 29,854 for the source and EvoIR semantics and `source-to-evoir`, 19,841 for EvoMIR and
 `lowering`, 6,277 for the AArch64 subset and `frame-emission`, 3,814 for `rewrite`, 3,431 for
 `allocation`, 1,387 for the rule and known-bits proofs and 747 for the pipeline. The lowering checker matches output
 forms construct by construct, while the allocation checker relates abstract states at block
@@ -530,12 +531,12 @@ acceptance harness.
 | 2026-09-13 | `3a25a89a` (1,380) | first complete boot of a kernel built by EvoCC, day 34 |
 | 2026-10-04 to 06 | `5a4e96ad` to `e85f5904` (1,951) | 99 commits add 66,742 lines of Lean for the `core-v1` checkers; the sweep of §7.3 |
 | 2026-10-27 | `8177cff2` (2,321) | the compiler of the release campaign |
-| 2026-10-28 | `c59d21b4` (2,342) | release 0.1.0, day 79 |
+| 2026-10-30 | `f0e5e01a` (2,389) | the compiler of release 0.1.0, day 81 |
 
 *Table 7. Milestones from `git log`; the number counts the commits that a commit contains.*
 
-At release 0.1.0, the repository had 351,524 lines of Rust outside `vendor/`: 192,885 in crate
-sources, 154,433 in crate tests and 4,206 in examples and build scripts.
+At release 0.1.0 (`f0e5e01a`), the repository had 354,304 lines of Rust outside `vendor/`: 195,341
+in crate sources, 154,757 in crate tests and 4,206 in examples and build scripts.
 
 ### 8.2 Method
 
@@ -544,14 +545,14 @@ EvoIR, EvoMIR, the target tables, the diagnostics and the verification contract;
 pins the revision and SHA-256 of each. (2) Authorities have ranks: frozen language and ABI
 contracts, then reviewed fixtures, then agreement of the sealed GCC and Clang, and last a kernel
 boot; a GCC–Clang disagreement on a defined program is a conflict, not a vote. (3) A change starts
-with a test that fails for the right reason, in its own commit; 407 of the 2,301 non-merge commits
-change only test files (a count over `git log --name-only` without receipts). (4) A gate that
-cannot find its evidence fails, and a skip, a timeout or a missing result is never a pass. (5) Each
-result is a receipt in `tests/contracts/` with the compiler digest, the inputs, the command and a
-claim ceiling, and the generated status page fails a check when it and the receipts disagree. (6)
-Each open task in `TODO.md` has a next action and an exit condition that names a test or a receipt.
-(7) Since 2026-10-29, new Rust and Python files have at most 1,500 lines and new functions at most
-150.
+with a test that fails for the right reason, in its own commit; 408 of the 2,322 non-merge commits
+up to `f0e5e01a` change only test files (a count over `git log --name-only` without receipts). (4) A
+gate that cannot find its evidence fails, and a skip, a timeout or a missing result is never a pass.
+(5) Each result is a receipt in `tests/contracts/` with the compiler digest, the inputs, the command
+and a claim ceiling, and the generated status page fails a check when it and the receipts disagree.
+(6) Each open task in `TODO.md` has a next action and an exit condition that names a test or a
+receipt. (7) Since 2026-10-29, new Rust and Python files have at most 1,500 lines and new functions
+at most 150.
 
 ### 8.3 Failures and the checks that caught them
 
@@ -602,11 +603,11 @@ predate the release compiler. EvoCC is larger and slower than GCC: we measured c
 translation units and executed instructions on one kernel workload, made no wall-clock run-time
 measurement on a quiet machine, and make no speed claim.
 
-The measurements come from several commits, and each states its own; the current code matches the
-release compiler only on the 792-object identity population. All runs used one host, and the kernel
-replay used QEMU 11.1.2 instead of the pinned 11.0.3. No hosted CI run has passed, because GitHub
-refused the jobs for a billing reason, so every gate ran on the author's machine, and a clean hosted
-runner fails seven tests that need untracked inputs or a newer SDK.
+The measurements come from several commits, and each states its own; the release compiler matches
+the campaign compiler only on the 792-object identity population. All runs used one host, and the
+kernel replay used QEMU 11.1.2 instead of the pinned 11.0.3. No hosted CI run has passed, because
+GitHub refused the jobs for a billing reason, so every gate ran on the author's machine, and a clean
+hosted runner fails seven tests that need untracked inputs or a newer SDK.
 
 In the agent experiments, the bugs are injected into code from three libraries, and the 18 silent
 items share six kernels, so the nominal p-values overstate the evidence. One coding-agent model at

@@ -5,7 +5,7 @@
       "steps": [
         [
           "evocc --version",
-          "evocc 0.1.0 (08bf09bd7631 2026-10-27)\nTarget: aarch64-apple-darwin\n"
+          "evocc 0.1.0 (f0e5e01a37b6 2026-10-30)\nTarget: aarch64-apple-darwin\n"
         ],
         [
           "evocc hello.c -o hello && ./hello",
@@ -39,7 +39,7 @@
         ],
         [
           "./a.out; echo $?  # expect 4",
-          "156\n"
+          "114\n"
         ],
         [
           "evo check mean.c",

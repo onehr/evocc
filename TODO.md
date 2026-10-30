@@ -1,7 +1,7 @@
 # EvoCC remaining work
 
-Updated **2026-10-27**, initially audited against `8fbced8`; current clauses are
-EvoIR **2.39.0** and EvoMIR **1.16.0** (pinned in `spec/`). This is the Git-tracked execution
+Updated **2026-10-30**, initially audited against `8fbced8`; current clauses are
+EvoIR **3.0.0** and EvoMIR **1.16.1** (pinned in `spec/`). This is the Git-tracked execution
 backlog, not a new test run.
 Task IDs are stable: update or split an item with cross-references; do not recycle
 IDs or silently delete unresolved work. Historical review IDs remain in their
@@ -138,7 +138,7 @@ was found in the read-only process check at this planning checkpoint.
 | APPLICATION | L11a, P17a, P22 | P21 completed 144 registered sessions: P1-P3 held; P4 and the earlier control penalty did not. P23 (experiment 8): P2 and P3 held for three chat models, P1 for Qwen3.8 27B only. P22's pilot of 2026-10-20 failed two go criteria on a false escape record. P01 through P20 retain their completed scope: P20 had no repair-count advantage; P18 stopped at the provider key limit. Existing application tasks keep separate exits. |
 | REVIEW |  | No rule decision is open. The 2026-10-13 decisions for K07, L03 to L10 and L11a to L11c are in docs/archive/notebook/rules-20261013/DECISIONS.md. |
 | AUDIT | D33 | D24 to D28 closed the follow-ups of D22, D23, L04 and L05; D33 changes the alignment model. D01-D15 are closed in their recorded scope. Keep the T03 audit boundary; kernel/application acceptance and deferred proof domains remain separate. |
-| ACCEPTANCE | T04, T02, K13, K14, R05, R05k | On 2026-10-27 the compiler of `8177cff2` passed the frozen acceptance (B10 and the direct Kbuild replay), the final gate T05 passed, and both archives were built (R05a). Next: the owner's R05k: the dating commit, the rebuild of both archives from it, the tag and the publication. |
+| ACCEPTANCE | T04, T02, K13, K14, R05, R05k | On 2026-10-27 the compiler of `8177cff2` passed the frozen acceptance (B10 and the direct Kbuild replay). On 2026-10-30 the release candidate `f0e5e01a` passed the final gate T05 and wrote the same bytes for the 792 identity objects, and both archives were built from it (R05a). Next: the owner's R05k: the tag of the dated commit, the archives built from it and the publication. |
 | RELEASE | R04, R07 | Target backends. |
 | LATER | R05m, R01, R02, R03, R03a, R03b, R03c, R03d, R03e, R03f, R03g, R03h, R04b, R04c, R04d, R04e, N06, N06a, N06b, N06c, N06d, N06e, R07b, R07c, R07d, R07e, V09, V10, V11, V12, V13, E01, E02, E03 | S1–S5 and R02e first slice are closed; S6 stays with R01's two G2 builds. R03 V1 negative-admission study is frozen; positive Q3 remains unachieved and R03a/b/c/d NOT_ADMITTED, R03e deferred. No VM timing or audit expansion; x86-64 and release stay separate. The bounded N01–N05/N07 batch is dispositioned, not a complete optimizing compiler: N03b/N03e preflights are negative, N07 E3 has zero SMT proofs, and all five library size targets remain missed. N03d C5 has size/correctness evidence but three compile-cost misses; C2/C5 remain outside the admitted cumulative configuration, and T1's misses stay frozen. All new defaults remain OFF. Retain N02's 70 admitted/187 opaque inputs and source-bridge mismatch. Broader inlining, mid-level and allocator work need newly scoped designs; no paused R activity is automatically reopened. |
 <!-- closure-queues:end -->
@@ -148,9 +148,9 @@ was found in the read-only process check at this planning checkpoint.
 Owner decision of 2026-10-28: EvoCC 0.2.0 is extendable, easy to adopt and ready for production
 use. It supports AArch64 (Linux and macOS), x86-64 Linux userspace and RISC-V (RV64GC) Linux
 userspace. The proof-required path stays AArch64 Linux only and refuses the other targets with
-exit status 6. The work runs in six parts: foundation, x86-64, RISC-V, Lean `core-v2`, the EqSat
-kit, and the release. AArch64 output stays byte-identical through the first three parts, apart
-from named fixes.
+exit status 6. The foundation (Q01 to Q05) shipped in release 0.1.0. Five parts remain: x86-64,
+RISC-V, Lean `core-v2`, the EqSat kit, and the release. AArch64 output stays byte-identical
+through x86-64 and RISC-V, apart from named fixes.
 
 - [x] **Q01 — Size limits with a ratchet** — `DONE`, P1. `f40be062`.
 - [x] **Q02 — Split the four largest source files** — `DONE`, P1. `d87152d5`, `1de19c93`, `b1f6490f`, `5fc8b241`.
@@ -1207,9 +1207,9 @@ Reopening any of them needs a new owner decision after the N03 slices land.
     The owner tags and pushes. Exit: CHANGELOG dates 0.1.0, tag `v0.1.0`
     exists, one merged `SHA256SUMS` is published, and the README download
     URLs resolve.
-    On 2026-10-28 the owner set the release date: the dating commit dates
-    0.1.0 as 2026-10-28. The archives are built again from it; the tag and
-    the publication remain.
+    The release commit dates 0.1.0 as 2026-10-30 and includes the foundation
+    Q01 to Q05. The archives are built from it; the tag and the publication
+    remain.
   - [x] **R05l — Name the proof profile in the README** — `DONE`. [History](docs/archive/todo-0.1.0.md#r05l).
   - [ ] **R05m — Make the hosted CI and release workflows pass** — `LATER`, P1.
     Paused by the owner on 2026-10-20. No run of `ci.yml`, `nightly.yml` or

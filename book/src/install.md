@@ -143,11 +143,11 @@ Lake writes `evoir-sem` to `lean/.lake/build/bin/`. Add both directories to your
 $ export PATH="$PWD/target/release:$PWD/lean/.lake/build/bin:$PATH"
 ```
 
-Now `evocc --version` works as in the release. A build of commit `8177cff2e06e` on macOS prints:
+Now `evocc --version` works as in the release. A build of commit `f0e5e01a37b6` on macOS prints:
 
 ```console
 $ evocc --version
-evocc 0.1.0 (08bf09bd7631 2026-10-27)
+evocc 0.1.0 (f0e5e01a37b6 2026-10-30)
 Target: aarch64-apple-darwin
 ```
 
