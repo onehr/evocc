@@ -1,7 +1,7 @@
 # EqSat cap census: diagnostic collector checkpoint
 
 This is an implementation step toward R02a/R02b, not closure of either task.
-R01a landed in `6cae306`. The remaining application preflight still requires
+R01a landed in `c676d6d`. The remaining application preflight still requires
 fresh correctness admission, post-lowering opportunity inventory, selected-pair
 traces, separate policy/rule/shortcut verdicts and native materialization.
 
@@ -36,7 +36,7 @@ performance admission. Missing/rejected chains and execution failures have
 unknown cap-hit results, not zero hits. Exit-2 malformed bundles remain separate
 from exit-3 proof rejection; matcher work remains null/NOT_MEASURED.
 
-The protocol was committed as `33e49db` **before** collection. The frozen
+The protocol was committed as `e4d0dbe` **before** collection. The frozen
 population has no AI candidates and authorizes no paid search.
 
 ## Observed collector smoke

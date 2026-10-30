@@ -1,6 +1,6 @@
 # N03c T2: conservative copy-location hints
 
-Clean implementation `bb2f3b5f`; RED `e5a9361f`; plan `5a477d38`; EvoMIR 0.60.
+Clean implementation `4acf3304`; RED `10c0ce87`; plan `2012d1b8`; EvoMIR 0.60.
 [Plan](../../../tests/contracts/codegen-n03c-copy-hints-20261003.json),
 [receipt](../../../tests/contracts/codegen-n03c-t2-20261003-receipt.json).
 `--regalloc-opt=copy-hints` prefers an already assigned same-class copy peer's

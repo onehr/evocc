@@ -13,7 +13,7 @@ is `tests/contracts/agent-repair-6-pilot-20261014.json`.
 ## Sources
 
 - Date: 2026-10-14. The pilot began at 01:17:31 UTC.
-- Repository commit at run time: `e74f3596`. The harness and the protocol file
+- Repository commit at run time: `177f7acf`. The harness and the protocol file
   were not committed yet. The receipt records their SHA-256.
 - Harness `tools/experiment/budget.py`, SHA-256
   `a255eb7ce9a3b53efd02ddfcc47301d4f0151aee8f84470ddd627a93896778f5`. It reuses
@@ -28,14 +28,14 @@ is `tests/contracts/agent-repair-6-pilot-20261014.json`.
   `.build/frozen/366fd796/evocc-darwin`.
 - Sealed image `evo-nexlab:sealed`, digest `sha256:e8d52bdc`. It equals the
   execution reference in `contracts/build-environment.json`.
-- Corpus: the five E3004 items at tag `agent-repair-corpus-2` (`7eed5eac`). The
+- Corpus: the five E3004 items at tag `agent-repair-corpus-2` (`2644dad5`). The
   working files equal the tag.
 - Captures: `.evidence/p17a-pilot-20261014/`, 1.0 MiB, ignored by Git.
 
 ## Rerun of 2026-10-20
 
 - Compiler: `evocc 0.1.0 (7fec1ce553a3 2026-10-20)`, release `evocc`
-  `49ddc244`, `evo` `7519053b`, at commit `7fec1ce5`. The harness, protocol
+  `49ddc244`, `evo` `7519053b`, at commit `0dfede74`. The harness, protocol
   file and prompt hashes equal those of the first run.
 - Free check: `compare-g0` gives 5/5 G0 feedback byte-identical to P17
   repetition 1, round 1, with the current compiler.

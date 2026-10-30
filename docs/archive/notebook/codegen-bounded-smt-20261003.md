@@ -1,6 +1,6 @@
 # N07 E3: negative SMT qualification
 
-Implementation `98542c3f`; plan `81374b99`; RED `20671add`.
+Implementation `a7dd22ad`; plan `0343f951`; RED `a3554317`.
 [Plan](../../../tests/contracts/codegen-n07-smt-20261003.json),
 [receipt](../../../tests/contracts/codegen-n07-e3-20261003-receipt.json),
 [rule inventory](../../../tests/contracts/codegen-n07-e3-verdicts-20261003.json).

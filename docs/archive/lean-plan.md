@@ -2,7 +2,7 @@
 
 ## First public release verification
 
-Plan revision 1, **2026-10-04**; inspected implementation `19bb5f7d`.
+Plan revision 1, **2026-10-04**; inspected implementation `d48a839c`.
 The owner requires a practical compiler-correctness path before the first public
 version, followed by verified rewrites on that path. This section is the current
 implementation plan; the scalar-proof plan below remains historical evidence.
@@ -16,9 +16,9 @@ V03 and V04 checkers. Then the pipeline check
 `checkPipeline_sound` and `checkPipelineTexts_sound`; they cover zero or more
 rewrite steps. An accepted record says "checked from typed Core source to final
 assembly text" (`CHECKED_TO_FINAL_ASSEMBLY`). Acceptance run: implementation
-commit `8770b186`. The full workspace gate passes (407 suites, 3,102 passed,
+commit `eed7f2f3`. The full workspace gate passes (407 suites, 3,102 passed,
 0 failed, 5 ignored; Clippy and formatting pass). The Lean gate passes (receipt
-Lean commit `5d917f39`). The sweep accepts 17 of 17 pilot modules and 107 of
+Lean commit `b64931fb`). The sweep accepts 17 of 17 pilot modules and 107 of
 107 entries (the 68 pilot entries and 39 other functions of these modules). It
 also accepts one g0 guard fold (`FixedMul`) and one P0 replacement
 (`short_circuit`) through the complete pipeline. Limits: Linux AArch64 with the
@@ -40,7 +40,7 @@ low bits and gives sufficient stack. `abiSourceEntry_of_abiEntry` shows that
 the old `AbiEntry` implies the new assumption. The new Boolean check
 `entryViewsOk` refuses at stage `V02` a post-SSA entry that does not read each
 32-bit parameter through a 32-bit register. After V07, the sweep passes again
-at `e657709b`. V08: the output of the 17 pilot modules was executed on Linux
+at `e85f5904`. V08: the output of the 17 pilot modules was executed on Linux
 AArch64 with no difference from the source interpreter in 14,194 comparisons,
 in the existing sealed image `evo-flight-lab:sealed` with GNU as and GNU ld
 2.44 and a second build with clang-19 and ld.lld 19. The upper-bits probe
@@ -383,7 +383,7 @@ identifiers and scope-depth preservation for the existing execution functions.
 These are generic proof components, not an executable generic pair checker.
 Instantiating and independently checking the diagrams for actual CFG edges,
 calls and private-leaf substitution remains V01's next implementation obligation.
-The clean Lean gate at `dbd98afb` records 19 kernel-only core targets.
+The clean Lean gate at `32139139` records 19 kernel-only core targets.
 
 **Executable target fragments.** `Core/SymbolicScalar.lean`,
 `SymbolicBindings.lean` and `SymbolicInstruction.lean` now check initialized
@@ -395,13 +395,13 @@ single-instruction theorem is linked to the actual `IR.execute` arm. Calls,
 objects and CFG traversal are refused by this local component, not asserted to
 preserve state. The source expectation and the entry/edge relationships still
 need independent justification; a successful fragment check is not V01 admission.
-The clean gate at `88e7f458` records 22 kernel-only core targets.
+The clean gate at `50499dc7` records 22 kernel-only core targets.
 `SymbolicSource.lean` additionally proves the six source types' conversions and
 source-directed add/sub/mul checks, including usual arithmetic conversions and
 their signed/unsigned diagnostic distinction. `segment_execution_sound` connects
 the complete finite instruction segment to actual `IR.Steps`, not just its local
 evaluator. These do not yet prove source expression, edge, loop or call diagrams.
-The `6321f218` checkpoint passes the clean Lean gate (25 kernel-only core
+The `6eab6d80` checkpoint passes the clean Lean gate (25 kernel-only core
 targets) and full workspace (3,080 passed, zero failures, five ignored;
 Clippy/format pass). The pilot receipt records the scope, logs and 3.86 GiB
 cache/capture increase, mostly the reused frontend Cargo target. This remains
@@ -483,7 +483,7 @@ semantics was introduced (`Source.place` was made public only for its proof).
 
 The actual exporter pair for `tests/fixtures/verification/stateful-return.c`
 passes, and 11 source/target mutations refuse. The previous original `FixedMul`
-and `abs` cases remain accepted. The first stateful checkpoint `74b33c80` passes
+and `abs` cases remain accepted. The first stateful checkpoint `e78f4e95` passes
 the clean Lean gate (42 kernel-only core targets) and full workspace (401 suites,
 3,080 passed, zero failed, five existing ignored; Clippy/format pass).
 The extension now uses one assignment continuation for simple and supported
@@ -495,7 +495,7 @@ dropping the second update's guard is refused even though its stored value is
 dead at return. There are 21 whole-return cases, 37 stateful expression
 outcome/refusal examples, 18 storage boundaries and 136 comparisons against the
 actual source machine. The assignment-extension clean Lean gate passes at
-`1746ceed` (42 kernel-only core targets; 1,246,159 vector answers).
+`2049f4de` (42 kernel-only core targets; 1,246,159 vector answers).
 This is **not V01 completion**: div/rem and their compound forms, statement
 sequencing/declaration integration, loops, calls/private-leaf substitution and
 validator execution safety remain required. Storage adapter lemmas alone do
@@ -519,7 +519,7 @@ proof on unrelated module functions. One observed representation mismatch
 branch normalization; runtime guards are retained and no P0 rule/allowlist
 changes. Local tests add 54 exact-store/source-machine comparisons, 23 kernel
 statement examples, five constant-branch examples and 28 complete-pair tests
-(four positive and 24 mutations). The clean Lean gate passes at `6c532776`
+(four positive and 24 mutations). The clean Lean gate passes at `a89befe2`
 (44 kernel-only core targets; 1,246,159 vector answers); seven actual export
 pairs replay successfully. Full workspace at that checkpoint passes 401 suites,
 3,080 tests, zero failures and five ignored, plus Clippy/format. Div/rem, cyclic
@@ -550,7 +550,7 @@ test's fixed point associations are test data, not a name-specific admission
 path. An executable, independently checked successor-invariant instantiation
 and connection to the actual function entry are still required before the
 whole-function checker may admit `loop_join`. Existing seven finite-function
-admissions are unchanged. At `8cf85cc6`, the clean Lean gate passes (47
+admissions are unchanged. At `18942a10`, the clean Lean gate passes (47
 kernel-only core targets), and full workspace passes 3,080 tests with zero
 failures and five ignored, plus Clippy/format. The earlier sandboxed attempt
 had two container-permission failures and remains a failed attempt.
@@ -564,7 +564,7 @@ the table to both actual function entries for all typed arguments. The original
 `loop_join.json` and complete `control.evo` pass the public interface; the seven
 finite-function admissions remain green. A divergent loop is also admitted;
 six zero-step roots and 30 mutations refuse. These are source-to-EvoIR results,
-not a V01-completion or backend claim. The clean Lean gate at `493aa9ac`
+not a V01-completion or backend claim. The clean Lean gate at `2ff0ed2d`
 passes with 49 kernel-only core targets and 1,246,159 vector answers; the
 workspace gate passes 401 suites / 3,080 tests / zero failures / five ignored,
 plus Clippy/format. Div/rem, calls/private-leaf substitution and validator safety
@@ -603,7 +603,7 @@ obligations in the current block, so intrinsic traps cannot mask their deletion.
 All six original `division-return.c` pairs now pass the public interface, as do
 the nested, conditional and looping cases in `division-control.c`. The tests
 cover 144 mixed-type/compound pairs, 1,060 refused mutations and 11 original
-control cases. At `b718a856`, the clean Lean gate passes with 53 kernel-only
+control cases. At `346824ff`, the clean Lean gate passes with 53 kernel-only
 core targets and 1,246,159 vector answers. Full workspace passes 401 suites /
 3,080 tests / zero failures / five ignored, plus Clippy/format. Calls,
 private-leaf substitution, validator safety and the complete frozen population
@@ -625,7 +625,7 @@ stripping state parameters. The original `converted_caller`, `checked_caller`,
 `nested_caller` and 32-argument `pressure` pairs pass the existing
 `--check-core-leaf-pair` interface, which prints `PROVED_CALL_PAIR` for this path.
 Nine execution/diagram controls, six source-boundary refusals and 18 target
-mutations pass. At `1b859487`, the clean Lean gate passes with 61 kernel-only core
+mutations pass. At `59a5488b`, the clean Lean gate passes with 61 kernel-only core
 targets and 1,246,159 vector answers; full workspace passes 401 suites / 3,080
 tests / zero failures / five ignored, plus Clippy/format. All five original
 named pilot entries now replay successfully (`FixedMul`, `abs`, `short_circuit`,
@@ -654,7 +654,7 @@ placeholders retain poison and cannot be read as numeric terms or returned.
 No source rewriting, IR cleanup or changed compiler default is used for admission.
 Focused selftests pass 17 call execution/diagram controls, five complete pairs,
 six call-boundary refusals, three source mutations and 33 target mutations.
-At implementation `b7a0a70e`, the clean Lean gate passes with 64 kernel-only
+At implementation `1729b09b`, the clean Lean gate passes with 64 kernel-only
 core targets and 1,246,159 vector answers; full workspace passes 401 suites /
 3,080 tests / zero failures / five ignored, plus Clippy/format. All five frozen
 named entries and the original private-leaf pair replay successfully.
@@ -665,7 +665,7 @@ The complete `main` closure still refuses. Five isolated calling-expression
 REDs in `tests/fixtures/verification/call-control.c` independently validate as
 source but refuse pair checking: choice, short-circuit and/or, assignment and
 comma. They are next-work inputs, not passing proof evidence.
-After the receipt synopsis correction, the clean gate at `0724fcc9` passes
+After the receipt synopsis correction, the clean gate at `daebc065` passes
 again and reproduces the committed receipt byte-for-byte. Final slice artifact
 growth is **2,440 KiB** across `.lake` and the capture; `target/frontend` is
 unchanged. The capture is 11,948 KiB against its
@@ -673,7 +673,7 @@ unchanged. The capture is 11,948 KiB against its
 (2,520 bytes) was removed after checking for open handles.
 
 **Calling-control correspondence (October 5 continuation).** Implementation
-`0eec2a26` closes all five original `call-control.c` REDs without changing their
+`1cf2bd3e` closes all five original `call-control.c` REDs without changing their
 source or target. Source diagrams compose unary, conditional, short-circuit,
 assignment and comma evaluation with actual callee execution. Target result
 trees retain conditional edges and bind the caller continuation only at a
@@ -720,7 +720,7 @@ controls and 15 target, 11 proposal and three source mutations pass. The five
 frozen primary entries and original private-leaf pair replay. The first replay
 attempt accidentally paired `caller.json` with `pressure.evo` and correctly
 refused; the corrected original-target replay is retained separately. The
-development axiom/proposition audit passes. Implementation `10f0c558` passes the
+development axiom/proposition audit passes. Implementation `4fb858e8` passes the
 clean Lean gate (69 kernel-only core targets, zero native dependencies,
 1,246,159 vector answers) and full workspace (401 suites, 3,080 passed, zero
 failed, five ignored; Clippy/format pass). Receipts are in the pilot manifest.
@@ -733,7 +733,7 @@ needs a continuation-aware simulation, not a larger finite call budget.
 That composition, private storage, full constructor/closure coverage and
 validator execution safety still block V01. V02–V06 remain OPEN.
 
-**Cyclic callee contexts (October 5 continuation).** Implementation `854f6b9e`
+**Cyclic callee contexts (October 5 continuation).** Implementation `941a0ef7`
 strengthens the same checked spans and successor associations to quantify over
 the actual suspended source caller and target return stack. A source return
 restores the caller's locals, continuation and function identity. An IR return
@@ -764,7 +764,7 @@ full frozen coverage and validator execution safety also remain required.
 V01 is OPEN; V02–V06 are not implemented. No scope or interpreter was changed.
 
 **Checked return construction (October 5 continuation).** Implementation
-`51b27bd2` constructs the post-call source/IR suffix instead of leaving its
+`c123dcb4` constructs the post-call source/IR suffix instead of leaving its
 simulation as an external premise. `resumeExpression` continues a symbolic
 returned value through binary operations and conversions; the IR diagram starts
 at the actual post-call instruction position. `checkedReturn` reserves an
@@ -787,7 +787,7 @@ manifest. Artifact disk delta +3,252 KiB, target/frontend unchanged, 51 GiB free
 Thirteen temporary intermediate logs/receipts (820 KiB) were retired; RED,
 final gates/replay and protected artifacts remain.
 
-**Whole cyclic caller entry (October 5 continuation).** `60adb247` constructs
+**Whole cyclic caller entry (October 5 continuation).** `e0d7a9fe` constructs
 the actual source argument/frontier and IR call-site prefixes, selects and checks
 the callee's own cutpoint proposal, and composes its proved return continuation.
 `CallFrontierPair.refines` covers all typed arguments, first diagnostics,
@@ -816,9 +816,9 @@ Measured build/capture delta +4,292 KiB; target/frontend unchanged, 51 GiB free.
 Two intermediate logs and the temporary phase probe were retired; final
 evidence and protected artifacts remain. No backend/release label is granted.
 
-**Saved calls and statement contexts (October 5 continuation).** `a1338248`
-and `014bfa62` close the four preceding context REDs, including nested cyclic
-calls and fresh renaming of saved operands. `e5db8d5e` additionally closes
+**Saved calls and statement contexts (October 5 continuation).** `77d202a4`
+and `6db43e9e` close the four preceding context REDs, including nested cyclic
+calls and fresh renaming of saved operands. `e2760e97` additionally closes
 initializer calls, post-call `&&`/`||`, and branches with a return-only arm.
 The same proof constructor checks both frontier arms; a terminal source suffix
 may take zero steps, but cyclic spans still require positive progress. Return
@@ -828,9 +828,9 @@ Source/IR execution semantics, P0/g0 and the frozen profile are unchanged.
 Nineteen original pairs replay, including all eight newly closed contexts.
 The new statement-context tests cover eight original/renamed pairs, 17
 mutations and 20 execution controls; 19 source-resumption and nine frontier
-controls pass. Clean Lean at `e5db8d5e`: 77 kernel-only audited core targets,
+controls pass. Clean Lean at `e2760e97`: 77 kernel-only audited core targets,
 no native axioms, 1,246,159 vector answers. The completed full Rust workspace
-gate at `014bfa62` is 401 suites / 3,080 passed / zero failed / five ignored,
+gate at `6db43e9e` is 401 suites / 3,080 passed / zero failed / five ignored,
 Clippy/format pass. Rust sources and that gate are unchanged; this is retained
 Rust-baseline evidence, not a new full-workspace run at the later Lean commit.
 
@@ -843,7 +843,7 @@ remain unimplemented. Receipts: `saved_call_contexts` and
 delta +6,396 KiB; target/frontend unchanged, capture 16,284 KiB of 500 MiB,
 53 GiB free. Temporary probe source removed; protected evidence retained.
 
-**Logical RHS call closure (October 5 continuation).** `9ab35d27` closes both
+**Logical RHS call closure (October 5 continuation).** `3bce4191` closes both
 `call-loop-short-right.c` REDs without changing either execution semantics.
 `cutMatchUnder` establishes premises only at matched branches; root admission
 starts with none. `PathConditions.for_return_sound` transports those premises
@@ -853,13 +853,13 @@ Twenty-one original pairs and the retained caller-only refusal replay. The
 new tests cover four original/renamed pairs, 18 mutations, 14 execution controls,
 15 premise-isolation controls and 24 six-type logical-resumption diagrams.
 Clean Lean at this commit passes all steps with 79 kernel-only core audit
-targets and 1,246,159 vector answers. The Rust baseline remains `014bfa62`, not
+targets and 1,246,159 vector answers. The Rust baseline remains `6db43e9e`, not
 a newly run workspace gate. Private storage, complete call/constructor closure
 and validator execution safety still keep V01 OPEN; V02–V06 are unimplemented.
 Artifact delta +3,660 KiB (.lake +2,796; capture +864); target/frontend unchanged,
 capture 17,148 KiB of 500 MiB, 53 GiB free. No temporary source remains.
 
-**Mixed finite/cyclic calls (October 5 continuation).** `59e0f8cc` closes
+**Mixed finite/cyclic calls (October 5 continuation).** `1969f5b8` closes
 `call-loop-mixed.c`'s three REDs: a finite call before a cyclic call, inside its
 argument, and after its return. Source frontiers now stop at the first actual
 call, rather than eagerly executing finite argument calls. An unannotated
@@ -868,7 +868,7 @@ its body, bindings and successors. An explicit bad plan is never replaced.
 Twenty-four original pairs and the historical refusal replay; six new
 original/renamed pairs, 23 rejection controls and 27 execution/frame controls
 pass. Clean Lean at this commit passes all steps: 79 kernel-only core targets,
-1,246,159 vector answers. Rust-baseline scope remains `014bfa62`.
+1,246,159 vector answers. Rust-baseline scope remains `6db43e9e`.
 `call-loop-nested.c` is the next RED: an unbounded caller loop invokes the
 cyclic callee. Both source and target execute the three recorded controls
 identically, but whole-pair admission refuses even with both functions' proposed
@@ -878,7 +878,7 @@ V01 and V02–V06 remain open. Artifact delta +1,216 KiB (.lake +1,124;
 capture +92); target/frontend unchanged, capture 17,240 KiB of 500 MiB,
 53 GiB free. Temporary inspection source removed; all final evidence retained.
 
-**Cyclic caller/callee composition (October 5 continuation).** `d14f4d95`
+**Cyclic caller/callee composition (October 5 continuation).** `7f2abb36`
 closes the original `call-loop-nested.c` pair. `OpenCheckpoint.bind` links
 callee returns to checked caller fragments; `OpenCheckpoint.close` closes all
 caller cutpoints with positive actual source/target paths. No assumed caller
@@ -888,7 +888,7 @@ the historical refusal replay. Two original/renamed pairs, 24 mutations,
 27 execution/frame controls and two matched nonterminating variants pass.
 Clean Lean at this commit: all steps PASS, 82 kernel-only core targets, no native
 axioms in those targets, 1,246,159 vector answers. Rust evidence remains the
-unchanged `014bfa62` full-workspace baseline, not a new run.
+unchanged `6db43e9e` full-workspace baseline, not a new run.
 The saved next RED, `call-loop-deep.c`, adds a finite caller around the now
 accepted nested loop. Its four-function source closure validates and three
 execution controls agree, but pair admission still refuses: the callee builder
@@ -900,20 +900,20 @@ the existing pilot manifest. Artifact delta +3,268 KiB (.lake +3,220; capture
 No temporary source remains; protected evidence is retained.
 
 **General call closure and execution safety (October 5 continuation).**
-`8b7d16d0` replaces the two-level construction with one nonrecursive call-graph
-builder over arbitrary suspended caller contexts. `8afff094` adds proved
+`5fdc1f39` replaces the two-level construction with one nonrecursive call-graph
+builder over arbitrary suspended caller contexts. `279be088` adds proved
 transport of unused poison placeholders and closed-term diagram normalization;
 false/unknown guards and the first diagnostic remain intact. The unchanged
 `source-execution.c` / `main` closure now passes with all signature bits and
 unbounded execution. Thirty-one positive original pairs and one retained
 negative replay; no source/IR input, EqSat registry or runtime bound was changed.
-`05fb62d4` connects actual identifier admission to a realized local store and
-proves typed scalar continuation safety. `4a8ac98e` derives
+`56f2aaf8` connects actual identifier admission to a realized local store and
+proves typed scalar continuation safety. `bc6b3543` derives
 `LoweringRefines.source_no_malformed`: an accepted whole-pair proof excludes
 malformed source terminals, including when target divergence is considered.
 This conditional result does **not** prove standalone input-validator safety.
-Clean Lean at `4a8ac98e`: PASS, 90 kernel-only core targets, no native axioms in
-those targets. Full workspace at `8afff094`: 401 suites, 3,080 PASS, 0 FAIL,
+Clean Lean at `bc6b3543`: PASS, 90 kernel-only core targets, no native axioms in
+those targets. Full workspace at `279be088`: 401 suites, 3,080 PASS, 0 FAIL,
 5 ignored; Clippy/format PASS. Private lowered-storage composition, complete
 constructor coverage, and preservation of validator facts through full
 expressions/statements/loops/calls remain OPEN; V02–V06 remain unimplemented.
@@ -921,11 +921,11 @@ Details and exact subjects are in the existing pilot receipt. Artifact delta
 +6,412 KiB; target/frontend unchanged; capture 17,832 KiB of 500 MiB; 52 GiB
 free. Two temporary inspection inputs removed, protected evidence retained.
 
-**Source write preservation (October 5 continuation).** `6c28845a` connects the
+**Source write preservation (October 5 continuation).** `1061094a` connects the
 actual assignment/update admission checks to runtime binding permissions and
 proves preservation of the local-store invariant for all eleven assignment
 forms, all four updates, declarations, initialization and caller restoration.
-`4db6012e` adds scope-exit preservation under an explicit frame-shape invariant:
+`3e5d4a75` adds scope-exit preservation under an explicit frame-shape invariant:
 the dropped prefix cannot shadow retained bindings, retained types remain exact,
 and the post-scope facts use the actual validator's initialization filter.
 Failures retain the old store and the first checked diagnostic; successful
@@ -940,12 +940,12 @@ const assignment and duplicate const initialization still refuse. This follows
 6.5.17 and 6.7.9, rather than restricting the source profile to hide the failure.
 The original C pair is accepted by the source/IR checker, both existing Rust
 interpreters return zero, and two original/renamed pairs, three mutations and
-eleven kernel storage controls pass. Clean Lean at `4db6012e`: 98 kernel-only
+eleven kernel storage controls pass. Clean Lean at `3e5d4a75`: 98 kernel-only
 core targets, no native axioms in those targets. The 31 previous positive pairs,
 one previous refusal and the new original pair replay as expected. Exact gate
 subjects, logs and disk accounting are in `validator_storage_preservation` in
 the existing pilot receipt. Full workspace on the unchanged Rust tree of
-`6c28845a`: 401 suites, 3,081 PASS / 0 FAIL / 5 ignored, Clippy/format PASS.
+`1061094a`: 401 suites, 3,081 PASS / 0 FAIL / 5 ignored, Clippy/format PASS.
 The sandbox-denied attempt is retained as FAIL, separate from the authorized
 complete rerun. Scoped artifact delta +19,260 KiB; 52 GiB free, no new target
 tree or temporary inspection inputs retained. Private lowered-storage composition, full constructor
@@ -1021,7 +1021,7 @@ listed Core C-HIR subset and target, with an explicit trusted boundary; existing
 scalar rewrites compose with that path.* Do not say "CompCert-equivalent GNU C",
 "all UB is caught", "the entire compiler is verified", or "Linux is proved".
 Current status is **implementation in progress**, not release acceptance.
-The initial documentation-only commit `409b84e3` produced approximately 22 KiB
+The initial documentation-only commit `a9a4e9ac` produced approximately 22 KiB
 of tracked text and no build/capture artifacts. Subsequent slice measurements
 belong to their own records; filesystem-wide free-space changes are not assumed
 to be compiler artifact growth. The October 1 numbers below remain unchanged.
@@ -1033,7 +1033,7 @@ to be compiler artifact growth. The October 1 numbers below remain unchanged.
 zero differences**. Selected runs now replace only their own groups; retained
 groups keep their run/commit/toolchain metadata and totals are recomputed.
 `tools/gate-lean.sh` ran from a clean tree and records actual answered counts for
-all six groups, with `lean_worktree_clean: true` and Lean source commit `595272a2`.
+all six groups, with `lean_worktree_clean: true` and Lean source commit `871ea379`.
 The current audit covers 55 P0 rules plus seven g0 rules; all seven new g0 A2
 transfer rows are parametric and kernel-only. The older five-group counts below
 remain the P0 subset, rather than the combined receipt total.

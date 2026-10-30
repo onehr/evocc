@@ -1,7 +1,7 @@
 # N03d C3: repeated integer extensions
 
-Clean subject `93847196`; RED `7069e4af`; plan `19769460`; measurement plans
-`d2fe7517`; EvoMIR 0.63. [Plan](../../../tests/contracts/codegen-n03d-extensions-20261003.json),
+Clean subject `2debb15c`; RED `3afaf704`; plan `14352b59`; measurement plans
+`705869e0`; EvoMIR 0.63. [Plan](../../../tests/contracts/codegen-n03d-extensions-20261003.json),
 [receipt](../../../tests/contracts/codegen-n03d-c3-20261003-receipt.json).
 `--isel-opt=extensions` reuses exact block-local Extend, low Bfx and low-mask
 AND results before allocation. Unique definitions, local non-edge uses and

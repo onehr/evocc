@@ -21,6 +21,9 @@ import sys
 import textwrap
 import unicodedata
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import history_map  # noqa: E402
+
 ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / "docs" / "status.md"
 
@@ -750,9 +753,9 @@ def main(argv: list[str] | None = None) -> int:
     receipts = load_receipts()
     versions = {"evoir": revision(ROOT / "spec/evoir.md"), "evomir": revision(ROOT / "spec/evomir.md")}
     if args.ascii:
-        print(render_ascii(receipts, **versions), end="")
+        print(history_map.current_text(render_ascii(receipts, **versions)), end="")
         return 0
-    text = render_document(receipts, **versions)
+    text = history_map.current_text(render_document(receipts, **versions))
     print(text, end="")
     if args.check:
         errors = []

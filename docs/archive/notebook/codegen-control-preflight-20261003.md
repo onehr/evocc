@@ -1,6 +1,6 @@
 # N03d C4: residual compare/control census
 
-Clean subject `2ce2385c`; plan `757c92ea`; RED `14007276`.
+Clean subject `3752dbdf`; plan `b617571f`; RED `3562ffe9`.
 [Plan](../../../tests/contracts/codegen-n03d-control-20261003.json),
 [receipt](../../../tests/contracts/codegen-n03d-c4-20261003-receipt.json).
 Read-only N01/S1 analysis of 48 retained OFF/cumulative A/B object rows,

@@ -1,7 +1,7 @@
 # N03a step 2: generic machine algorithms
 
-Implementation: `cb65735d` (operand facts), `a1717dc1` (SSA destruction),
-`16cc9b2b` (allocation and verifier). [Plan](../../../tests/contracts/codegen-n03a-20261002.json);
+Implementation: `632d2667` (operand facts), `0d78884c` (SSA destruction),
+`370ebd87` (allocation and verifier). [Plan](../../../tests/contracts/codegen-n03a-20261002.json);
 [receipt](../../../tests/contracts/codegen-n03a-machine-20261002-receipt.json).
 The canonical `targets/aarch64/insts` now generates one operand, edge, call,
 flags, spill and DCE descriptor read by the shared out-of-SSA pass, linear scan,

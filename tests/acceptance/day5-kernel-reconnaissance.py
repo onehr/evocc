@@ -31,6 +31,8 @@ from typing import Any, Iterable
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(PROJECT_ROOT / "tools"))
+import history_map  # noqa: E402
 DEFAULT_CONTRACT = PROJECT_ROOT / "tests/contracts/day5-kernel-cohort.json"
 BUILD_ENV_CONTRACT = PROJECT_ROOT / "contracts/build-environment.json"
 KERNEL_CONTRACT = PROJECT_ROOT / "contracts/kernel-target.json"
@@ -438,9 +440,10 @@ def verify_contract(contract_path: Path, evidence_inputs: Path | None) -> dict[s
     require(sha256_file(archive_path) == contract["kernel"]["sourceArchiveSha256"], "pinned kernel archive bytes drift")
 
     day4 = contract["frozenBeforeProductionEdit"]
-    require(day4["day4Commit"] == "2f1c1570ee5268a082734dd8061e49bd2ff37dbf", "Day-4 baseline commit drift")
+    day4_commit = history_map.current(day4["day4Commit"])
+    require(day4_commit == "5fb7f54e679ba9a5450ad0c8ceb6d5010ac2910d", "Day-4 baseline commit drift")
     tree_probe = subprocess.run(
-        ["git", "rev-parse", f"{day4['day4Commit']}^{{tree}}"],
+        ["git", "rev-parse", f"{day4_commit}^{{tree}}"],
         cwd=PROJECT_ROOT,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
@@ -449,6 +452,7 @@ def verify_contract(contract_path: Path, evidence_inputs: Path | None) -> dict[s
     )
     require(tree_probe.returncode == 0, "cannot resolve frozen Day-4 commit tree")
     observed_tree = tree_probe.stdout.decode("ascii", errors="strict").strip()
+    # The rewrite of 2026-10-30 removed Chinese files from the Day-4 tree; this check fails since.
     require(observed_tree == day4["day4Tree"], "frozen Day-4 tree authority drift")
 
     selection = contract["selection"]

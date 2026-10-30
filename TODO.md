@@ -1,6 +1,6 @@
 # EvoCC remaining work
 
-Updated **2026-10-27**, initially audited against `a83d803`; current clauses are
+Updated **2026-10-27**, initially audited against `8fbced8`; current clauses are
 EvoIR **2.39.0** and EvoMIR **1.16.0** (pinned in `spec/`). This is the Git-tracked execution
 backlog, not a new test run.
 Task IDs are stable: update or split an item with cross-references; do not recycle
@@ -117,7 +117,7 @@ The bounded codegen batch remains closed with misses; no new optimization slice
 or default flip is scheduled. The older kernel/application queues below retain
 their independent acceptance obligations; none is marked complete by this plan.
 
-September 28 replan at `6bd69b7`: prioritize **bounded ARM64 acceptance**, then
+September 28 replan at `3d02245`: prioritize **bounded ARM64 acceptance**, then
 the remaining language breadth, then the wider research/release roadmap. This
 is sequencing, not approval to drop features or convert failures into passes.
 The project has working boot and substantial application coverage, but the full
@@ -138,7 +138,7 @@ was found in the read-only process check at this planning checkpoint.
 | APPLICATION | L11a, P17a, P22 | P21 completed 144 registered sessions: P1-P3 held; P4 and the earlier control penalty did not. P23 (experiment 8): P2 and P3 held for three chat models, P1 for Qwen3.8 27B only. P22's pilot of 2026-10-20 failed two go criteria on a false escape record. P01 through P20 retain their completed scope: P20 had no repair-count advantage; P18 stopped at the provider key limit. Existing application tasks keep separate exits. |
 | REVIEW |  | No rule decision is open. The 2026-10-13 decisions for K07, L03 to L10 and L11a to L11c are in docs/archive/notebook/rules-20261013/DECISIONS.md. |
 | AUDIT | D33 | D24 to D28 closed the follow-ups of D22, D23, L04 and L05; D33 changes the alignment model. D01-D15 are closed in their recorded scope. Keep the T03 audit boundary; kernel/application acceptance and deferred proof domains remain separate. |
-| ACCEPTANCE | T04, T02, K13, K14, R05, R05k | On 2026-10-27 the compiler of `08bf09bd` passed the frozen acceptance (B10 and the direct Kbuild replay), the final gate T05 passed, and both archives were built (R05a). Next: the owner's R05k: the dating commit, the rebuild of both archives from it, the tag and the publication. |
+| ACCEPTANCE | T04, T02, K13, K14, R05, R05k | On 2026-10-27 the compiler of `8177cff2` passed the frozen acceptance (B10 and the direct Kbuild replay), the final gate T05 passed, and both archives were built (R05a). Next: the owner's R05k: the dating commit, the rebuild of both archives from it, the tag and the publication. |
 | RELEASE | R04, R07 | Target backends. |
 | LATER | R05m, R01, R02, R03, R03a, R03b, R03c, R03d, R03e, R03f, R03g, R03h, R04b, R04c, R04d, R04e, N06, N06a, N06b, N06c, N06d, N06e, R07b, R07c, R07d, R07e, V09, V10, V11, V12, V13, E01, E02, E03 | S1–S5 and R02e first slice are closed; S6 stays with R01's two G2 builds. R03 V1 negative-admission study is frozen; positive Q3 remains unachieved and R03a/b/c/d NOT_ADMITTED, R03e deferred. No VM timing or audit expansion; x86-64 and release stay separate. The bounded N01–N05/N07 batch is dispositioned, not a complete optimizing compiler: N03b/N03e preflights are negative, N07 E3 has zero SMT proofs, and all five library size targets remain missed. N03d C5 has size/correctness evidence but three compile-cost misses; C2/C5 remain outside the admitted cumulative configuration, and T1's misses stay frozen. All new defaults remain OFF. Retain N02's 70 admitted/187 opaque inputs and source-bridge mismatch. Broader inlining, mid-level and allocator work need newly scoped designs; no paused R activity is automatically reopened. |
 <!-- closure-queues:end -->
@@ -152,11 +152,11 @@ exit status 6. The work runs in six parts: foundation, x86-64, RISC-V, Lean `cor
 kit, and the release. AArch64 output stays byte-identical through the first three parts, apart
 from named fixes.
 
-- [x] **Q01 — Size limits with a ratchet** — `DONE`, P1. `d68dc9ea`.
-- [x] **Q02 — Split the four largest source files** — `DONE`, P1. `ca829d81`, `8a4a650c`, `c992cc69`, `0afbcad9`.
-- [x] **Q03 — Split the long functions of the backend path** — `DONE`, P1. `bbee1651`.
-- [x] **Q04 — Compiler architecture and crate interfaces** — `DONE`, P1. `823947d6`.
-- [x] **Q05 — Keep active work in the tracker, and inventory the tools** — `DONE`, P2. `6a1519b9`.
+- [x] **Q01 — Size limits with a ratchet** — `DONE`, P1. `f40be062`.
+- [x] **Q02 — Split the four largest source files** — `DONE`, P1. `d87152d5`, `1de19c93`, `b1f6490f`, `5fc8b241`.
+- [x] **Q03 — Split the long functions of the backend path** — `DONE`, P1. `704f5a1b`.
+- [x] **Q04 — Compiler architecture and crate interfaces** — `DONE`, P1. `91f1f5ac`.
+- [x] **Q05 — Keep active work in the tracker, and inventory the tools** — `DONE`, P2. `2ff5cf38`.
 - [ ] **R07 — RISC-V (RV64GC) Linux userspace backend** — `OPEN`, P1.
   The same shared EvoMIR as x86-64 (R04). The proof-required path refuses RISC-V.
   - [x] **R07a — Design** — `DONE`, P1, 2026-10-29.
@@ -266,7 +266,7 @@ retain the original scope where one copy has a truncated sentence.
   AtlasCloud was degraded during the run. Next action: the owner raises the key
   limit or supplies a key; then the same 10 requests run again.
   October 20: after the owner raised the key limit, the same 10 pilot requests
-  ran with the compiler of `7fec1ce5`, whose G0 feedback is byte-identical to
+  ran with the compiler of `0dfede74`, whose G0 feedback is byte-identical to
   P17 for 5/5 items. All 10 completed from AtlasCloud with no retry, and all
   five go criteria hold: 9 delivered, valid and correct responses; one L4 G0
   response stopped at the 4,096-token limit; the largest L16 completion used
@@ -275,10 +275,10 @@ retain the original scope where one copy has a truncated sentence.
   the owner approves registration and the 400-request measured run (cap USD
   3.50), or stops here.
   October 22: the owner unfroze the release binaries, which had stayed at commit
-  7fec1ce5 for the agent experiments. The pilots of 2026-10-20 used that
+  0dfede74 for the agent experiments. The pilots of 2026-10-20 used that
   compiler, so a measured run now needs a new pilot with the current compiler
   and a new registration commit, because commits followed the registration of
-  3a19ce9a.
+  b9114473.
 
 - [x] **P21 — Replicate repair effort and test larger programs** — `DONE`. [History](docs/archive/todo-0.1.0.md#p21).
 - [ ] **P22 — Shorten the check feedback of the agent interface; the controls of experiments 4 and 5 show its cost** — `OPEN`, P2.
@@ -326,9 +326,9 @@ retain the original scope where one copy has a truncated sentence.
   the owner chooses a new pilot with no concurrent repository writer, or the
   measured run.
   October 22: the owner unfroze the release binaries, which had stayed at commit
-  7fec1ce5 for the agent experiments. The pilots of 2026-10-20 used that
+  0dfede74 for the agent experiments. The pilots of 2026-10-20 used that
   compiler, so a measured run now needs a new pilot with the current compiler.
-- [x] **P23 — Give the silent bugs to chat models (experiment 8)** — `DONE`, P2, 2026-10-29. Registration `0b9cef89`, records `7f3c0c34`, [report](book/src/evaluation-agents.md#experiment-8-chat-models-and-silent-bugs).
+- [x] **P23 — Give the silent bugs to chat models (experiment 8)** — `DONE`, P2, 2026-10-29. Registration `3e24b509`, records `c204a215`, [report](book/src/evaluation-agents.md#experiment-8-chat-models-and-silent-bugs).
 
 - [x] **P20 — Agent repairs of silent undefined behavior** — `DONE`. [History](docs/archive/todo-0.1.0.md#p20).
 - [x] **P19 — Consistent options and checkout defaults** — `DONE`. [History](docs/archive/todo-0.1.0.md#p19).
@@ -410,7 +410,7 @@ K6 boot is already accepted for the locked 2,799-target-C configuration. The
 complete K7/KUnit success; these configurations and their Images are distinct.
 
 Direct Kbuild checkpoint (2026-10-11): Linux 6.18.44 `tinyconfig` builds from
-an empty output tree with `CC=evocc`, fixed compiler `e5bf1a72`, and no seeded
+an empty output tree with `CC=evocc`, fixed compiler `68e32c41`, and no seeded
 GCC target objects. The build produces 446 C objects and four C-to-assembly
 helpers; host tools, assembly and linking still use the GNU toolchain.
 Driver capability probes, assembly stdin/preprocessing/dependencies, masked
@@ -433,7 +433,7 @@ paired baseline before a replacement campaign. Boot and kselftests remain
 NOT_RUN for the direct build; no historical verdict changes. [Details][kernel].
 
 Fresh direct-build replay (2026-10-12): the retained arm64 virtconfig input
-now builds with EvoCC `03600f80`. All **2,799 target C objects** and five
+now builds with EvoCC `ded50043`. All **2,799 target C objects** and five
 C-to-assembly helpers match this compiler's recorded invocations; no GCC
 target C object is seeded or substituted. The new Image passes **HVF and TCG
 boot**, including `/init`, the current nonce and shutdown. The unchanged nine
@@ -448,7 +448,7 @@ not the missing 7,008-unit configuration, full 970-program acceptance or
 KUnit, and it closes none of those separate tasks.
 [Receipt](tests/contracts/kernel-direct-virt-receipt.json) and [details][kernel].
 
-Frozen release replay (2026-10-27): the frozen compiler of `08bf09bd` builds the retained
+Frozen release replay (2026-10-27): the frozen compiler of `8177cff2` builds the retained
 arm64 virtconfig input in a fresh output tree, in one uninterrupted Kbuild run (5,084 s of
 the 7,200 s limit). All 2,799 target C objects and the 5 C-to-assembly helpers come from one
 compiler, `3520c267…`; no target C comes from GCC and no object is seeded. The GCC reference
@@ -543,7 +543,7 @@ full kselftest or KUnit acceptance.
   This is an integrated checkpoint, not causal attribution to one repair or
   native timing; the diagnostic's 1,200-second budget is not the original exit.
   October 23 (diagnostic TCG profile of the rebuilt K16 Image 63087e12, compiler
-  f6c6f5e1): the fixed 256 MiB demand-paging VM runs 2.79 times GCC's kernel
+  c4b95339): the fixed 256 MiB demand-paging VM runs 2.79 times GCC's kernel
   instructions (October 13: 5.43). The unchanged original still ends at the
   120-s limit with EvoCC, while GCC now finishes it on a quiet host.
   [Record](tests/fixtures/kernel-tcg-profile-20261023.out).
@@ -728,14 +728,14 @@ full kselftest or KUnit acceptance.
     October 23 (static sizes, no kernel run): the `mm/memory.c` of the K16 tree,
     preprocessed with GCC 14 and compiled under the kernel flags, gives a
     21,404-byte `copy_pte_range` (5,381 instructions, 1,904-byte frame) with the
-    release compiler of 31b4e6e2, and 1,329,212 bytes with the profile's frozen
-    compiler 820bfa29. All text of the unit falls from 2,425,156 to 236,812
+    release compiler of a517c0fc, and 1,329,212 bytes with the profile's frozen
+    compiler 361f9b35. All text of the unit falls from 2,425,156 to 236,812
     bytes; GCC 14 gives 61,848 bytes and inlines `copy_pte_range` into a
     9,000-byte `copy_page_range`. The dynamic ratios of October 13 therefore
     describe the old compiler. A new TCG profile with the current compiler comes
     before any fix is chosen.
     October 23 (TCG profile of the K16 Image rebuilt on October 19, 63087e12,
-    compiler f6c6f5e1): per fork/exit cycle EvoCC runs 2.83 times GCC's kernel
+    compiler c4b95339): per fork/exit cycle EvoCC runs 2.83 times GCC's kernel
     instructions (October 13: 11.6), and `copy_pte_range` 4.19 times (205.94). The largest excess is now
     `zap_present_ptes` (5.42 times, 7.6 percent); boot to the first mark is 2.81
     times. Both originals still end at the 45-second limit of the recycling
@@ -884,7 +884,7 @@ explicit; [the research brief][semantics] supplies the detailed probe contracts.
     `__c11_atomic_*`. [Tests](crates/evocc/tests/atomic_objects.rs). The lead's
     full-workspace gate of 2026-10-20 passes 465 suites, 3,520 tests, zero
     failures and 13 ignores, plus Clippy and formatting.
-    October 21 (EvoIR 2.23.0, commit e00f9871): Darwin `<stdatomic.h>` compiles
+    October 21 (EvoIR 2.23.0, commit 38ef073d): Darwin `<stdatomic.h>` compiles
     and runs through the 14 `__c11_atomic_*` builtins that Clang's header uses,
     on the existing EvoIR 3.8 forms, with the ten `__CLANG_ATOMIC_*_LOCK_FREE`
     macros. The stdatomic probe and every macro and generic function of the
@@ -1185,7 +1185,7 @@ Reopening any of them needs a new owner decision after the N03 slices land.
   contract pins them. The children R05a to R05l hold the missing deliverables.
   October 27 claims refresh: the README, the book, the paper, the evidence
   document, the gallery and `CHANGELOG.md` cite the receipts of the frozen
-  acceptance of `08bf09bd`. With that compiler the code is 1.8 to 2.3 times
+  acceptance of `8177cff2`. With that compiler the code is 1.8 to 2.3 times
   the size of GCC 14 `-O2` code on five library files
   ([default receipt](tests/contracts/application-size-default-20261027-receipt.json),
   [EqSat receipt](tests/contracts/application-size-eqsat-20261027-receipt.json)).
@@ -1225,7 +1225,7 @@ Reopening any of them needs a new owner decision after the N03 slices land.
     On 2026-10-27 a clean Lean build, as CI and `tools/release.sh --with-lean`
     make it, failed twice on a busy host: `bv_decide` timed out at the default
     10 s in `Proofs/Transfer.lean`, and that one module peaked at 17 GiB, more
-    than the 7 GB of a macOS runner. `02d84269` gives each `bv_decide` 60 s.
+    than the 7 GB of a macOS runner. `36aaa4b6` gives each `bv_decide` 60 s.
     The bv_decide rows now live in `TransferCarry`, `TransferMul` (with
     `Elab.async false`) and `TransferCompare`, which only the umbrella `EvoIR`
     imports: a clean `lake build` peaks at 8.3 GiB in 164 s, and a clean
@@ -1442,7 +1442,7 @@ plan, RED, flag, gates, one-page note, TODO update in the same commit.
   The original K02 workload still times out on EvoCC, so N08 remains open.
   October 24 recount of the five reductions of
   `tests/fixtures/kernel-codegen-reductions/` with the method of October 13
-  (tbprof, one vCPU, the GCC Image) and the compiler of 0d6aeda1, instructions
+  (tbprof, one vCPU, the GCC Image) and the compiler of 21553c17, instructions
   per call, EvoCC / GCC 14: `loop-carried-transport` 26,663 / 8,236 (3.24; was
   179,135), `asm-goto-live-transport` 147 / 67 (2.19; was 488),
   `leaf-helper-call` 32 / 9 (3.56; was 85; the helper is now inlined),
@@ -1457,7 +1457,7 @@ plan, RED, flag, gates, one-page note, TODO update in the same commit.
   that changes object hashes or proof-required outputs re-baselines them in the
   same commit and lists them.
   October 25 measurement of the nine opt-in code-generation variants with the
-  compiler of 91348ade. Under the kernel flags every variant, and all of them
+  compiler of efd38bd8. Under the kernel flags every variant, and all of them
   together, give byte-identical reduction objects and the same `memory.c`
   `.text` (234,248 bytes): the variants do not change the K02 reductions under
   the kernel contract. With `-fomit-frame-pointer -mno-general-regs-only` added,
@@ -1512,7 +1512,7 @@ plan, RED, flag, gates, one-page note, TODO update in the same commit.
   [Current reduction](tests/fixtures/kernel-zero-branch.out).
   October 24 recount of the five reductions of
   `tests/fixtures/kernel-codegen-reductions/` with the method of October 13
-  (tbprof, one vCPU, the GCC Image) and the compiler of 0d6aeda1, instructions
+  (tbprof, one vCPU, the GCC Image) and the compiler of 21553c17, instructions
   per call, EvoCC / GCC 14: `loop-carried-transport` 26,663 / 8,236 (3.24; was
   179,135), `asm-goto-live-transport` 147 / 67 (2.19; was 488),
   `leaf-helper-call` 32 / 9 (3.56; was 85; the helper is now inlined),
@@ -1564,7 +1564,7 @@ plan, RED, flag, gates, one-page note, TODO update in the same commit.
   objects still warn. Mbed TLS run `20261025T171209Z` retains all 382/382 EvoCC
   objects, with no refusal, exclusion, unmeasured unit or make replacement.
   Its original selftest and 148/148 CTest pass under unchanged `-Werror`.
-  The final production sources (`e7a3408c`) pass 515 workspace suites:
+  The final production sources (`00fbc6d7`) pass 515 workspace suites:
   3,875 PASS, zero FAIL, 51 existing ignores, Clippy and formatting; all six
   Lean steps pass and the Lean receipt is unchanged. The return-value probes
   also pass 60 native reference/candidate executions on Darwin and Linux.
@@ -1575,7 +1575,7 @@ plan, RED, flag, gates, one-page note, TODO update in the same commit.
   were retired. [Csmith receipt](tests/contracts/ladder-csmith-receipt.json),
   [Mbed TLS receipt](tests/contracts/ladder-mbedtls-receipt.json).
   October 27 classification of the 19 old PASS programs that the run of
-  2026-10-25 lost (ctest 2, torture 5, LLVM 12), with the compiler of e7a3408c
+  2026-10-25 lost (ctest 2, torture 5, LLVM 12), with the compiler of 00fbc6d7
   and each original command. Six stop at `optimize` (E2952): torture `pr60062`,
   `pr60072`, `alias-1` and `pr79043`, and two LLVM copies. One stops at
   `stdcall` (E2952): ctest 00210. Seven LLVM programs stop at a strict-driver
@@ -1699,13 +1699,13 @@ plan, RED, flag, gates, one-page note, TODO update in the same commit.
   prototype check.
 
   October 27 frozen campaign (B10): 18 of the 19 old PASS programs that the run of 2026-10-25
-  lost pass again with their original commands. `optimize` (`d56d3e5f`): torture `pr60062`,
+  lost pass again with their original commands. `optimize` (`b694ece2`): torture `pr60062`,
   `pr60072`, `alias-1`, `pr79043` and the LLVM copies of `pr60062` and `pr60072`. `stdcall`
-  (`7a79e9b6`): ctest 00210. The strict-driver options (`b37e9499`): LLVM `20040709-3`,
-  `pr68506`, `stkalign` and `wchar_t-1`. The permission-only options (`e424f638`): LLVM
-  `pr68381`, `pr68532` and `compare-fp-3`. Incompatible pointers (`53a9bf31`): LLVM `correlation`
-  and `Shootout-methcall`. The old-style call (`0c953e05`): torture `920302-1`. The range value
-  (`e77966c0`, `5b082542`): ctest 00216. LLVM `acle-fmv-features` keeps its reference-side cause:
+  (`597136c7`): ctest 00210. The strict-driver options (`6c446619`): LLVM `20040709-3`,
+  `pr68506`, `stkalign` and `wchar_t-1`. The permission-only options (`d174e234`): LLVM
+  `pr68381`, `pr68532` and `compare-fp-3`. Incompatible pointers (`4ab8dec7`): LLVM `correlation`
+  and `Shootout-methcall`. The old-style call (`d81d7929`): torture `920302-1`. The range value
+  (`82b28877`, `3aa279c0`): ctest 00216. LLVM `acle-fmv-features` keeps its reference-side cause:
   its reference build finds compiler-rt, enables FMV, and the unchanged Clang 19 rejects its
   CSSC check. The 2x and whole-ladder size exits stay open.
 

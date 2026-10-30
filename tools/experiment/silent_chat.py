@@ -104,7 +104,7 @@ def provenance(protocol, phase, path):
     prompt = ROOT / protocol["prompt_file"]
     if repair.digest(prompt) != protocol["prompt_sha256"]:
         raise budget.Failure("prompt_changed")
-    if budget.git("rev-parse", protocol["corpus_tag"] + "^{commit}") != protocol["corpus_commit"]:
+    if budget.git("rev-parse", protocol["corpus_tag"] + "^{commit}") != budget.history_map.current(protocol["corpus_commit"]):
         raise budget.Failure("corpus_tag_moved")
     corpus = [ROOT / protocol["items_root"] / item / name for item in protocol["items"] for name in SCORED_FILES]
     relative = [str(p.relative_to(ROOT)) for p in corpus]

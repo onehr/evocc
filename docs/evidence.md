@@ -14,7 +14,7 @@ Linux 6.18.44 is the kernel target.
 
 ## Status — 2026-10-27
 
-On 2026-10-27, one release compiler, built from commit `08bf09bd` (`ab0c9043…` on macOS,
+On 2026-10-27, one release compiler, built from commit `8177cff2` (`ab0c9043…` on macOS,
 `3520c267…` for Linux), ran all 15 application lanes and Doom in one serial campaign, and built and
 booted the direct Kbuild kernel. The application lanes have 10 PASS, 2 PROFILE_CLEAN and
 3 INCOMPLETE, and no lane has a compiler failure. Each invocation started on a clean tree. No
@@ -65,7 +65,7 @@ separately.
 
 | Scope | Verified result | Limit |
 |---|---|---|
-| Direct Kbuild, retained virtconfig, 2026-10-27 | **2,799/2,799 target-C** and 5 C-to-assembly helpers from one release compiler (`3520c267…`, commit `08bf09bd`), compiled through `make CC=evocc` in one full build in a fresh output tree; the banner names EvoCC; stored return addresses signed (`-mbranch-protection=pac-ret`); boot PASS on HVF with pointer authentication and on TCG; 9/9 programs and 125/125 subtests PASS on both kernels | GNU tools assemble the 67 assembly files, link and build host programs; six options have no effect. The original KVM programs pass 10 of 10 modes on GCC; on EvoCC, demand paging and memslot stress both reach the 120-second limit after 6 of 10 modes. Full kselftest and KUnit not rerun |
+| Direct Kbuild, retained virtconfig, 2026-10-27 | **2,799/2,799 target-C** and 5 C-to-assembly helpers from one release compiler (`3520c267…`, commit `8177cff2`), compiled through `make CC=evocc` in one full build in a fresh output tree; the banner names EvoCC; stored return addresses signed (`-mbranch-protection=pac-ret`); boot PASS on HVF with pointer authentication and on TCG; 9/9 programs and 125/125 subtests PASS on both kernels | GNU tools assemble the 67 assembly files, link and build host programs; six options have no effect. The original KVM programs pass 10 of 10 modes on GCC; on EvoCC, demand paging and memslot stress both reach the 120-second limit after 6 of 10 modes. Full kselftest and KUnit not rerun |
 | Same kernels, fixed 256 MiB diagnostics, 2026-10-27 | Demand paging: 65,682 page-fault handler entries on each side, EvoCC/GCC total instructions **2.59x**, kernel instructions **2.77x**. Memslot stress: 65,679 entries each, **2.59x** total and **2.77x** kernel. All four runs complete with verdict PASS | Diagnostic 1,200-second budget, not the original 120-second exit. Full translated blocks are charged at entry; concurrent waits remain. Not native timing or attribution to an individual change. [Recorded counts](../tests/contracts/kernel-direct-virt-receipt.json) |
 | K6 locked configuration, 2026-09-13 | **2,799/2,799 target-C**, complete link, real boot and normal shutdown PASS; uniform EvoCC rebuild, zero GCC target-C fallback | Not every Linux configuration or subsystem |
 | BPF/module configuration, 2026-09-28 | **7,008/7,008 target-C** from compiler `ab2eeb7b…`, generated-input fixed point, complete link/boot PASS; 848 modules linked/BTF/signed/installed | Objects substituted into a GCC Kbuild tree; its raw configuration and runtime pair are no longer available. Not all installed modules runtime-tested; QEMU drift recorded |
@@ -194,7 +194,7 @@ snapshots and the detailed frame hashes stay in `.build/ladder/doom`. The Linux 
 | 2026-10-01 | Object-level size ([S1–S4 ledger](archive/notebook/eqsat-size-work-packages-20261001.md), [DCE control](../tests/contracts/eqsat-size-dce-20261001.json), [policy ranking](../tests/contracts/eqsat-size-policy-ranking-20261001.json)) | see table below; exhaustive best policy beats the default by at most 4 bytes | Verified rewrites shrink object `.text` by 0.8–2.4% on the changed subject TUs. The policy weight space is `FINITE_ENUMERATION_SUFFICIENT` for size. |
 | 2026-10-01 | Guard-folding ceiling ([result](../tests/contracts/eqsat-size-guards-result-20261001.json), [guard contract](../spec/evoir.md#812-certified-total-integer-guard-folding), [archived draft](archive/eqsat-guard-folding-draft.md)) | Unverified diagnostic recovers 952 / 1,608 / 80 bytes (zlib / zstd / cJSON) from provably-true UB checks | A diagnostic ceiling for R02e, not a certified benefit. Nothing from the diagnostic is installed. |
 | 2026-10-01 | Certified guard first slice ([acceptance](archive/notebook/eqsat-certified-guards-20261001.md)) | Seven g0 rules and seven new A2 rows are kernel-only; ten certificates replay; checked text saves 256 / 984 / 28 bytes in zlib / zstd / cJSON | First-slice acceptance on six original TUs. Maximum per-TU saving is 0.800%; unchecked sizes are unchanged. Diagnostic and P0 savings remain separate. |
-| 2026-10-27 | Lean audit of `p0.scalar.v4` and `g0.ub.v1`, Lean commit `733ea26e` ([receipt](../tests/contracts/lean-p0-receipt.json)) | 55 / 55 and 7 / 7 rules proved, kernel-only | Rules are sound equalities of the modeled semantics. Not a proof of the compiler. |
+| 2026-10-27 | Lean audit of `p0.scalar.v4` and `g0.ub.v1`, Lean commit `bd31621f` ([receipt](../tests/contracts/lean-p0-receipt.json)) | 55 / 55 and 7 / 7 rules proved, kernel-only | Rules are sound equalities of the modeled semantics. Not a proof of the compiler. |
 
 Checked P0 EqSat on the subject translation units, in object `.text` bytes of the checked profile,
 with the common dead-code elimination on both sides (A: EqSat off; B: EqSat on, with the same
@@ -245,7 +245,7 @@ and linking, and then the actual boot and runtime tests.
 
 ### Lean project size
 
-Files and lines of `lean/` at commit `3b0f18fc`:
+Files and lines of `lean/` at commit `3ce2bdaf`:
 
 | Part of `lean/` | Content | Files | Lines |
 |---|---|---:|---:|
@@ -276,7 +276,7 @@ records in the file are not the completion status.
 | Clean Lean gate | 118 audited Core declarations, all `kernel-only`, with no native axioms in their recorded dependencies. | The modeled semantics and checker theorems. Not a kernel replay of each CLI invocation. |
 | Full Rust workspace gate | 402 suites; 3,085 passed, zero failed, five pre-existing ignored campaigns. Clippy and formatting passed. | Implementation regression evidence, not a semantic theorem. Ignored campaigns are not passes. |
 
-The final combined gates bind implementation commit `56af3157`. The source fixtures include the
+The final combined gates bind implementation commit `65237f75`. The source fixtures include the
 unchanged `FixedMul` from doomgeneric and `abs` from musl, plus synthetic control-flow and call
 cases. This does not prove either complete application.
 
@@ -312,17 +312,17 @@ In `source-execution.c`, the functions `loop_join` and `control` are also entrie
 are the elements for symbols 7 and 56 of
 `tests/fixtures/verification/source-execution.cutpoints.json`. Without these proposals, the stage
 `source-to-evoir` refuses the module with exit 3. This is a missing input, not a defect of the mode.
-The acceptance run binds implementation commit `8770b186`. At that commit, the full workspace gate
+The acceptance run binds implementation commit `eed7f2f3`. At that commit, the full workspace gate
 passes (407 suites, 3,102 passed, 0 failed, 5 ignored; Clippy and formatting pass), and the Lean
-gate passes (receipt Lean commit `5d917f39`). The
+gate passes (receipt Lean commit `b64931fb`). The
 [closed tracker entry of V06](archive/todo-0.1.0.md#v06) records the binary digests. After V07, the
-sweep passes again at `e657709b`: 17 of 17 modules, 107 of 107 entries and both optimized cases.
+sweep passes again at `e85f5904`: 17 of 17 modules, 107 of 107 entries and both optimized cases.
 The 19 `output.s` files are byte-identical to the earlier output. The
 [native-run receipt](../tests/contracts/core-v1-native-run.json) records this repeat.
 
 ### Native run of the checked output
 
-On 2026-10-06 (V08, subject `e657709b`), the output of the 17 pilot modules ran on Linux AArch64
+On 2026-10-06 (V08, subject `e85f5904`), the output of the 17 pilot modules ran on Linux AArch64
 with no difference from the source interpreter in 14,194 comparisons. The run used the sealed image
 `evo-flight-lab:sealed`, the earlier tag of `evo-nexlab:sealed` with the same digest, GNU as and
 GNU ld 2.44, and a second build with clang-19 and ld.lld 19. The two optimized cases give no
@@ -345,7 +345,7 @@ Container runtime. Without `--evocc` and `--evocc-checker`, it uses the debug bu
 ## README examples
 
 On 2026-10-27, the quick start and the tutorial "Build your first optimization" of the README of
-commit `08bf09bd`, and the first-program pages of the book, ran again on macOS with the release
+commit `8177cff2`, and the first-program pages of the book, ran again on macOS with the release
 binaries of that commit (`evocc` `ab0c9043…`). Each output equals the text, after three text
 updates: the checked `abs` keeps its zero operand in `w1`, the interpreter reports `shout.c` with a
 rendered diagnostic, and the first 24 assembly lines of `sum.c` changed. The Lean command of the

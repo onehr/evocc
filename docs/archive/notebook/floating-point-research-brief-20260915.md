@@ -12,7 +12,7 @@ The supplied final research report answers this brief, not the separate
 `simd-inline-asm-research-brief-20260920.md`. It is sufficient to start the
 finite scalar foundation; its NOT RUN numerical/ABI matrix is not acceptance.
 At this checkpoint, local authority was EvoIR **1.9.103** plus Appendix D and EvoMIR **0.33**
-plus addenda, on `9f571ca` with the existing shared dirty tree. No clone or
+plus addenda, on `52f8e3b` with the existing shared dirty tree. No clone or
 historical evidence archive was created.
 
 Corrections to the report's snapshot: reviewed GNU inline and restricted raw
@@ -125,7 +125,7 @@ test; interactive graphics/audio is a separate acceptance claim.
 ## Repository baseline and evidence boundary
 
 Prepared 2026-09-15 against HEAD
-`9f571cac0e6be6d27915aa82b4c8866ae84eaf9a`, **with a substantial uncommitted
+`52f8e3bdeb91c17e8155d482c4690b19e95ab4e6`, **with a substantial uncommitted
 implementation tree**. HEAD alone does not identify the implementation below.
 Read the supplied files/diff; if no checkout is available, explicitly distinguish
 provided repository observations from independently verified ones.

@@ -11,7 +11,7 @@ to `PATH`. No checker override is needed. From the repository root, run
 `sh tools/demo/agent-loop.sh`. The source fixture stays unchanged; the fixed
 source and proof remain in the printed temporary directories.
 
-Recorded on 2026-10-30 with a release build of commit `5ec1cb7f`, and copied
+Recorded on 2026-10-30 with a release build of commit `f529fe95`, and copied
 from the command. Only the host paths are replaced: `$REPO` stands for the
 repository checkout, and `$TMPDIR` for the temporary directory of macOS, in its
 plain form or in its resolved form under `/private`. The diff comes from the same

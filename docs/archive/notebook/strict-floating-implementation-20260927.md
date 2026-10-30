@@ -6,7 +6,7 @@ acceptance boundaries do not retroactively strengthen earlier checkpoints.
 
 ## Numerical prerequisite
 
-Commit `7eb4097` adds explicit rounding and exception results to the pinned
+Commit `4a5a1e8` adds explicit rounding and exception results to the pinned
 APFloat adapter, and immutable FP environment snapshots to `WorldState`.
 The independent SoftFloat/TestFloat run checks **2,630,976 value/status pairs**.
 The retained target instruction probe checks **22,568 records** in each of
@@ -380,7 +380,7 @@ records** per GCC14/Clang19 O0/O2 caller. All pass, including invalid inputs
 without invalid C casts. `floating-quad-raw.evoir` and `floating-quad-fma.evoir`
 are emitted using the validated `evoir_assembly` bridge; the native matrix is
 retained in `tests/acceptance/quad-hosted-native.sh`. The changed-crate gate
-against `9234f15` passes **2,416 tests, zero failures, four retained ignores**,
+against `907ab9c` passes **2,416 tests, zero failures, four retained ignores**,
 followed by Clippy/all-targets and fmt. Logs are `quad-native-frozen.log`,
 `quad-raw-fma-native.log` and `quad-native-gate.log` in the small local directory.
 

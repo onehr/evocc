@@ -12,10 +12,10 @@ bytes enter the verified-EqSat numerator. No cross-family averages.
 
 | Package | Contract / input | State and claim ceiling |
 | --- | --- | --- |
-| S1 | [framing revision 7 §5.5](../verified-optimization-design.md#v1-size-contract-s1-revision-7); `tools/ladder/eqsat_elf.py` | DONE, `04fec0d7`. Object layout metrics only, not dynamic instruction counts or a new Q2 acceptance result. |
-| S2 | [DCE attribution plan](../../../tests/contracts/eqsat-size-dce-20261001.json), same A/B verified IR; common backend DCE | DONE. Implementation `e625b89c`; measurement closeout is this record's commit. Existing baseline confirmed, not newly credited to EqSat. Final allocated MIR retains the separately disclosed unused-parameter copies. |
+| S1 | [framing revision 7 §5.5](../verified-optimization-design.md#v1-size-contract-s1-revision-7); `tools/ladder/eqsat_elf.py` | DONE, `8978ae9c`. Object layout metrics only, not dynamic instruction counts or a new Q2 acceptance result. |
+| S2 | [DCE attribution plan](../../../tests/contracts/eqsat-size-dce-20261001.json), same A/B verified IR; common backend DCE | DONE. Implementation `5a21d523`; measurement closeout is this record's commit. Existing baseline confirmed, not newly credited to EqSat. Final allocated MIR retains the separately disclosed unused-parameter copies. |
 | S3 | [Existing-capture size ranking](../../../tests/contracts/eqsat-size-policy-ranking-20261001.json), no new evaluation | DONE, this ranking record's commit. Size verdict only FINITE_ENUMERATION_SUFFICIENT or NO_OBSERVABLE_EFFECT; does not reopen R03a. |
-| S4 | Existing guard forms / known bits, MIR diagnostic first | First slice DONE (`595272a2`); [certified result](eqsat-certified-guards-20261001.md). Diagnostic remains UNVERIFIED_DIAGNOSTIC and never PASS. No second slice is open. |
+| S4 | Existing guard forms / known bits, MIR diagnostic first | First slice DONE (`871ea379`); [certified result](eqsat-certified-guards-20261001.md). Diagnostic remains UNVERIFIED_DIAGNOSTIC and never PASS. No second slice is open. |
 | S5 | Owner-unlocked six original TUs, GCC14/Clang19 `-Os`/`-O2` | DONE, TU-only comparison; [frozen table](eqsat-size-references-20261001.md). No parity or latency claim. |
 | S6 | G2 vmlinux `.text` alongside R01's two builds | Pending R01; no separate kernel campaign is authorized by this package. |
 
@@ -44,7 +44,7 @@ The synthetic partition is 32 text bytes = 16 instruction bytes (4 slots) +
 8 inter-function padding + 8 in-text data. Moving that pool gives 24 text bytes
 and 8 rodata bytes, still 4 slots and 32 combined bytes. These are contract
 fixtures, **not application savings**. Implementation commit: the S1 commit
-containing this record: `04fec0d7`.
+containing this record: `8978ae9c`.
 
 ## S2 — existing common DCE, not a newly added optimization
 

@@ -7,7 +7,7 @@ Rust lane. It changes no code, evidence or task file.
 
 ## Sources and method
 
-- Repository commit at analysis time: `6b1e0f10`. The rendering files named
+- Repository commit at analysis time: `0f598cce`. The rendering files named
   below have no working-tree change at that commit.
 - Experiment 4: `tests/contracts/agent-repair-4-20261009.json` (SHA-256
   `a7e8c5a95a440e65b6941a378a53704385cc35af857506a285d9fb8b746e3a05`) and
@@ -57,7 +57,7 @@ Rust lane. It changes no code, evidence or task file.
 
 ## How the current feedback is produced
 
-| Stage | Code at `6b1e0f10` | Output |
+| Stage | Code at `0f598cce` | Output |
 | --- | --- | --- |
 | Diagnostic | `crates/evocc/src/diagnostics.rs`, `render()` (line 296) with `Format::Json` | One object per diagnostic: `code`, `level`, `message`, `spans`, `notes`, `help`, `rendered`, `repairs`. `rendered` is the whole text form. |
 | Executed-path note | `crates/evocc/src/main.rs`, line 2293 | Adds `this operation failed on the executed path`, or the note for an imprecise location. |

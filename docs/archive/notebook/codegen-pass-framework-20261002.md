@@ -1,7 +1,7 @@
 # N02: bounded pass framework and identity validation
 
-Plan: [`917f8955`](../../../tests/contracts/codegen-n02-20261002.json).
-Implementation: `7680ae23`; bounded framework accepted. Resource plan: `4cbe9be9`.
+Plan: [`626f29f8`](../../../tests/contracts/codegen-n02-20261002.json).
+Implementation: `449d589e`; bounded framework accepted. Resource plan: `aa89cdec`.
 [Compact receipt](../../../tests/contracts/codegen-n02-20261002-receipt.json).
 
 | Evidence | Result |

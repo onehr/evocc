@@ -64,8 +64,8 @@ measures everything it touches. This plan spends the quarter on those.
 
 ## 2. Authority and scope
 
-Inspected implementation: `5e7fb334` (certified guard first slice) and
-`963c5442` (figures). [EvoIR](../../spec/evoir.md) and [EvoMIR](../../spec/evomir.md)
+Inspected implementation: `c7cc3c2c` (certified guard first slice) and
+`f4ca672c` (figures). [EvoIR](../../spec/evoir.md) and [EvoMIR](../../spec/evomir.md)
 remain the semantic authorities; this plan changes no IR semantics, registry,
 proof format or trust policy. Backend changes that alter EvoMIR lowering rules
 need their own EvoMIR revision as today. Correctness admission (two interpreters,

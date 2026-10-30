@@ -21,7 +21,7 @@ for new work. Current specs are **EvoIR 1.9.114 / EvoMIR 0.50**; hashes:
 `6a0ffe0005b26d6eba71ffc78b609cda727a4da778c3a7e6fb5223332b387c4d`.
 Current tested compiler is
 `e850aacaffba056b0edac81416c604d725f3c77d367e21e5273ffb5d231deab5`,
-at source checkpoint `73d5ba3`. Strict scalar FP, real binary128, and admitted
+at source checkpoint `a862913`. Strict scalar FP, real binary128, and admitted
 scalar `w` assembly are implemented, with current musl **1271/1339** assembled,
 68 floating-complex refusals, two full mixed-library trials without additional
 failures and 17 still-failing reference cases. L01/L02 are closed for their
@@ -37,8 +37,8 @@ The original handoff below is historical. Current clauses are EvoIR **1.9.105**
 and EvoMIR **0.44**; their SHA-256 values are respectively
 `717e99625a1e3d8219de6d1728da9a168568f935d8053ca40911ff7d59e14ca1` and
 `75d481e3d36cd8ad1409d204dcc4d1e3add10c4b7916baa7d6a3f12427b6f9c0`.
-Compiler implementation commit `ab50a13` adds bounded private integer-memory
-facts through the existing C-HIR inliner; diagnostic commit `a82fde2` changes
+Compiler implementation commit `273ef37` adds bounded private integer-memory
+facts through the existing C-HIR inliner; diagnostic commit `09b3c1f` changes
 no compiler code. The checked debug executable is
 `eee2c03bc045d181b2f5aefb4f6047b90a7a7728f6fc90373bb1a9a228d0a9d8`.
 Do not substitute this identity for the retained release used by old campaigns.
@@ -63,7 +63,7 @@ adjudicated by this FP report. See the current [task ledger](../../../TODO.md).
 ### Original September 21 handoff
 
 The working specifications at handoff are EvoIR **1.9.104** and EvoMIR **0.34**,
-on HEAD `9f571cac0e6be6d27915aa82b4c8866ae84eaf9a` with substantial working-tree
+on HEAD `52f8e3bdeb91c17e8155d482c4690b19e95ab4e6` with substantial working-tree
 changes. HEAD alone does not identify the implementation. Use the supplied current
 files, not the older 1.9.102/0.32 research snapshot. Function-section support has
 been implemented independently. Fresh run `20260921T065917Z` compiles and links

@@ -22,13 +22,13 @@ add dependencies, crates or configuration systems. Do not push.
   the hand-written JSON validator and full workspace gate pass. Budget:
   900 production Rust lines and 300 specification lines. Runtime locations
   must come from execution metadata, not a guessed source expression.
-  October 7 checkpoint: renderer REDs committed at `77dec0cc`; nine public
+  October 7 checkpoint: renderer REDs committed at `6567522e`; nine public
   presentation/location tests pass. Runtime origins follow the executed
   instruction through calls and SSA renumbering. Included source snippets use
   the bytes read during preprocessing. A paired lowering test checks identical
   IR and execution results with source capture on and off. The presentation
   contract is pinned at revision 1.0.0 (126 lines).
-  Second checkpoint: RED `74990d2e` records missing related declaration labels
+  Second checkpoint: RED `cd811219` records missing related declaration labels
   and execution-limit notes. All 12 presentation tests now pass. The product
   suite passes 11 tests, including byte-exact replay of 42 text/JSON pairs and
   schema mutation controls. The 34-line JSON validator checks every snapshot;
@@ -39,24 +39,24 @@ add dependencies, crates or configuration systems. Do not push.
   production Rust at this checkpoint was 754 of 900 lines. The 13 legacy-format suites now request
   `short` explicitly and pass on replay; their diagnostic codes, locations and
   exits remain checked. Two native suites pass all eight tests after moving
-  disposable files outside retained evidence (`a294e3df`). The broad driver run
+  disposable files outside retained evidence (`342a8f32`). The broad driver run
   initially failed these 15 targets; all were replayed, but a new full workspace
   gate has not run. This is partial work: workspace-wide
   style checks, remaining invocation errors and the full workspace exit remain
   open. P02 through P05 have not started.
-  Third checkpoint: RED `13f68767` records three command-line renderer bypasses.
+  Third checkpoint: RED `3c76f3bf` records three command-line renderer bypasses.
   Empty invocations, unsupported capabilities and malformed probes now retain
   exit 69 but use the common renderer and command-line span. The diagnostic,
   product, EvoIR CLI and cc-driver suites pass 44 tests; targeted Clippy with
   warnings denied and workspace formatting pass. Conservative production Rust
   insertions, including blank lines, are 765 of 900. Workspace-wide message
   style and the full workspace exit remain open. No later package has started.
-  Fourth checkpoint: RED `e6aeead2` and implementation `6e297e35` cover header
+  Fourth checkpoint: RED `f31945ae` and implementation `1d2ead8b` cover header
   style and disposable native-test paths. The focused presentation, product
   and style suites pass 35 tests. Inventory checks cover 679 source headers,
   43 snapshot headers and 823 error-detail templates; the period and redundant-prefix checks also
-  inspect details. RED `c9b5a4bb` fixes an inventory blind spot after test-only
-  items without excluding the later production code. RED `72d614cb` records
+  inspect details. RED `a5c7e987` fixes an inventory blind spot after test-only
+  items without excluding the later production code. RED `52ef80ee` records
   unreadable input files being labeled as the whole command, not the affected
   argument; the correction covers spaces, newlines and UTF-8 byte columns.
   The first full gate passes: 412 suites, 3,147 passed, zero failed, five
@@ -70,7 +70,7 @@ add dependencies, crates or configuration systems. Do not push.
   started. Build space is above the 25 GiB admission threshold; only the
   unused, rebuildable target/frontend incremental cache was removed (5.8 GiB),
   after process and open-handle checks. No protected artifact was removed.
-  Completion: the final clean subject `a05d24e8` passes the full offline
+  Completion: the final clean subject `70970151` passes the full offline
   workspace gate: 412 suites, 3,148 passed, zero failed, five pre-existing
   ignored campaigns; Clippy with warnings denied and formatting pass. Log:
   `.evidence/diagnostics/20261007/a05d24e8-full-workspace.log` (under 500 MiB).
@@ -92,7 +92,7 @@ add dependencies, crates or configuration systems. Do not push.
   `--explain`, generated book index and full workspace gate pass. Report every
   `Trigger: none` exception. Budget: 300 Rust/Python lines excluding pages;
   each page at most 40 lines, index generator at most 150 lines.
-  Checkpoint: RED `7a7bc855` precedes the implementation. All 117 authority
+  Checkpoint: RED `97850b3f` precedes the implementation. All 117 authority
   rows now have hand-written pages; all 195 tagged C examples pass with the
   first diagnostic checked or no diagnostic for the fixed example. The public
   explanation and check-product suites pass 14 tests, including all 117 exact
@@ -111,8 +111,8 @@ add dependencies, crates or configuration systems. Do not push.
   catalogue; the full gate must be repeated. No later package has started. Only text and
   a temporary mdBook download/site were added; no protected artifacts were
   deleted. Final disk accounting follows the exit gate.
-  Completion: RED `7a7bc855`, implementation `73d558fb`, catalogue-test
-  correction `48b31f1f`. The clean final subject passes the full offline
+  Completion: RED `97850b3f`, implementation `b9fcf6fb`, catalogue-test
+  correction `5ef276d5`. The clean final subject passes the full offline
   workspace gate: 413 suites, 3,151 passed, zero failed, five pre-existing
   ignored campaigns; Clippy with warnings denied and formatting pass. Log:
   `.evidence/diagnostics/20261007/48b31f1f-full-workspace.log` (SHA-256
@@ -140,7 +140,7 @@ add dependencies, crates or configuration systems. Do not push.
   Exit: warning-level UI matrix, unchanged zlib/cJSON builds with recorded
   warnings and full workspace gate pass. Pin the revised authority table.
   Budget: 700 production Rust lines. No lint registry or new lint framework.
-  October 7 checkpoint: RED `147bb7af` records six failing public tests.
+  October 7 checkpoint: RED `89d330c2` records six failing public tests.
   The implementation adds the five warnings, named and group levels, promotion,
   suppression and caps. Symbol identities distinguish shadowed variables;
   a source CFG checks reachable function ends without changing executable IR.
@@ -162,14 +162,14 @@ add dependencies, crates or configuration systems. Do not push.
   trees were unchanged. Production inserted/replaced Rust is 413/700 lines
   at this checkpoint. Full workspace, Clippy and final cleanup remain required;
   this is not package closure. No later package has started.
-  **October 7 closure:** implementation `f1faa2e9`; attribute RED `61eb8677`
-  and fix `08d8f8bf`; prior diagnostic controls updated in `16dfd8ad` and
-  `c2209111`. The first full gate has 3,154 passes and three failures: an empty
+  **October 7 closure:** implementation `639b02e8`; attribute RED `82c25c9d`
+  and fix `9d067b8c`; prior diagnostic controls updated in `380bbc65` and
+  `4e2e60a0`. The first full gate has 3,154 passes and three failures: an empty
   non-void definition now warns, and two undeclared-call controls now use
   W0003 rather than E2001. All three inputs and their exit/no-output checks
   remain. A separate RED reproduces false positives for `used` objects and
   direct `noreturn` calls; the fix reads declaration attributes by symbol.
-  The affected replay passes 32 tests. On clean subject `c2209111`, the final
+  The affected replay passes 32 tests. On clean subject `4e2e60a0`, the final
   full workspace gate passes: 414 suites, 3,158 passed, zero failed, five
   existing ignored campaigns; Clippy with warnings denied and formatting pass.
   The final binary again passes cJSON `all test` with its own warning flags
@@ -197,7 +197,7 @@ add dependencies, crates or configuration systems. Do not push.
   retain their recorded acceptance. No build system or interpreter libc was added.
   Closed on October 7 after the full gate and packaged-command acceptance. The six
   verbs delegate to the existing driver; no driver library was introduced.
-  RED: `9b1793f0`, seven failures because the binary did not exist. The focused
+  RED: `c44cc6f9`, seven failures because the binary did not exist. The focused
   suite now passes eleven tests, including the real cJSON build, writable
   argc/argv, non-UTF-8 argument bytes, retained proof files on copy failure,
   warning counts, source/output distinction and expected configure failures.
@@ -218,7 +218,7 @@ add dependencies, crates or configuration systems. Do not push.
   Exit: verb tests, actual cJSON build receipt, tested book commands, release
   packaging and full workspace gate pass. Budget: 600 lines for the binary and
   100 lines for release-script and book changes.
-  **October 7 closure:** implementation `d69cadc5` passes the clean offline
+  **October 7 closure:** implementation `207a9eae` passes the clean offline
   full workspace gate: 416 suites, 3,169 passed, zero failed and five existing
   ignored campaigns. Clippy with warnings denied and formatting pass. Its log
   SHA-256 is `ee3745b0e3ea99aec0256673a68632ace2e0813e1bcc801917f1a8cda2c4543b`.
@@ -263,7 +263,7 @@ add dependencies, crates or configuration systems. Do not push.
   sysroot cannot be unpacked faithfully on the repository volume. Owner decision
   requested: require a case-sensitive sysroot location for this release, or
   approve a separate storage/lookup change. Do not drop or rename headers.
-  Driver checkpoint: RED commit `a7003b21` has three expected failures and one
+  Driver checkpoint: RED commit `c550309d` has three expected failures and one
   passing control. The implementation now passes all six sysroot tests and
   all eleven cc-driver tests; focused Clippy with warnings denied passes.
   Lookup is explicit, environment, bundled, then existing sealed exports on
@@ -277,7 +277,7 @@ add dependencies, crates or configuration systems. Do not push.
   are removed. Since the prior 04:47 target measurement, target/frontend grew
   by 123,468 KiB before the final Clippy completion; this is a checkpoint,
   not final package disk accounting. Available space remains 29 GiB.
-  Export checkpoint: RED `32e3409a` records two failures because the exporter
+  Export checkpoint: RED `43096aa2` records two failures because the exporter
   was absent. `tools/export-sysroot.sh` now uses 106/120 lines, reads the actual
   image identity and GCC version, follows header-directory symlinks, refuses
   case-insensitive storage and keeps differing existing files intact. The
@@ -307,16 +307,16 @@ add dependencies, crates or configuration systems. Do not push.
   changed, and no insecure fallback is enabled. Native hello, the original
   zlib example and minigzip round trip exit zero. The debug compiler hash is
   `a4ffb63b8f1b5e17bc576a61af81eb171e7f97bf79f537eff5545905e9e7fa6f`
-  (version subject `32e3409a`); this is not final release acceptance.
-  Archive RED `ccc6953a` fails on the old root-level binary layout. The new
+  (version subject `43096aa2`); this is not final release acceptance.
+  Archive RED `7ecd44f3` fails on the old root-level binary layout. The new
   `bin/` layout and all 3,974 header hashes pass the five Python checks on a
   real archive. Release-script changes use 18/60 lines; the five changed
   workflow lines only follow the new binary paths, not the pending CI header
   export or cross-host transfer. The archive structure check used the earlier
-  `d69cadc5` release binaries and is not a current-binary acceptance claim.
+  `207a9eae` release binaries and is not a current-binary acceptance claim.
   Book cross-compilation commands were executed. The storage warning states
   a physical file limitation, not owner approval of a narrowed release goal.
-  Current-binary checkpoint: the release build at `f425e503` passes. Its
+  Current-binary checkpoint: the release build at `b21f4adf` passes. Its
   archive SHA-256 is
   `6f9b5439bda84b9c926803fac7d2deae21dd6f5ee92fe4cb7c88ea7c64ed45e1`.
   All five archive/contract checks pass. The packaged compiler produces the
@@ -335,7 +335,7 @@ add dependencies, crates or configuration systems. Do not push.
   target/frontend plus capture plus the temporary directory fell by
   210,528 KiB. No protected file or shared header export was removed.
   Header-transfer CI and the owner storage decision remain open.
-  **October 7 gate checkpoint:** clean implementation `08ed5e0c` passes
+  **October 7 gate checkpoint:** clean implementation `e16eaaa2` passes
   `tools/gate-changed.sh --full-workspace --offline`: 417 suites, 3,176
   passed, zero failed and five existing ignored campaigns. Clippy with
   warnings denied and formatting pass. Log:
@@ -349,8 +349,8 @@ add dependencies, crates or configuration systems. Do not push.
   Since the post-cleanup checkpoint, target/frontend plus this capture grew
   by 265,796 KiB. Capture is 4,228 KiB, below 500 MiB; free space is 28 GiB.
   **Owner decision and implementation:** the earlier storage blocker is
-  superseded. RED `bdd14b03` detects the missing exclusion field and case
-  collisions; RED `321e6d30` detects the absent CI handoff. The exporter
+  superseded. RED `efeede88` detects the missing exclusion field and case
+  collisions; RED `0744f453` detects the absent CI handoff. The exporter
   copies inside the existing Linux container, drops eight uppercase entries,
   then copies 3,966 files to the default macOS volume. The contract records
   the sorted list. No driver lookup, mapping or disk image was added. Five
@@ -363,7 +363,7 @@ add dependencies, crates or configuration systems. Do not push.
   Keep the requested reader unchanged and report this result, not a false
   missing-header guarantee. Change budgets: exporter 24/40 lines (118 total),
   tests 16/20, book paragraph 8/10; workflow 36/40 for the whole package.
-  **Portable release acceptance:** clean implementation `c054a0fd` passes the
+  **Portable release acceptance:** clean implementation `515d0b4e` passes the
   full workspace gate: 417 suites, 3,176 passed, zero failed, five existing
   ignored campaigns; Clippy with warnings denied and formatting pass. Log:
   `.evidence/diagnostics/20261007/sysroot/c054a0fd-full-workspace.log`, SHA-256
@@ -400,7 +400,7 @@ exporter. The final collision change uses 25/40 exporter lines (119/120 total),
 Contract SHA-256 after the description-only update:
 `e522f1bea58a120f72020fb6d3865d3aa19e1f3d60371a24321fd173cbda0f80`.
 
-Both final gates started on clean commit `d3d583fb`, with exact disk preflights
+Both final gates started on clean commit `900565be`, with exact disk preflights
 of 25.052 GiB and 25.543 GiB respectively. Cargo ran serially with two jobs and
 the existing target directory. The full workspace gate exits zero: 417 suites,
 3,176 passed, zero failed, five existing ignored campaigns; Clippy with warnings
@@ -440,18 +440,18 @@ gates is 26.535 GiB. No new target tree, workspace copy or disk image was made.
 <a id="p06"></a>
 
 - [x] **P06 — Correct help and early stdin rejection** — `DONE`, P1.
-  RED `ad291c6e` reproduces help/status, JSON help and EPIPE failures; fix
-  `bca14544` passes all 23 focused tests. Inserted/replaced code, tests and
+  RED `0a41f34a` reproduces help/status, JSON help and EPIPE failures; fix
+  `7a9f3c19` passes all 23 focused tests. Inserted/replaced code, tests and
   book text total 55/60 lines. Help exits 0; no arguments gives the same
   usage and exits 64. The stdin helper tolerates early argument rejection.
-  Three consecutive complete evocc-crate runs on clean `bca14544` each pass:
+  Three consecutive complete evocc-crate runs on clean `7a9f3c19` each pass:
   81 suites, 711 passed, zero failed, one existing ignored test.
   The full offline workspace gate on that same clean subject passes:
   417 suites, 3,178 passed, zero failed, five existing ignored campaigns;
   Clippy with warnings denied and formatting also pass. The gate log hash is
   `f9381460ec277d45eafb12c0ad00676bd985c213e860936f3553cce9a7f428bf`.
-  Logs: `bca14544-service-restored-{1,2,3}.log` and
-  `bca14544-full-workspace.log` in the capture below. Preserve the interrupted
+  Logs: `7a9f3c19-service-restored-{1,2,3}.log` and
+  `7a9f3c19-full-workspace.log` in the capture below. Preserve the interrupted
   run and the first failed complete run (709 passed, two container-service
   failures). After starting the existing service, the sealed GCC/Clang probe
   and all subsequent native tests pass; the consecutive count starts anew.
@@ -469,28 +469,28 @@ gates is 26.535 GiB. No new target tree, workspace copy or disk image was made.
 <a id="p07"></a>
 
 - [x] **P07 — Expose and apply diagnostic repairs** — `DONE`, P1.
-  RED `2c00b3eb`: all 12 public-path tests fail as expected. At that subject,
+  RED `6a6d0911`: all 12 public-path tests fail as expected. At that subject,
   the compiler has no repairs field and evo has no fix verb. The tests cover
   the five repair records and byte-exact edits, safe/review separation,
   parse-error refusal, edit order, shared declarations and macro/volatile
   boundaries. Log: `.evidence/diagnostics/20261007/repairs/2c00b3eb-red.log`.
-  Implementation `512cb75f` has the five repair records, plan/apply and rollback.
+  Implementation `3a53299b` has the five repair records, plan/apply and rollback.
   All 17 repair tests pass, including adjacent declarations, volatile aggregate
   initialization, prototype types and equal-position insertion order. The five
   existing UI cases have repair JSON snapshots; all 55 existing records keep
   their old structural fields. Focused diagnostics/lint tests and Clippy pass.
   Production Rust: 500 inserted/replaced lines; specification: 49 lines.
   The 52 focused diagnostics/lint tests pass, plus all 12 evo command tests.
-  On clean `512cb75f`, unchanged cJSON 1.7.19 passes its original Makefile's
+  On clean `3a53299b`, unchanged cJSON 1.7.19 passes its original Makefile's
   all/test targets. zlib 1.3.2 passes both static and shared original tests;
   all C objects use EvoCC, while the upstream shared link uses system cc.
   These are Makefile replays, not a replacement Unity/ladder campaign.
   The same clean subject passes the full offline workspace gate: 418 suites,
   3,195 passed, zero failed, five existing ignored campaigns; Clippy with
-  warnings denied and formatting pass. Log: `512cb75f-full-workspace.log` in
+  warnings denied and formatting pass. Log: `3a53299b-full-workspace.log` in
   the capture below; SHA-256:
   `c5578df193c81bdc919f55fd4bad0fe524276657647e373b876df5cf2837c7aa`.
-  `512cb75f-commands.txt` records application commands, source and binary hashes.
+  `3a53299b-commands.txt` records application commands, source and binary hashes.
   Removed the owned 7,708 KiB temporary application tree after handle checks;
   object hashes/sizes and logs remain. Target/frontend plus capture grows by
   454,704 KiB from the recorded repair RED checkpoint; no host-wide attribution.
@@ -509,9 +509,9 @@ gates is 26.535 GiB. No new target tree, workspace copy or disk image was made.
 - [x] **P08 — Add machine-readable user commands** — `DONE`, P1.
   The owner confirms the independent JSON reader/writer limit is 250 lines.
   The 247-line implementation and the existing green functional exits meet it.
-  RED `b0aeae9c`: seven command tests fail before JSON support. RED `73fe91ce`:
+  RED `def07f17`: seven command tests fail before JSON support. RED `a8d755bd`:
   both stdio/instruction tests fail before the server and agent files exist.
-  RED `dfccc79e` also catches scalar `tools/list` params being accepted; the
+  RED `2ce7fd0d` also catches scalar `tools/list` params being accepted; the
   server now rejects them with -32602. The book's exact session is executed.
   All command verbs have JSON output. The five stdio tools delegate to those
   commands. Proof summaries come from the retained record, not English logs;
@@ -519,10 +519,10 @@ gates is 26.535 GiB. No new target tree, workspace copy or disk image was made.
   All 26 focused tests pass, including the 12 existing command regressions;
   targeted Clippy with warnings denied passes. No Lean, checker, interpreter,
   emitted-code path, dependency, daemon or network service was changed.
-  First clean full gate on `cd0eefbc`: 420 suites, 3,208 passed, one style-test
+  First clean full gate on `ebee36d1`: 420 suites, 3,208 passed, one style-test
   failure, five existing ignored campaigns. Two new error messages started
   with uppercase JSON; their wording is corrected without changing the rule.
-  The corrected full gate on clean `04605cd1` passes: 420 suites, 3,209 passed,
+  The corrected full gate on clean `d834a446` passes: 420 suites, 3,209 passed,
   zero failed, five existing ignored campaigns; target generation, Clippy with
   warnings denied and formatting pass. Keep the first failed log unchanged.
   Final log: `corrected-full-workspace.log` in the capture below; SHA-256:
@@ -535,7 +535,7 @@ gates is 26.535 GiB. No new target tree, workspace copy or disk image was made.
   capture is 692 KiB, free space 201.28 GiB. Test-owned source/build/proof
   directories were removed. This is not a host-wide disk attribution.
   Claim: the CLI/stdio package meets the restored contract. No new gate is needed
-  for a clarified limit; the implementation is unchanged from tested 04605cd1.
+  for a clarified limit; the implementation is unchanged from tested d834a446.
   The end-of-stage Lean gate, changelog and six-package report remain pending.
   Exit: verb JSON snapshots, five MCP tools over pipes, agent instructions,
   llms.txt, tested book session and full gate. No network server or dependencies.
@@ -550,7 +550,7 @@ gates is 26.535 GiB. No new target tree, workspace copy or disk image was made.
   focused gate passes 44 tests, including the independent pipe client and 13
   VS Code client checks. Shared-header diagnostics remain until all includers
   clear them. Production budget: 698/700 Rust and 73/80 TypeScript lines.
-  Clean-tree full gate on `430fa7c0`: 422 suites, 3,216 passed, zero failed,
+  Clean-tree full gate on `d826757c`: 422 suites, 3,216 passed, zero failed,
   five existing ignored campaigns; Clippy and formatting pass. The gate exited
   zero. Log SHA-256: `3dc5fae0695c17261f75a60b0de200f1c591b267403e4647f33f6727bf150513`.
   The owner selected Zed for the native UI exit, then waived the screenshot
@@ -562,22 +562,22 @@ gates is 26.535 GiB. No new target tree, workspace copy or disk image was made.
 <a id="p10"></a>
 
 - [x] **P10 — Integrate existing build systems** — `DONE`, P1.
-  CMake/compiler-identification REDs are committed in `ca0f7a2a`; library and
-  native stack-protector regressions are in `94a9fb29`. Eight focused checks
+  CMake/compiler-identification REDs are committed in `28a9b301`; library and
+  native stack-protector regressions are in `569e00e3`. Eight focused checks
   pass: compiler identity, warning controls, native CMake, Linux object CMake
   with a space-containing sysroot, pkg-config, Make dependencies and native
-  stack protection, plus generated angle-header precedence (`74b92076`).
+  stack protection, plus generated angle-header precedence (`956a9d6f`).
   Original cJSON 1.7.19 CMake utility tests pass 22/22. The original default
   zlib build first failed on unsupported -coverage. The owner's later decision
   permits a warning for four coverage options, with no instrumentation and no
-  test exclusions. RED b223419e and fix ff520ce0 close the option refusal in
+  test exclusions. RED a83e03cd and fix 58f3ee28 close the option refusal in
   five driver lines. The 20 focused driver/build tests pass. The default zlib
   1.3.2 build and all 16 CTest commands now pass. Its infcover assertions pass;
   Apple's gcov reports missing .gcno but exits 0. The coverage-summary command
   is therefore not evidence of coverage support. No .gcno/.gcda is produced.
-  The final clean-tree gate on 95466ea0 passes 423 suites: 3,225 passed,
+  The final clean-tree gate on 898fb8c6 passes 423 suites: 3,225 passed,
   zero failed, five existing ignored; Clippy and formatting pass. The corrected
-  Darwin snapshots and authorized Linux target replays pass 9/9. Clean `82c9543a` passes the full
+  Darwin snapshots and authorized Linux target replays pass 9/9. Clean `92158785` passes the full
   offline gate: 423 suites, 3,224 passed, zero failed, five existing ignored;
   Clippy and formatting pass, exit 0. Log SHA-256:
   `438891e78717057388cfbf24fd42af5c230e2b9c45085b643d80b0b6a05dcbea`.
@@ -600,7 +600,7 @@ gates is 26.535 GiB. No new target tree, workspace copy or disk image was made.
 <a id="p11"></a>
 
 - [x] **P11 — Publish channel metadata and compatibility** — `DONE`, P1.
-  RED tests are prepared in `94a9fb29`: eight cases run, the positive packaging
+  RED tests are prepared in `569e00e3`: eight cases run, the positive packaging
   control passes, and missing matrix/nightly/changelog checks fail as expected.
   Implementation follows the unchanged default zlib replay. The matrix uses
   retained receipts only; channel CI does not imply a hosted release run.
@@ -609,15 +609,15 @@ gates is 26.535 GiB. No new target tree, workspace copy or disk image was made.
   nightly caller is 21/60 lines and reuses the native/cross-host release smoke
   checks; the packaging changelog guard adds 8/20 lines. act is absent, so YAML,
   embedded shell and permission/channel paths were reviewed instead. No hosted
-  CI or publication was run. Implementation is c8a9be0f. The final clean-tree
-  full workspace gate on 95466ea0 passes 3,225 tests with zero failures and
+  CI or publication was run. Implementation is 201886df. The final clean-tree
+  full workspace gate on 898fb8c6 passes 3,225 tests with zero failures and
   five existing ignored. All six Lean gate steps also pass on that clean tree.
   Exit: every ladder receipt in the generated chapter, nightly dry run with
   act if present or careful review, changelog guard and full gate. Known
   budgets: 150 Python lines and 60 workflow lines. Do not publish a release.
 
 The six packages are accepted with the stated limits. Both final gates started
-on clean 95466ea0; no source changed between them. CHANGELOG 0.1.0 is updated.
+on clean 898fb8c6; no source changed between them. CHANGELOG 0.1.0 is updated.
 Logs in `.evidence/diagnostics/20261007/build-systems/`:
 `product-final-full-workspace.log` SHA-256
 `d8bbb9a704961a4370a3f40e83bc302cd09adf809d5966476465240655971d5c`;
@@ -633,7 +633,7 @@ are gone. This is not host-wide disk attribution. Last free-space check: 188.95 
 <a id="p12"></a>
 
 - [x] **P12 — Preserve compiler errors when stdin closes early** — `DONE`, P1.
-  Implemented in `f3fd04ee`: 45 compiler stdin writes in 45 files now discard
+  Implemented in `a9653733`: 45 compiler stdin writes in 45 files now discard
   write errors and retain the existing output assertions. The inventory is
   57 write sites in 53 files: three file writes, six Python-validator writes,
   three already-safe compiler writes and 45 affected compiler writes. No helper
@@ -648,7 +648,7 @@ are gone. This is not host-wide disk attribution. Last free-space check: 188.95 
   The first authorized replay attempt could not start because the terminal
   service reported `Too many open files`. Preserve that failure log, SHA-256:
   `b5477b00b5882fc4886fe85ae148d4c361473201fd4c668871da557e5809a966`.
-  After terminal recovery, the authorized full offline gate on clean `402fb4f3`
+  After terminal recovery, the authorized full offline gate on clean `1ad9248a`
   passes: 423 suites, 3,225 passed, zero failed, five existing ignored; workspace
   Clippy with warnings denied and formatting pass, exit 0. Both previously
   denied Linux tests pass. No code or test selection changed for the replay.
@@ -683,7 +683,7 @@ are gone. This is not host-wide disk attribution. Last free-space check: 188.95 
   (exit 3); D06 retains that exact program and refusal. Do not report the new
   fixture as a pass for the original. Capture:
   `.evidence/diagnostics/20261007/agent-demo/loop-proof-red.log` and
-  `division-lowering-refusal/`. Implementation: `0f459aaa`; script 72/80 lines,
+  `division-lowering-refusal/`. Implementation: `0bdb30de`; script 72/80 lines,
   fixture 10/30 lines, one test. The focused run passes in 19.53 seconds; the
   clean full offline gate passes in `loop-full-workspace.log`: 424 suites,
   3,226 passed, zero failed, five existing ignored; Clippy and formatting pass.
@@ -698,7 +698,7 @@ are gone. This is not host-wide disk attribution. Last free-space check: 188.95 
   proof-profile change. Capture is 544 KiB; measured target/frontend plus capture
   delta from the recorded pre-gate checkpoint is -164 KiB. Protected evidence
   and the small recorded model workspace remain. P14-P16 keep their order.
-  Source-checkout follow-up: `c5d23f8d` adds 14 driver lines for nearest-ancestor
+  Source-checkout follow-up: `182200b9` adds 14 driver lines for nearest-ancestor
   checker discovery and its JSON path. One regression runs with no checker
   override, a restricted PATH and an unrelated working directory. All four
   demo scripts are executable; the refusal script reads the chosen path from
@@ -718,7 +718,7 @@ are gone. This is not host-wide disk attribution. Last free-space check: 188.95 
 <a id="p14"></a>
 
 - [x] **P14 — Record rejected proposals** — `DONE`, P1.
-  `66dd2f5c` adds the 60-line `tools/demo/no-fooling.sh` and the actual chapter
+  `c4c0cf19` adds the 60-line `tools/demo/no-fooling.sh` and the actual chapter
   transcript. Its source is byte-identical to P13's repaired program. One
   certificate byte changes: archive replay exits 1, `BUNDLE_MISMATCH`, before
   semantic replay. One exported `ub.assume.signed_overflow` line is deleted,
@@ -748,7 +748,7 @@ are gone. This is not host-wide disk attribution. Last free-space check: 188.95 
   stage order, JSON bytes and assembly remain checked. `SOURCE_DATE_EPOCH=0`
   is explicit preprocessing context, not output normalization. No timestamp
   field is removed. Capture: `agent-demo/determinism-{red,1,2,3}.log` under the
-  same October 7 evidence directory. Implementation: `95a883d5`. Its clean full
+  same October 7 evidence directory. Implementation: `b3d3ae0a`. Its clean full
   offline gate passes: 425 suites, 3,227 passed, zero failed, five existing
   ignored; Clippy and formatting pass. `determinism-full-workspace.log` SHA-256:
   `16b3c3761e01b004451d5f37ab3e7777bce159349a2c8210a36dc156a02dabdf`.
@@ -761,7 +761,7 @@ are gone. This is not host-wide disk attribution. Last free-space check: 188.95 
 <a id="p16"></a>
 
 - [x] **P16 — Document a real agent connection** — `DONE`, P1.
-  `200b4e73` adds the 37/40-line connection section, the 65/80-line standalone
+  `d98cd41e` adds the 37/40-line connection section, the 65/80-line standalone
   skill and `tools/demo/connect-agent.sh`. The skill validator passes. Claude
   Code 2.1.292 accepts the scratch project configuration and reports pending
   approval; the separate P13 session establishes its real connected use.
@@ -769,7 +769,7 @@ are gone. This is not host-wide disk attribution. Last free-space check: 188.95 
   through its actual client catalog, without a model turn. Other servers are
   disabled only in that child process; no persistent client configuration is
   changed. The initial sandbox denial of Codex's state database is retained;
-  the authorized retry exits zero. Both final gates start on clean `200b4e73`.
+  the authorized retry exits zero. Both final gates start on clean `d98cd41e`.
   Full offline workspace: 425 suites, 3,227 passed, zero failed, five existing
   ignored; Clippy and formatting pass. The demo takes 12.41 seconds and the
   paired-record test 24.35 seconds. Lean: all six steps pass, including 20
@@ -807,7 +807,7 @@ are gone. This is not host-wide disk attribution. Last free-space check: 188.95 
   `.env` stays ignored; the final receipt and nested transcript payloads pass
   the credential-prefix scan. `agent-repair-corpus-1` is retained with zero model calls: its full-repository
   file query exceeded the capture cap. The bounded query and regression test
-  were committed before `agent-repair-corpus-2` at `7eed5eac` and the first request.
+  were committed before `agent-repair-corpus-2` at `2644dad5` and the first request.
   The [final receipt](../../tests/contracts/agent-repair-20261008.json) records 270/270
   repetitions, 272 requests and USD 0.1982890478. GCC feedback passes 88/90,
   Clang 82/90 and EvoCC 87/90. All successful repairs pass in round one.
@@ -819,7 +819,7 @@ are gone. This is not host-wide disk attribution. Last free-space check: 188.95 
   class and item tables. There is no overall advantage over both baselines.
   The authorized full workspace gate passes 425 suites: 3,228 passed,
   zero failed and five existing ignored; Clippy and formatting pass. It began
-  on clean `8f09f06c`; the later registration-query fix changes no Rust or spec.
+  on clean `0d19e61f`; the later registration-query fix changes no Rust or spec.
   The earlier two sandbox container-access failures remain in the log.
   No Lean source changed and no new proof claim is made. Capture cap is 500 MiB
   at `.evidence/diagnostics/20261007/agent-repair-preflight/`.
@@ -844,7 +844,7 @@ are gone. This is not host-wide disk attribution. Last free-space check: 188.95 
   completes 4/4 repairs with zero escapes. Its quota increase is 0.011111;
   the fixed projection is 0.205332, so Part B keeps two repetitions.
   [Registration](../../tools/experiment/protocol-5.md) fixes the package stop line
-  at 0.363758. Tag `agent-repair-experiment-5` is `9672d2d9`. All 96 Part A
+  at 0.363758. Tag `agent-repair-experiment-5` is `859ab6a4`. All 96 Part A
   and 48 Part B sessions complete, with zero censoring, unknown outcomes or
   escapes. There are 36 allowed in-session overload notices, no session
   reruns and no provider refusal. Package quota rises from 0.113758 to
@@ -855,7 +855,7 @@ are gone. This is not host-wide disk attribution. Last free-space check: 188.95 
   A repairs C1 44/48 and C3 47/48; B repairs 24/24 in both conditions.
   All 127 experiment tests pass. Exact p-values also match an independent
   calculation. Secret scans cover all captures, including four credential
-  values, without printing them. Results are committed in `0afe36cc`.
+  values, without printing them. Results are committed in `9c73502f`.
   The full offline workspace gate passed on that clean tree: 425 suites,
   3,239 passed, zero failed, five existing ignored campaigns; Clippy and
   formatting passed. No bypass or new Lean claim is made. Gate log:
@@ -982,7 +982,7 @@ are gone. This is not host-wide disk attribution. Last free-space check: 188.95 
   [qualification receipt](../../tests/fixtures/agent-repair-4/qualification.json).
   The six-session pilot passes C1 2/3 and C3 3/3; its quota projection is
   0.057864, so all items remain. Tag `agent-repair-experiment-4` fixes clean
-  `5b765db0`, C1/C3, prompt-3 and GCC O0/O2 plus Clang O2 scoring.
+  `1a1e9175`, C1/C3, prompt-3 and GCC O0/O2 plus Clang O2 scoring.
   The [formal receipt](../../tests/contracts/agent-repair-4-20261009.json) records
   48/48 completed sessions: each condition passes 18/18 silent items and
   5/6 controls. P1 does not hold (exact McNemar p=1); P2 holds (difference 0).
@@ -992,7 +992,7 @@ are gone. This is not host-wide disk attribution. Last free-space check: 188.95 
   The [report](../../book/src/evaluation-agents.md#experiment-4-silent-undefined-behavior)
   retains the matrix, pilot and descriptive cost counts without a general
   repair-advantage claim. All 112 experiment tests and both secret scans pass.
-  On clean `2c0153a6`, the offline full-workspace gate passes 425 suites:
+  On clean `d3f1a2d2`, the offline full-workspace gate passes 425 suites:
   3,239 passed, zero failed and five existing ignored; Clippy and formatting
   pass. The report's paired counts and p-value were independently recomputed.
   All 24 matrix rows match the qualification receipt; copied evidence is
@@ -1020,7 +1020,7 @@ are gone. This is not host-wide disk attribution. Last free-space check: 188.95 
   its existing option pairs. Twelve JSON command tests pass, including six
   prove permutations, ten invalid-argument controls, and both JSON orders for
   run/check/explain/build. No proof pipeline or sysroot semantics changed.
-  On clean `9bb1bdbd`, the complete offline workspace gate passes 425 suites:
+  On clean `949358a2`, the complete offline workspace gate passes 425 suites:
   3,239 passed, zero failed, five existing ignored; Clippy and formatting pass.
   The report and tracker Python checks pass 11 tests. No Lean source changes.
   The prerequisite production change is 51 net Rust lines including D07;
@@ -1045,7 +1045,7 @@ are gone. This is not host-wide disk attribution. Last free-space check: 188.95 
   limit before measurement. Report response errors separately, token cost,
   diff size, span overlap and safe auto-repairs; publish negative results too.
   The owner approved `agent-repair-experiment-2`: the old
-  `agent-repair-corpus-2` remains at P17's `7eed5eac`. The owner also confirmed
+  `agent-repair-corpus-2` remains at P17's `2644dad5`. The owner also confirmed
   30 items × five conditions × two models × three repetitions × three rounds:
   at most 2,700 normal requests, with one retry charged separately. Report
   repair rate excluding response errors and completion rate over all attempts.
@@ -1054,9 +1054,9 @@ are gone. This is not host-wide disk attribution. Last free-space check: 188.95 
   and 30 UB diagnoses each from EvoCC, GCC and Clang. All fixed executions
   complete. The CRC original's sanitizer and hidden timeouts remain failures.
   The corpus has 20 public-source adaptations and ten marked synthetic items.
-  Commit `1e98993f` adds 115 harness lines and 58 report lines; 56 mock harness
+  Commit `3f19a425` adds 115 harness lines and 58 report lines; 56 mock harness
   and report tests pass. None of these results establishes model difficulty.
-  The first C0 preflight at `a03a4f50` was stopped after source review found
+  The first C0 preflight at `71bbe9f7` was stopped after source review found
   that the sorting item's hidden stable-order requirement was absent from the
   model-visible program. No score completed. The first response had no final
   C file and exhausted 16,384 tokens (reported cost USD 0.00309618); the
@@ -1072,7 +1072,7 @@ are gone. This is not host-wide disk attribution. Last free-space check: 188.95 
   USD 0.005037825 for the day (USD 0.203326857 lifetime); these aggregates do
   not identify the retry's exact charge. Reserve USD 1 of the total preflight
   allowance for this attempt; a new draft's cap is at most USD 11, not USD 12.
-  The second preflight at `3bfb68c5` stopped with `cost_unknown:transport_error`:
+  The second preflight at `41e99a69` stopped with `cost_unknown:transport_error`:
   four of 180 slots attempted, two scored (one pass, one failure), two response
   errors, six HTTP attempts, USD 0.03732025 reported cost. The other 176 slots
   were not attempted. One error exhausted the output budget twice; the other
@@ -1089,7 +1089,7 @@ are gone. This is not host-wide disk attribution. Last free-space check: 188.95 
   directory, preserving all prior outcomes, transcripts, provenance and cost.
   The transport/admission fixes pass 62 harness, report and secret tests.
   The harness is 411 lines, exactly 120 above its original baseline. The full
-  offline workspace gate started on clean `3bfb68c5`: 425 suites, 3,239 passed,
+  offline workspace gate started on clean `41e99a69`: 425 suites, 3,239 passed,
   zero failed, five existing ignores; Clippy and formatting pass. No Rust
   source changed during that gate. This does not complete model qualification.
   The read-only usage query at 2026-10-08T12:54:09Z is unchanged from 12:04:16Z.
@@ -1106,7 +1106,7 @@ are gone. This is not host-wide disk attribution. Last free-space check: 188.95 
   prediction outcomes, report, changelog and full gate. Budgets: +150 harness
   lines (owner-approved continuation exception) and +80 report lines.
   This is not a completion or repair-benefit claim.
-  Run record (2026-10-09). Commit `55214a6e` fixes the 14-minute stall:
+  Run record (2026-10-09). Commit `c177be2f` fixes the 14-minute stall:
   urllib's 120 s timeout limits each socket read, and OpenRouter's keep-alive
   whitespace kept the read alive. Each HTTP attempt now has a 300 s total
   deadline. Unknown usage adds a USD 0.05 reserve instead of stopping.
@@ -1118,7 +1118,7 @@ are gone. This is not host-wide disk attribution. Last free-space check: 188.95 
   for the stronger model, so the corpus stays unchanged and the predictions
   use each model's hard items
   ([preflight receipt](../../tests/contracts/agent-repair-2-preflight.json)).
-  The tag `agent-repair-experiment-2` is `0701fea5`. The measured run started at
+  The tag `agent-repair-experiment-2` is `8ac3fa1d`. The measured run started at
   2026-10-08T16:17:48Z with six parallel slots and the USD 160 cap. The key's
   own USD 10 limit stopped it at slot 443: OpenRouter answered HTTP 403 "Key
   limit exceeded". The tagged harness stops only on 401 and 402, so the raw
@@ -1134,10 +1134,10 @@ are gone. This is not host-wide disk attribution. Last free-space check: 188.95 
   changelog record the result. Not done: the harness does not stop on the
   HTTP 403 key refusal, and the unattempted repetitions cannot be continued
   under this registration.
-  The full offline workspace gate on clean `249e522d` passes 425 suites:
+  The full offline workspace gate on clean `848f90b7` passes 425 suites:
   3,239 passed, zero failed, five existing ignored; Clippy and formatting
   pass. No Rust source changed. Capture:
-  `.evidence/diagnostics/20261009/repair-experiment-2/full-workspace-249e522d.log`.
+  `.evidence/diagnostics/20261009/repair-experiment-2/full-workspace-848f90b7.log`.
 
 
 ## Kernel runtime and acceptance
@@ -1857,7 +1857,7 @@ are gone. This is not host-wide disk attribution. Last free-space check: 188.95 
   as having no effect. So the direct-build kernel does not sign return
   addresses, although its configuration asks for it; the GCC reference kernel
   signs them.
-  Closed by `2a8968a4` and a direct Kbuild run with `fb05debf`. The capability
+  Closed by `e923f0a9` and a direct Kbuild run with `2d2af604`. The capability
   probe asks for `-mbranch-protection=pac-ret+leaf`, which EvoCC did not
   accept. It now does. Each accepted signing option signs every function,
   leaves included. As in GCC 14, `-msign-return-address` has no effect. The
@@ -1881,13 +1881,13 @@ are gone. This is not host-wide disk attribution. Last free-space check: 188.95 
   These kernel objects carry `section`, so they stayed in the output. Without
   `section`, `-O2` dropped such an object; GCC 14 keeps it. GCC 14 also accepts
   `unused` in that position without a warning.
-  Closed by `ce3ab5e9`, after the owner approved the rule on 2026-10-13.
+  Closed by `2ac49acc`, after the owner approved the rule on 2026-10-13.
   EvoIR 2.1.0 attaches `used` and `retain` after a pointer `*` in a named
   declarator to the declaration, as it attaches `weak`, `alias` and
   `section`. The lint reads `unused` on the pointer next to a variable's name.
   Tests cover the warning, `-O2` retention of objects and functions, and the
   GCC 14 cases that still warn: a farther pointer, an array element and a
-  parameter. A direct Kbuild run of the K15 configuration with `820bfa29`
+  parameter. A direct Kbuild run of the K15 configuration with `361f9b35`
   printed no W0001 warning. Of its 2,922 recorded build outputs, 3 differ from
   the K15 run: `init/version.o`, `init/version-timestamp.o` and
   `kernel/configs.o`. They embed the compiler version text. The Image boots on
@@ -1905,12 +1905,12 @@ are gone. This is not host-wide disk attribution. Last free-space check: 188.95 
   invocation. Also, the code generator never allocates `x18`, so
   `-ffixed-x18` is always in effect, but the vDSO compile still reported it as
   having no effect.
-  Closed by `820bfa29`. On 2026-10-13 the owner asked to finish K17,
+  Closed by `361f9b35`. On 2026-10-13 the owner asked to finish K17,
   including the shorter text form. The warning and its `-Werror` error now
   label the ignored option. Diagnostic format 1.3.0 shows only the labelled
   bytes of a `<command-line>` line longer than 80 bytes; the location and the
   JSON coordinates do not change. `-ffixed-x18` is accepted without a warning
-  (EvoMIR Section 2.5). In the direct Kbuild run with `820bfa29`, 19,632 such
+  (EvoMIR Section 2.5). In the direct Kbuild run with `361f9b35`, 19,632 such
   warnings fill 4.5 MiB of the 10.2 MiB build log. Each one labels only the
   ignored option. The two fewer warnings are the vDSO `-ffixed-x18` warnings,
   and the receipt lists eight options without effect.
@@ -2384,7 +2384,7 @@ are gone. This is not host-wide disk attribution. Last free-space check: 188.95 
     original assertions or increasing watchdogs to conceal a progress defect.
     Closed on 2026-10-13. Each of the 17 cases has a source-bound disposition,
     and none is relabeled PASS. Two fresh runs with the frozen compiler
-    `366fd796` fail 13 reference cases: the case environment now runs the two
+    `546fe46a` fail 13 reference cases: the case environment now runs the two
     atfork and the two daemon cases correctly. The EvoCC mixed library fails
     exactly those 13 cases in four complete replays. The genuine loader lane
     passes 5/5 with the GCC library and 5/5 with the EvoCC library. The 13
@@ -2643,7 +2643,7 @@ are gone. This is not host-wide disk attribution. Last free-space check: 188.95 
     deferred; the B10 replay decides them.
     [Record](../../tests/fixtures/disposition-evidence-20261013.out).
 
-  Closed on 2026-10-27 by the frozen acceptance of release 0.1.0 (compiler of `08bf09bd`).
+  Closed on 2026-10-27 by the frozen acceptance of release 0.1.0 (compiler of `8177cff2`).
   `tools/bench.py` ran the 15 lanes in one invocation, in the order of 2026-10-25, and Doom in
   a second one. Both started on a clean tree (`dirty: false`). No population, budget, timeout,
   flag or disposition changed. ctest 220/220; torture 1,543/1,692 PROFILE_CLEAN (146
@@ -2763,7 +2763,7 @@ are gone. This is not host-wide disk attribution. Last free-space check: 188.95 
   binary32 and rounds once; AAPCS64 scalars and HFAs pass, and `__bf16` HFAs are
   refused. [Decision](../../docs/archive/notebook/rules-20261013/DECISIONS.md),
   [packet](../../docs/archive/notebook/rules-20261013/l03-half-bfloat.md).
-  Closed on 2026-10-21 (EvoIR 2.22.0, EvoMIR 1.10.0, commit 4b4f8e2f).
+  Closed on 2026-10-21 (EvoIR 2.22.0, EvoMIR 1.10.0, commit 723ac3b6).
   `_Float16`, `__fp16` and `__bf16` are the storage formats `f16` and `bf16`.
   Each operation converts to binary32, evaluates there and rounds once, as GCC
   14 does; a half conditional evaluates in binary32, and `__fp16` promotes to
@@ -2814,7 +2814,7 @@ are gone. This is not host-wide disk attribution. Last free-space check: 188.95 
   long double complex is admitted.
   [Decision](../../docs/archive/notebook/rules-20261013/DECISIONS.md),
   [packet](../../docs/archive/notebook/rules-20261013/l04-floating-complex.md).
-  Closed on 2026-10-21 (EvoIR 2.20.0, EvoMIR 1.8.0, commit bcb9fd0e). Complex
+  Closed on 2026-10-21 (EvoIR 2.20.0, EvoMIR 1.8.0, commit 405b608a). Complex
   values are HFA pairs; real operands, truth tests and conversions follow
   per-part rules. On Linux, native multiply and divide call libgcc's `__mul?c3`
   and `__div?c3`. On Darwin a quotient calls compiler-rt, and a product uses
@@ -2856,7 +2856,7 @@ are gone. This is not host-wide disk attribution. Last free-space check: 188.95 
   Before, it passed by reference where AAPCS64 uses vector registers
   (`crates/evocc/tests/floating_vector_records.rs`). Execution and intrinsics
   remain.
-  Closed on 2026-10-21 (EvoIR 2.21.0, EvoMIR 1.9.0, commit b9e381ab). GNU
+  Closed on 2026-10-21 (EvoIR 2.21.0, EvoMIR 1.9.0, commit 6e86c453). GNU
   `float` and `double` vectors of 8 and 16 bytes execute lane by lane with the
   scalar rules and no contraction. Masks are `long` on Linux and `long long` on
   Darwin, conversions are a C cast per lane (E3063), and `++`, `--` and `&v[i]`
@@ -2904,7 +2904,7 @@ are gone. This is not host-wide disk attribution. Last free-space check: 188.95 
   on both targets; full intrinsic support is outside this item.
   Closed in the owner's bounded scope: `Vector/NEON/simple.c` passes at O0/O2
   on Linux and Darwin, with crossed tests for all 18 integer intrinsics.
-  The Darwin implementation is in `3a101cd3`; its source tests are
+  The Darwin implementation is in `b5de2149`; its source tests are
   `crates/evocc/tests/darwin_neon_simple.rs`. The combined source gate passes
   3,867 tests with zero failures and 51 retained ignores; the refreshed Lean
   receipt matches EvoIR 2.32.0. This is not full NEON or a new proof profile.
@@ -3150,7 +3150,7 @@ are gone. This is not host-wide disk attribution. Last free-space check: 188.95 
     existing E3049 rather than generic E3101; no new numeric type is executable.
     All eight original half-interface replays retain named refusal. The 1,876
     affected tests pass with three historical ignores; Clippy/fmt and the
-    changed gate against `1160db6` pass. No kernel/native acceptance is inherited.
+    changed gate against `7a20e8a` pass. No kernel/native acceptance is inherited.
     [Minimal cases, negative attempts and identity](../../tests/fixtures/typed-call-requirements.out).
 
 
@@ -3763,7 +3763,7 @@ are gone. This is not host-wide disk attribution. Last free-space check: 188.95 
   bounded result. Passing this gate alone does not close B10/K13/K14.
   [Workflow](../../CONTRIBUTING.md#the-change-workflow).
   September 28's [post-repair checkpoint](../../tests/fixtures/compiler-health-20260927.out)
-  at compiler source `13082c6` passes **2784 workspace tests**, Clippy/fmt, **563 Python tests**, Ruff,
+  at compiler source `b314d7a` passes **2784 workspace tests**, Clippy/fmt, **563 Python tests**, Ruff,
   54/54 grammar shapes, both frozen layout corpora (**128 + 22**) and **13**
   isolated offline replays. Four historical Rust ignores remain explicit.
   This verifies current code, not a last-semantic-change or final campaign claim;
@@ -3947,8 +3947,8 @@ are gone. This is not host-wide disk attribution. Last free-space check: 188.95 
     retained selected receipt recomputes to `sched_ext:runner`. Historical
     observations and verdicts remain unchanged. This is report integrity, not
     a kernel repair. [RED, GREEN and health](../../tests/fixtures/kernel-regression-identity.out).
-  Release 0.1.0 (2026-10-27): the gate passes on the clean tree of `fecd612f`,
-  whose compiler source is the freeze `08bf09bd` (equal tree IDs of `crates`,
+  Release 0.1.0 (2026-10-27): the gate passes on the clean tree of `9714aa41`,
+  whose compiler source is the freeze `8177cff2` (equal tree IDs of `crates`,
   `vendor` and `lean`). The offline workspace gate passes 522 suites: **3,928
   PASS / 0 FAIL / 62 ignored**, with Clippy and fmt. The 62 ignored tests run
   only on request: 54 sealed Linux lanes, 4 standing-campaign runs, a QEMU
@@ -3977,7 +3977,7 @@ are gone. This is not host-wide disk attribution. Last free-space check: 188.95 
 
   - [x] **R01a — Policy-aware persistent optimization and proof provenance** — `DONE`, requalified 2026-09-29.
     Review reproduced three failures in the sealed-certificate suite, omitted by
-    the previous four-crate gate. Commit `31234f5` repairs fixture placement,
+    the previous four-crate gate. Commit `b3af7e9` repairs fixture placement,
     recovery-proof accounting, inherited scratch-file limits and checker
     packaging/identity admission. The full workspace gate passed: 2,850 Rust
     tests, zero failures, four existing ignored campaigns, all-target Clippy
@@ -4212,11 +4212,11 @@ are gone. This is not host-wide disk attribution. Last free-space check: 188.95 
   <a id="r02e"></a>
 
   - [x] **R02e — Guard-predicate folding domain, separately reviewed** — `DONE`, 2026-10-01, exact first slice only.
-    Implementation `595272a2`: seven total predicates, separate `g0.ub.v1`,
+    Implementation `871ea379`: seven total predicates, separate `g0.ub.v1`,
     existing known-bit/all-edge seed facts, independent checker and seven
     kernel-only parametric A2 transfer proofs. P0 and interpreters unchanged;
     IR obligations/effects remain, MIR elides only direct canonical true.
-    Review repair `7b385567`: full workspace **2,881 PASS / 0 FAIL / 4 existing ignored**,
+    Review repair `3fef1dca`: full workspace **2,881 PASS / 0 FAIL / 4 existing ignored**,
     Clippy/fmt and clean-tree Lean gate green. All six Rust/Lean groups rerun:
     **1,487,689** comparisons (1,325,045 P0 + 162,644 guards), zero differences;
     subset receipts merge, and nonzero transfer requires a known one bit.
@@ -4237,8 +4237,8 @@ are gone. This is not host-wide disk attribution. Last free-space check: 188.95 
     Exit: `tools/release.sh --target aarch64-unknown-linux-gnu --with-lean`
     passes the smoke steps of the release workflow and the static-link check,
     and `tools/tests/test_sysroot.py` passes on that archive.
-    Closed on 2026-10-27 at `9e83b76a`. Its compiler source is that of the
-    freeze `08bf09bd`: the trees `crates`, `vendor` and `lean` and the three
+    Closed on 2026-10-27 at `5125cc44`. Its compiler source is that of the
+    freeze `8177cff2`: the trees `crates`, `vendor` and `lean` and the three
     manifests are equal. A fresh checkout in a `debian:13-slim` AArch64
     container with no network built `evocc-0.1.0-aarch64-unknown-linux-gnu.tar.gz`
     (SHA-256 `5a86e3fb…356e`). The smoke steps of `release.yml` pass. `evocc`
@@ -4311,7 +4311,7 @@ are gone. This is not host-wide disk attribution. Last free-space check: 188.95 
     Exit: a book page gives the commands, and a second build from a clean
     checkout reproduces the macOS archive digest.
     Packaging half closed on 2026-10-14: `book/src/release.md` gives the
-    commands, and three checkouts of `34d81cbf` at three paths, with the same
+    commands, and three checkouts of `3b4a7bcb` at three paths, with the same
     programs, gave the same archive digest. The rebuild half moves to R05e's
     exit.
 
@@ -4405,7 +4405,7 @@ typed Core source to final assembly text. The acceptance sweep accepts all 17
 pilot modules and all 107 entries of these modules, and both optimized cases.
 The V06 entry below gives the first acceptance run. V07 removes the
 zero-extension premise from the entry assumption. The V08 entry gives the
-repeat of the sweep at `e657709b` and the native run: the output of the 17
+repeat of the sweep at `e85f5904` and the native run: the output of the 17
 pilot modules was executed on Linux AArch64 with no difference from the
 source interpreter in 14,194 comparisons. The proofs do not cover the whole
 compiler, the GNU C language or Linux.
@@ -4443,7 +4443,7 @@ Limits of the accepted result:
 
 - [x] **V00 — Freeze the core compilation theorem and real pilot**, complete in the frozen scope; P1.
   Name the source/target states, observation/refinement relation, exact supported
-  constructors, trusted boundaries and snapshot interfaces at `19bb5f7d` or a
+  constructors, trusted boundaries and snapshot interfaces at `d48a839c` or a
   recorded successor. Freeze the joined/loop, spill, direct-call/stack-argument,
   checked-diagnostic cases and two unchanged real application functions with
   nearby refusal cases before implementation. Exit is an exact theorem contract
@@ -4459,7 +4459,7 @@ Limits of the accepted result:
   complete source-input export. All five selected entry exports decode through
   the independent Lean grammar reader. The full Rust gate passes (3,079 / 0 / 5
   ignored, plus Clippy and formatting), and the clean Lean gate passes at
-  `4483ef67`. Earlier interrupted/permission-failed attempts remain recorded.
+  `59fcbecb`. Earlier interrupted/permission-failed attempts remain recorded.
   This is not a compilation proof.
 
 
@@ -4502,7 +4502,7 @@ Limits of the accepted result:
   one exact-pair bootstrap, not the general checker or a narrower final profile.
   The owner reopened bounded verification after cleanup. The complete `abs`
   case now passes the clean Lean gate (14 kernel-only core targets) and full
-  workspace (3,080 / 0 / 5 ignored; Clippy/format pass) at `7f79966a`.
+  workspace (3,080 / 0 / 5 ignored; Clippy/format pass) at `9f15f12b`.
   The resumed Lean gate exposed an exact-type audit expectation mismatch
   (Lean omits inferable existential binder types); a RED and exact spelling
   correction retain rejection of changed premises, widths, entries and relations.
@@ -4510,15 +4510,15 @@ Limits of the accepted result:
   read-after-local-write, other-local noninterference and scope-depth preservation
   are now kernel-proved components. Administrative cycles and changed terminal
   observations are excluded by their regression proofs. This does not implement
-  the generic program-pair checker. The clean Lean gate at `dbd98afb` passes
+  the generic program-pair checker. The clean Lean gate at `32139139` passes
   19 kernel-only core targets. Executable symbolic integer-fragment checking now
   has universal correctness theorems, an actual `IR.execute` bridge and negative
   cases for SSA collisions, opaque/poison operands, width/operand changes,
   missing obligations and changed diagnostic reasons. It does not justify its
-  own source expectation or admit a program pair. The clean gate at `88e7f458`
+  own source expectation or admit a program pair. The clean gate at `50499dc7`
   records 22 kernel-only core targets. Source-directed arithmetic and conversion
   checking now preserves all six C ranks and signedness, and checked finite
-  instruction segments are connected to actual `IR.Steps`. At `6321f218`, the
+  instruction segments are connected to actual `IR.Steps`. At `6eab6d80`, the
   clean Lean gate passes 25 kernel-only core targets (zero native axioms),
   and full workspace passes 401 suites / 3,080 tests / zero failures / five
   ignored, plus Clippy/format. The resumed slice's measured cache/capture net
@@ -4545,13 +4545,13 @@ Limits of the accepted result:
   close the branching/looping/state/call cases or V01; the frozen scope is unchanged.
   The same checker now admits all 108 AND/OR/XOR and source-type pairs through
   a parametric source-semantics bridge; 108 target-op mutations are refused.
-  The clean Lean gate passes at `2fb00d28` (35 kernel-only core targets).
+  The clean Lean gate passes at `8ed7a5ae` (35 kernel-only core targets).
   The source/target return checker now covers conditional-expression CFGs:
   `ReturnPair.refines` admits both original `FixedMul` and `abs` for every
   signature value, without an exact-tree whitelist. Comparison/unary bridges
   pass 888 runtime cases; 26 branching whole-return cases and eight kernel
   examples cover changed pairs, swapped branches/joins, missing obligations,
-  wrong diagnostics and target cycles. The clean Lean gate passes at `f2d51bc8`
+  wrong diagnostics and target cycles. The clean Lean gate passes at `fc919526`
   (39 kernel-only core targets; 1,246,159 vector answers). No full-workspace
   PASS is claimed for this Lean-only checkpoint. General expression combinations, short-circuit
   state, div/rem, statement control/loops, mutable storage, calls/private-leaf
@@ -4562,13 +4562,13 @@ Limits of the accepted result:
   operations preserve the local store at the first diagnostic. The actual
   `stateful-return.c` exporter pair and 11 mutations pass; 81 source-machine
   comparisons, 18 storage boundaries and 26 expression examples pass locally.
-  Checkpoint `74b33c80` now passes the clean Lean gate (42 kernel-only core
+  Checkpoint `e78f4e95` now passes the clean Lean gate (42 kernel-only core
   targets) and full workspace (401 suites; 3,080/0/5 ignored; Clippy/format).
   Supported compound assignments and all four pre/post updates now use the same
   stateful checker: actual mixed-signedness and consecutive-update exporter pairs
   pass, and discarded-update diagnostics remain checked. The local gate totals
   21 whole-return cases and 136 source-machine comparisons; the extension's
-  clean Lean gate passes at `1746ceed` (42 kernel-only core targets).
+  clean Lean gate passes at `2049f4de` (42 kernel-only core targets).
   Div/rem (including compound forms),
   statement/declaration integration, loops, calls,
   private-leaf substitution and validator safety remain OPEN; V02–V06 are not
@@ -4579,7 +4579,7 @@ Limits of the accepted result:
   the latter is selected from the untouched complete `control.evo` module.
   Local regressions add 54 source-machine comparisons and 28 whole-function
   cases (24 mutations), plus 28 kernel boundary examples. The clean Lean gate
-  passes at `6c532776` (44 kernel-only core targets); seven actual export pairs
+  passes at `a89befe2` (44 kernel-only core targets); seven actual export pairs
   replay successfully. Full workspace passes 401 suites / 3,080 tests / zero
   failures / five ignored, with Clippy/format. Div/rem, loops, calls/private-leaf substitution and validator
   safety remain required; this does not close V01 or advance V02–V06.
@@ -4589,7 +4589,7 @@ Limits of the accepted result:
   association mutations refuse. The whole-loop checker still needs independent
   successor-invariant instantiation and the actual entry connection; matching
   spans are not loop admission. Focused checks pass; clean Lean/full-workspace
-  gates subsequently passed at `8cf85cc6`: 47 kernel-only core targets and
+  gates subsequently passed at `18942a10`: 47 kernel-only core targets and
   full workspace 3,080 / 0 / 5 with Clippy/format (two container-permission
   failures in the earlier sandboxed attempt remain recorded).
   October 5 whole-loop continuation: independently checked successor/store
@@ -4598,7 +4598,7 @@ Limits of the accepted result:
   accepts the original `loop_join` source against the full unchanged target
   module with an untrusted cutpoint proposal; the seven finite pairs still pass.
   A divergent loop passes, while six zero-step roots and 30 mutations refuse.
-  Clean Lean acceptance at `493aa9ac` passes (49 kernel-only core targets,
+  Clean Lean acceptance at `2ff0ed2d` passes (49 kernel-only core targets,
   1,246,159 vector answers); full workspace passes 401 suites / 3,080 tests /
   zero failures / five ignored, plus Clippy/format. Six actual exported
   division/remainder/compound-assignment pairs now reproduce the next RED.
@@ -4612,7 +4612,7 @@ Limits of the accepted result:
   normalization changes proof diagrams only, with explicit source obligations
   still required. Focused tests: 144 mixed-type pairs accepted, 1,060 mutations
   refused, 11 original control cases passed; development kernel audit PASS.
-  Clean Lean gate at `b718a856`: PASS, 53 kernel-only core targets and
+  Clean Lean gate at `346824ff`: PASS, 53 kernel-only core targets and
   1,246,159 vector answers. Full workspace: 401 suites / 3,080 passed /
   zero failures / five ignored, plus Clippy/format. Calls/private-leaf substitution,
   validator safety and complete frozen-population acceptance remain OPEN.
@@ -4622,7 +4622,7 @@ Limits of the accepted result:
   `CallPair.refines` proves all-input source/IR correspondence with the real call
   stack and memory/world signature, not sampled execution. Nine execution/diagram
   controls, six source refusals and 18 target mutations pass; 61 kernel-only core
-  targets pass the clean Lean gate at `1b859487`; full workspace passes 401 suites /
+  targets pass the clean Lean gate at `59a5488b`; full workspace passes 401 suites /
   3,080 tests / zero failures / five ignored, plus Clippy/format. All five named
   pilot entries replay successfully, not the combined ten-function fixture. More
   calling statement forms, cyclic/private-storage call composition, private-leaf
@@ -4635,7 +4635,7 @@ Limits of the accepted result:
   proofs; target unconditional edges transport all bindings simultaneously,
   preserving unused poison without admitting numeric uses. The focused gate
   passes 17 call execution controls, five pairs, six call-boundary refusals,
-  three source mutations and 33 target mutations. Implementation `b7a0a70e`
+  three source mutations and 33 target mutations. Implementation `1729b09b`
   passes clean Lean (64 kernel-only core targets, 1,246,159 vector answers)
   and full workspace (401 suites; 3,080 / 0 / 5 ignored; Clippy/format).
   All five frozen named entries plus the original `caller` pair replay.
@@ -4645,7 +4645,7 @@ Limits of the accepted result:
   storage, the remaining calling expression forms, full constructor coverage
   and validator safety remain OPEN. V02–V06 have not advanced.
 
-  **October 5 calling-control continuation:** implementation `0eec2a26` closes
+  **October 5 calling-control continuation:** implementation `1cf2bd3e` closes
   the five `call-control.c` REDs and four branching-callee pairs. Checked result
   trees preserve the selected call/return path, caller locals, tokens and first
   diagnostic. Nine complete pairs, 31 execution controls and 21 target mutations
@@ -4666,13 +4666,13 @@ Limits of the accepted result:
   continuation-aware proof, not finite unfolding. Private storage, complete
   coverage and validator safety remain required; V02–V06 remain OPEN.
 
-  Implementation `10f0c558` passes clean Lean (69 kernel-only core targets)
+  Implementation `4fb858e8` passes clean Lean (69 kernel-only core targets)
   and full workspace (401 suites / 3,080 passed / zero failed / five ignored,
   Clippy/format pass). Receipts: `cyclic_call_correspondence` in the pilot
   manifest. Build/capture disk delta +4,612 KiB; target/frontend unchanged,
   52 GiB free. Protected evidence, fixtures and Lean cache remain.
 
-  **October 5 cyclic-callee context continuation:** `854f6b9e` proves
+  **October 5 cyclic-callee context continuation:** `941a0ef7` proves
   `LoopDiagram.call_refines`: actual call entry, context-relative cyclic spans,
   preserved caller state/frame counters, diagnostics and unbounded composition
   with a separately proved return continuation. Six suspended-context controls
@@ -4686,7 +4686,7 @@ Limits of the accepted result:
   Clippy/format pass; ten original pairs replay. Disk delta +3,108 KiB,
   target/frontend unchanged, 51 GiB free; protected artifacts retained.
 
-  **October 5 checked-return construction:** `51b27bd2` constructs the caller
+  **October 5 checked-return construction:** `c123dcb4` constructs the caller
   suffix proof and composes it with a cyclic callee. Six continuation controls,
   the original `call_loop` return suffix, eight mutation refusals and 18
   fresh-return controls pass. Clean Lean: 72 kernel-only core targets;
@@ -4698,7 +4698,7 @@ Limits of the accepted result:
   Artifact delta +3,252 KiB; target/frontend unchanged, 51 GiB free. Thirteen
   temporary logs/development receipts were retired; final evidence retained.
 
-  **October 5 whole cyclic caller entry:** `60adb247` closes the actual
+  **October 5 whole cyclic caller entry:** `e0d7a9fe` closes the actual
   argument/frontier and call-site prefixes and verifies the callee proposal;
   unchanged `call_loop` is now a whole-entry PASS for all typed arguments and
   unbounded execution. Eleven original pairs replay; six frontier controls,
@@ -4713,11 +4713,11 @@ Limits of the accepted result:
   Receipt: `whole_cyclic_caller`. Build/capture delta +4,292 KiB, target/frontend
   unchanged, 51 GiB free; intermediate scratch retired, final evidence retained.
 
-  **October 5 call-context closure:** `a1338248` / `014bfa62` close the four
-  preceding REDs; `e5db8d5e` closes initializer calls, post-call short circuit
+  **October 5 call-context closure:** `77d202a4` / `6db43e9e` close the four
+  preceding REDs; `e2760e97` closes initializer calls, post-call short circuit
   and a branch with a return-only arm. Nineteen original pairs replay.
   New context tests: 8 original/renamed pairs, 17 mutations, 20 executions.
-  Clean Lean: 77 kernel-only core targets; full Rust baseline at `014bfa62`:
+  Clean Lean: 77 kernel-only core targets; full Rust baseline at `6db43e9e`:
   3,080 / 0 / 5 ignored, Clippy/format pass (Rust and gate unchanged).
   Two valid-source REDs remain in `call-loop-short-right.c`: preserve the
   selected path premise when a logical right operand calls a cyclic callee.
@@ -4726,17 +4726,17 @@ Limits of the accepted result:
   `call_statement_contexts`. Combined artifact delta +6,396 KiB, 53 GiB free;
   temporary probe removed, protected evidence retained.
 
-  **October 5 logical RHS continuation:** `9ab35d27` closes those two REDs.
+  **October 5 logical RHS continuation:** `3bce4191` closes those two REDs.
   Branch premises are established by matched paths and renamed across returns;
   they are not unconditional facts or new EqSat rules. Twenty-one original
   source/IR pairs replay, the caller-only negative still refuses; four new
   original/renamed pairs, 18 mutations, 14 executions, 15 premise controls and
   24 six-type resumption diagrams pass. Clean Lean: 79 kernel-only core targets,
-  1,246,159 vector answers. Retained Rust gate is still `014bfa62`, not a new
+  1,246,159 vector answers. Retained Rust gate is still `6db43e9e`, not a new
   run. Full call/constructor closure, private storage and validator safety remain
   OPEN. Receipt: `logical_right_call_contexts` in the existing pilot manifest.
 
-  **October 5 mixed-call continuation:** `59e0f8cc` closes three more original
+  **October 5 mixed-call continuation:** `1969f5b8` closes three more original
   call contexts without assuming a finite callee summary: proposed entry-only
   spans still pass the independent checker. Twenty-four original pairs replay;
   six new original/renamed pairs, 23 refusals, 27 execution/frame controls and
@@ -4748,13 +4748,13 @@ Limits of the accepted result:
   Private storage, complete closure/constructor coverage and validator safety
   remain OPEN. Receipt: `mixed_call_contexts` in the existing pilot manifest.
 
-  **October 5 cyclic caller continuation:** `d14f4d95` closes
+  **October 5 cyclic caller continuation:** `7f2abb36` closes
   `call-loop-nested.c`: productive open fragments compose callee returns with
   the caller's independently checked backedges. Twenty-five original pairs and
   the retained negative replay; 2 original/renamed pairs, 24 mutations,
   27 execution/frame controls and 2 nonterminating variants pass. Clean Lean:
   all steps PASS, 82 kernel-only core targets, zero native axioms in those
-  targets. Rust baseline remains `014bfa62`. Next RED: `call-loop-deep.c`
+  targets. Rust baseline remains `6db43e9e`. Next RED: `call-loop-deep.c`
   invokes this nested-loop function from another function; source validation
   and three execution controls pass, but the whole-pair checker refuses.
   Reuse open caller tables for callees under a suspended outer return context;
@@ -4763,29 +4763,29 @@ Limits of the accepted result:
   `cyclic_caller_contexts`. Artifact delta +3,268 KiB; 52 GiB free; no temporary
   source remains, protected evidence retained.
 
-  **October 5 general closure and safety:** `8b7d16d0` generalizes suspended
-  callers through the nonrecursive closure; `8afff094` proves unused-poison
+  **October 5 general closure and safety:** `5fdc1f39` generalizes suspended
+  callers through the nonrecursive closure; `279be088` proves unused-poison
   transport and closed-term diagram normalization. The unchanged combined
   `source-execution.c` / `main` closure now passes, without input restriction or
   an execution bound. Thirty-one positive original pairs and one retained
-  negative replay. `05fb62d4` proves scalar/read safety under explicit runtime
-  store/operand invariants; `4a8ac98e` proves accepted whole-pair refinement
+  negative replay. `56f2aaf8` proves scalar/read safety under explicit runtime
+  store/operand invariants; `bc6b3543` proves accepted whole-pair refinement
   excludes malformed source terminals. Standalone validator safety is still
   OPEN: establish and preserve those invariants through the complete machine.
   Private lowered-storage composition and complete constructor coverage also
   remain OPEN; no V02–V06 or release completion is claimed. Clean Lean PASS:
   90 kernel-only core targets, no native axioms in those targets. Full workspace
-  at `8afff094`: 401 suites, 3,080 PASS / 0 FAIL / 5 ignored, Clippy/format PASS.
+  at `279be088`: 401 suites, 3,080 PASS / 0 FAIL / 5 ignored, Clippy/format PASS.
   Receipt: `general_call_closure` and `validator_safety_foundation` in the existing
   pilot manifest. Artifact delta +6,412 KiB; 52 GiB free; target/frontend
   unchanged, capture 17,832 KiB; temporary diagnostic inputs removed.
 
-  **October 5 source writes:** `6c28845a` proves actual-validator-backed safety
+  **October 5 source writes:** `1061094a` proves actual-validator-backed safety
   for assignment entry/continuation and updates, plus store preservation,
   declaration, initialization and caller restoration. This exposed and fixed
   the accepted-but-malformed `int x = (x = 1, 2);` model case; its original
   source/IR pair now passes, with const and uninitialized-read negatives retained.
-  `4db6012e` adds scope-exit preservation under explicit binding-separation and
+  `3e5d4a75` adds scope-exit preservation under explicit binding-separation and
   retained-type premises; establishing that frame invariant globally is still
   required. Clean Lean: 98 kernel-only core targets, zero native axioms in those targets;
   33 replays have their expected results (32 positive, one retained negative).
@@ -4837,7 +4837,7 @@ Limits of the accepted result:
   write, exchanged arguments, changed operations, false loop invariants and
   slot reuse. `export_core_allocation` in
   `crates/evocc-mir/src/verify_alloc.rs` makes the export. Proof-required mode
-  runs V03 (commits `d3a9c4d8`, `17873336`). Frames and emission are not
+  runs V03 (commits `bf75a2af`, `c0d32221`). Frames and emission are not
   covered.
   October 6: the acceptance sweep of proof-required mode accepts V03 for all
   107 entries of the 17 pilot modules. No pilot entry has an edge bridge block.
@@ -4856,7 +4856,7 @@ Limits of the accepted result:
   (`checkAsm_sound`), and `source_asm_refines` composes V01 to V04. The print
   check compares the printed AST with the actual text byte for byte.
   Proof-required mode runs V04 on the text that it publishes (commits
-  `2bbee1ed`, `c4bed6a1`, `642234db`). Private frame objects are refused. V04
+  `aa92a840`, `ee2abca9`, `cfa7abe9`). Private frame objects are refused. V04
   stays OPEN until the lead runs the full gates.
   **October 6 completion (current state):** V04 is complete in the frozen
   scope. `checkAsm_sound` and `source_asm_refines` are kernel-checked, and the
@@ -4879,7 +4879,7 @@ Limits of the accepted result:
   (`checkRewrite_refines`, `check_source_rewrite_refines`). It accepts a P0
   fold and a g0 guard fold from actual `-Oeq-scalar` output and rejects forged
   premises, deleted obligations and changes outside the roots. Proof-required
-  mode runs V05 on each rewrite step (commits `f4f71dc5`, `46be6d80`), and V02
+  mode runs V05 on each rewrite step (commits `f47359ca`, `2a062b03`), and V02
   to V04 check the rewritten program to the final assembly text. The pipeline
   check (`checkPipelineTexts_sound`) gives one theorem for the whole optimized
   chain. V05 stays OPEN until the lead runs the full gates.
@@ -4942,7 +4942,7 @@ Limits of the accepted result:
   **October 6 completion (current state):** V06 is complete in the frozen
   scope. No refusal in the acceptance sweep is a defect of the mode. The
   acceptance run:
-  - Subject: implementation commit `8770b186`. The sweep ran at `4c4cc849`,
+  - Subject: implementation commit `eed7f2f3`. The sweep ran at `1ef2de78`,
     which adds only the Lean gate receipt. Binary SHA-256 digests: `evocc`
     `aedc2cd02dda98ab65a18f3e25831eb3344d78d6c7ba371e5bff67bfed89dbb2`,
     `evoir-sem`
@@ -4950,11 +4950,11 @@ Limits of the accepted result:
     `evocc-checker`
     `723354bf72ce5cbbc9cd3e7d3d35339c46159bbb87678590fc8eeda3be9f078f`.
   - Full workspace gate (`tools/gate-changed.sh --full-workspace --offline`)
-    at `8770b186`, clean tree: 407 suites, 3,102 passed, 0 failed, 5 ignored.
+    at `eed7f2f3`, clean tree: 407 suites, 3,102 passed, 0 failed, 5 ignored.
     Clippy and formatting pass.
-  - Lean gate (`tools/gate-lean.sh`) at `8770b186`, clean tree: all steps
+  - Lean gate (`tools/gate-lean.sh`) at `eed7f2f3`, clean tree: all steps
     pass. The receipt `tests/contracts/lean-p0-receipt.json` names Lean
-    commit `5d917f39`.
+    commit `b64931fb`.
   - Sweep: proof-required mode ran on each of the 17 pilot modules of
     `machine_lowering_checkpoint`, with all functions of the output as
     entries and the proposal files below. 17 of 17 modules are accepted
@@ -5000,7 +5000,7 @@ Limits of the accepted result:
   holds without the zero-extension premise, and the acceptance sweep of the
   17 pilot modules and the two optimized cases passes again.
   **October 6 completion (current state):** V07 is complete in the frozen
-  scope (commits `3db5b76a`, `c00ae749`, `61868fdf`).
+  scope (commits `15465533`, `4f37b154`, `187b8a74`).
   - The pipeline theorems `EvoIR.Pipeline.checkPipeline_sound` and
     `checkPipelineTexts_sound` use the entry assumption
     `EvoIR.Asm.Proof.AbiSourceEntry` (`lean/EvoIR/Asm/Soundness.lean`). For a
@@ -5016,11 +5016,11 @@ Limits of the accepted result:
     `x0 = 0xFFFFFFFF00000005` and source argument 5.
   - The change has 322 inserted Lean lines. The axioms are `propext`,
     `Classical.choice` and `Quot.sound`.
-  - Gates at `61868fdf`, clean tree: the full workspace gate passes (407
+  - Gates at `187b8a74`, clean tree: the full workspace gate passes (407
     suites, 3,102 passed, 0 failed, 5 ignored; Clippy and formatting pass).
-    The Lean gate passes (receipt Lean commit `61868fdf`, committed in
-    `e657709b`).
-  - The acceptance sweep passes again at `e657709b`: 17 of 17 modules, 107 of
+    The Lean gate passes (receipt Lean commit `187b8a74`, committed in
+    `e85f5904`).
+  - The acceptance sweep passes again at `e85f5904`: 17 of 17 modules, 107 of
     107 entries and both optimized cases are checked from typed Core source
     to final assembly text (see V08).
 
@@ -5045,14 +5045,14 @@ Limits of the accepted result:
   Receipt: [`tests/contracts/core-v1-native-run.json`](../../tests/contracts/core-v1-native-run.json).
   Command to repeat: `python3 tools/proof-native/proof_native.py all WORK_DIR`
   (`WORK_DIR` must be outside the repository). The scripts are in
-  `tools/proof-native/` (commit `94a13c24`); the receipt gives their digests.
-  - Subject: `e657709b`, with the binaries built at that state. The receipt
+  `tools/proof-native/` (commit `65eda63f`); the receipt gives their digests.
+  - Subject: `e85f5904`, with the binaries built at that state. The receipt
     gives their SHA-256 digests. Proof-required mode accepts all 19 cases
     with `CHECKED_TO_FINAL_ASSEMBLY`: the 17 pilot modules (107 of 107
     entries) and both optimized cases. This is also the repeat of the
     acceptance sweep that the exit of V07 requires. All 19 `output.s` files
     are byte-identical to the output of the first native run (subject
-    `8dd00f59`, with the V06 binaries). The two runs give the same numbers.
+    `ba5fe617`, with the V06 binaries). The two runs give the same numbers.
   - Environment: the existing sealed image `evo-flight-lab:sealed` (digest
     `2c23684c9cc5`) on the Apple Container runtime 1.2.2. Guest kernel:
     Linux 6.18.15 aarch64. Assembler and linker: GNU as 2.44 and GNU ld 2.44,
@@ -5102,7 +5102,7 @@ Limits of the accepted result:
   add it to the section 6.3 table and correct section 3.13.1. Exit: one code
   per diagnostic, the section 6.3 table updated, and
   `crates/evocc/tests/check_product.rs` extended to check the new code.
-  Closed by `09831b5f`. `builtin-argument-type` is now E2951. EvoIR 2.3.0 lists
+  Closed by `2d5a5957`. `builtin-argument-type` is now E2951. EvoIR 2.3.0 lists
   it in the Section 6.3 table and corrects Section 3.13.1, and
   `check_product.rs` checks the code.
 
@@ -5115,7 +5115,7 @@ Limits of the accepted result:
   Next action: make the reader refuse `epoch 0` as malformed, and add a test
   with an `evp2` certificate that is valid except for this marker. Exit: the
   reader refuses `epoch 0`, and a test shows the refusal.
-  Closed by `363d1ebf`. The EVP reader refuses `epoch 0` with status 2, and a
+  Closed by `36af01c3`. The EVP reader refuses `epoch 0` with status 2, and a
   test submits an `evp2` certificate that is valid except for this marker.
 
 <a id="d03"></a>
@@ -5130,7 +5130,7 @@ Limits of the accepted result:
   parser production for each form that the writer prints, then remove the
   limits from Appendix A. Exit: the parser reads every form that the writer
   prints, and a round-trip test (write, parse, write) gives the same text.
-  Closed by `16ba5757`. The parser reads every form that the writer prints, and
+  Closed by `b7e5cfa3`. The parser reads every form that the writer prints, and
   a write-parse-write test gives the same text. EvoMIR 1.1.0 removes the two
   limits from Appendix A.
 
@@ -5161,12 +5161,12 @@ Limits of the accepted result:
 <a id="d05"></a>
 
 - [x] **D05 — Darwin profile: variadic rules** — `DONE`, P2, 2026-10-14.
-  The backend option `CodegenOptions::anonymous_on_stack` (`a794cab5`)
+  The backend option `CodegenOptions::anonymous_on_stack` (`c83de970`)
   implements the Apple arm64 convention: a call passes every anonymous
-  argument on the stack, and `va_list` is one pointer (`7c1fe668`). The C
-  driver enables it for `aarch64-apple-darwin` only (`c1985dd0`).
+  argument on the stack, and `va_list` is one pointer (`0ee79baf`). The C
+  driver enables it for `aarch64-apple-darwin` only (`e26c2cc4`).
   `spec/evomir.md` revision 1.0.1 specifies it in sections 6.1 and 6.12. On
-  a macOS host at `7b64cc1c`, `darwin_variadic_calls_agree_with_the_c_library`
+  a macOS host at `2180c5b2`, `darwin_variadic_calls_agree_with_the_c_library`
   in `crates/evocc/tests/driver_cc.rs` passes, and cJSON 1.7.19 and zlib
   1.3.2 pass their own `make test` with `CC=evocc` (zlib: static and shared
   library). No test compares each variadic case of section 6.12 with the
@@ -5190,10 +5190,10 @@ Limits of the accepted result:
 - [x] **D06 — Lowering check refuses the guarded division shape** — `DONE`, P2, 2026-10-14.
   Preserve the exact source from
   `.evidence/diagnostics/20261007/agent-demo/evocc-demo-core-integer.c`:
-  October 14: the Lean change `34d81cbf` adds the proved width and bitwise
+  October 14: the Lean change `3b4a7bcb` adds the proved width and bitwise
   conversion and the entry-state hint of the allocation check.
   `tools/gate-lean.sh` passed on a clean tree and refreshed the receipt
-  (`350d48fe`). In `crates/evocc/tests/proof_required.rs`,
+  (`8702fb27`). In `crates/evocc/tests/proof_required.rs`,
   `guarded_division_is_checked_to_final_assembly_text` checks the unchanged
   original (`tests/fixtures/d06-guarded-division/`) to final assembly text for
   `divide` and `main`. Seven changed-input controls exit 3 and write no output.
@@ -5237,7 +5237,7 @@ Limits of the accepted result:
 <a id="d07"></a>
 
 - [x] **D07 — Consistent command defaults and repair output** — `DONE`, P1.
-  Seven public regressions at `b11047ce` cover the four reported issues:
+  Seven public regressions at `1de6ca91` cover the four reported issues:
   fix argument order, whole-line unused-declaration removal, producer version,
   and source-checkout sysroot lookup. Each issue has a retained failing run in
   `.evidence/diagnostics/20261008/driver-usability/` (500 MiB cap).
@@ -5247,8 +5247,8 @@ Limits of the accepted result:
   cover half-open deletion ranges next to a macro and conservative insertion
   boundaries. The seven focused suites pass 83 tests; the final repair suite
   passes 22 tests, including those two controls. Release/tracker Python checks
-  pass 17 tests. Implementation: `2ce447b7`; ABI metadata test: `57e61c73`.
-  On clean `57e61c73`, `tools/gate-changed.sh --full-workspace --offline`
+  pass 17 tests. Implementation: `77f9a098`; ABI metadata test: `3486e676`.
+  On clean `3486e676`, `tools/gate-changed.sh --full-workspace --offline`
   passes 425 suites: 3,237 passed, zero failed, five existing ignored tests;
   Clippy and formatting pass. The first full run retained one ABI snapshot
   failure from the corrected producer version. The historical hash table is
@@ -5285,7 +5285,7 @@ Limits of the accepted result:
   and name an unknown builtin at its own location. Exit: the reproducer runs
   with the 15.4 SDK at -O0 and -O2, and glibc fortify levels 2 and 3 match
   gcc-14, the overflow abort included.
-  Closed by `224f5b8d`. All 14 checked builtins of GCC 14 work: a call becomes
+  Closed by `adaa298d`. All 14 checked builtins of GCC 14 work: a call becomes
   the plain function only when the object size is unknown or a constant length
   fits, and otherwise calls the C library's checking function.
   `__builtin_va_arg_pack` works through always-inline substitution, and
@@ -5440,10 +5440,10 @@ Limits of the accepted result:
 <a id="d15"></a>
 
 - [x] **D15 — Accept `returns_twice` prototypes from `<pthread.h>`** — `DONE`, P1, 2026-10-20.
-  Found on 2026-10-20 by the L11a TinyCC replay. D11 (f81a13d4) refused
+  Found on 2026-10-20 by the L11a TinyCC replay. D11 (f53f67b6) refused
   `returns_twice` at every placement, and glibc's `pthread.h` declares
   `__sigsetjmp_cancel` with it, so every Linux unit that included `<pthread.h>`
-  failed with E2952; the release binaries of 7fec1ce5 have the defect. EvoIR
+  failed with E2952; the release binaries of 0dfede74 have the defect. EvoIR
   2.11.1 accepts the attribute on a function prototype and records it. A
   definition, a call or any other use of the designator of a marked function is
   E2952, in any declaration order, because EvoCC has no rule for a second
@@ -5492,7 +5492,7 @@ Limits of the accepted result:
   another value into a guarded slot at every point that the call reaches. EvoCC
   also counts a block-scope declaration with external linkage, a conservative
   addition to GCC's file-scope rule. The Darwin RED probe returned a wrong sum
-  at O0 and O2 with the compiler of 537e745a; it now agrees with Apple clang. In
+  at O0 and O2 with the compiler of 814188e5; it now agrees with Apple clang. In
   the sealed lane six programs exit 0 at O0 and O2 with GCC 14 and with EvoCC:
   the RED probe, `setjmp`, `_setjmp` and `sigsetjmp` jumps with a loop and
   volatile objects, `vfork`, `getcontext`, pthread cancellation and a user
@@ -5508,11 +5508,11 @@ Limits of the accepted result:
 
 - [x] **D17 — Accept vector-PCS prototypes so `<math.h>` compiles on Linux** — `DONE`, P1, 2026-10-21.
   Found on 2026-10-20 by the header sweep (`.evidence/header-sweep-20261020/`).
-  D11 (f81a13d4) refuses `aarch64_vector_pcs` at every placement. glibc's
+  D11 (f53f67b6) refuses `aarch64_vector_pcs` at every placement. glibc's
   `bits/math-vector.h`, which `<math.h>` includes, declares the Advanced SIMD
   math functions with it, so every Linux unit that includes `<math.h>` or
   `<tgmath.h>` fails with E2952; the pinned `cJSON_Utils.c` fails too. The
-  compiler of 366fd796, GCC 14 and Apple clang accept these prototypes. Clang's
+  compiler of 546fe46a, GCC 14 and Apple clang accept these prototypes. Clang's
   `bounds_safety_soft_traps.h` has the same defect with `preserve_all`. Rule
   decided by the lead: every attribute of the EvoIR 10.1.9 list is accepted on a
   function prototype and recorded; a definition keeps E2952; a call or other use
@@ -5533,9 +5533,9 @@ Limits of the accepted result:
   full-workspace gate of 2026-10-21 passes 470 suites, 3,555 tests, zero
   failures and 17 ignores, plus Clippy and formatting. The header sweep with the
   new compiler is the remaining exit.
-  Closed on 2026-10-21. The header sweep with the compiler of 53f1cb3e
+  Closed on 2026-10-21. The header sweep with the compiler of 337b3bc8
   (`.evidence/header-sweep-20261021/`) finds no regression against the compilers
-  of 366fd796 and 537e745a: in 2,296 Linux and 1,259 Darwin candidate headers,
+  of 546fe46a and 814188e5: in 2,296 Linux and 1,259 Darwin candidate headers,
   in every mode, in the compiler resource headers and in 14 use probes.
   `<math.h>`, `<tgmath.h>` without `_GNU_SOURCE` and Clang's
   `bounds_safety_soft_traps.h` compile, and the `pthread_cleanup_push` probe
@@ -5548,7 +5548,7 @@ Limits of the accepted result:
 
 - [x] **D18 — Implement `__has_include_next` so Darwin `<limits.h>` reaches the SDK** — `DONE`, P1, 2026-10-21.
   Found on 2026-10-20 by the header sweep; also present in the compiler of
-  366fd796. Clang's resource `<limits.h>` includes the SDK header only when
+  546fe46a. Clang's resource `<limits.h>` includes the SDK header only when
   `__has_include_next(<limits.h>)` holds. EvoCC does not define
   `__has_include_next` and evaluates the test as 0, so on Darwin `#include
   <limits.h>` gives no `PATH_MAX`: a use is E2001, and Apple clang accepts it.
@@ -5556,7 +5556,7 @@ Limits of the accepted result:
   `__has_include_next` behaves as in Clang and GCC on both targets, `PATH_MAX`
   and the other SDK limits exist after `<limits.h>`, and the sweep's E0104 group
   is gone.
-  Closed on 2026-10-21 (EvoIR 2.14.0, commit a2b0c708). `__has_include_next`
+  Closed on 2026-10-21 (EvoIR 2.14.0, commit ceeaee64). `__has_include_next`
   searches as `#include_next` does; in the main file both search as `#include`
   does, as in GCC and Clang. On Darwin, Clang's resource `<limits.h>` reaches
   the SDK header, so `PATH_MAX` exists, and the 64 APR headers compile. A header
@@ -5570,7 +5570,7 @@ Limits of the accepted result:
 <a id="d19"></a>
 
 - [x] **D19 — Close the Darwin SDK header gaps of the header sweep** — `DONE`, P2, 2026-10-23.
-  Found on 2026-10-20; also present in the compiler of 366fd796. Of 1,259 Darwin
+  Found on 2026-10-20; also present in the compiler of 546fe46a. Of 1,259 Darwin
   SDK headers that Apple clang compiles alone, EvoCC refuses 173 at O0 and at
   O2. Apart from D18's 64, the largest groups are: an attribute in a
   parenthesized declarator (`libxml/xmlmemory.h:66`, 53 headers);
@@ -5583,8 +5583,8 @@ Limits of the accepted result:
   implement it or refuse it with a named diagnostic. Exit: the sweep's Darwin
   gap count falls to the refusals that a rule keeps.
   October 21: fixed underlying types of enumerations (EvoIR 2.16.0, commit
-  50f160f8; E1306, E1307 and E2958 are new) and GNU attributes after the
-  parenthesis of a declarator (EvoIR 2.17.0, commit 38fc9fe4) are admitted. A
+  5e47bb1c; E1306, E1307 and E2958 are new) and GNU attributes after the
+  parenthesis of a declarator (EvoIR 2.17.0, commit 274c8852) are admitted. A
   sweep with the final compiler finds no regression; the Darwin gap falls from
   173 to 47 headers per mode (64 APR, 53 libxml and libexslt, 6 fixed-enum and
   three more headers compile). Remaining groups: `__API_AVAILABLE` in Spatial
@@ -5593,7 +5593,7 @@ Limits of the accepted result:
   `infiniband/verbs.h`. The full offline workspace gate of rust-r7 on the final
   tree passes 477 suites, 3,580 tests, zero failures and 20 ignores, plus Clippy
   and formatting.
-  October 21 (EvoIR 2.25.0 to 2.28.0, commits 6e0f6841 to 6e60deb7): framework
+  October 21 (EvoIR 2.25.0 to 2.28.0, commits 780dd334 to 5a8aceb5): framework
   headers, `-F`, `-iframework`, `-framework` and `#import`; Apple clang
   availability for the macOS deployment target (the last `-mmacosx-version-min`,
   then `MACOSX_DEPLOYMENT_TARGET`, then 11.0, where Apple clang uses the host
@@ -5621,7 +5621,7 @@ Limits of the accepted result:
   does not know are still ignored on Darwin, and on Linux EvoCC gives no warning
   where GCC 14 warns. Spatial, Blocks and `infiniband/verbs.h` remain.
   Closed on 2026-10-23. Of the 1,496 SDK and framework headers that Apple clang
-  21 compiles alone, EvoCC at ed7e423f compiles 1,443 at O0 and at O2. Each of
+  21 compiles alone, EvoCC at dd927533 compiles 1,443 at O0 and at O2. Each of
   the other 53 is kept by a rule: 21 need Blocks (19 report E2963; `notify.h`
   and `os/activity.h` hide their declarations without `__BLOCKS__`, and Apple
   clang with `-fno-blocks` fails at the same lines), 2 need `overloadable`
@@ -5642,7 +5642,7 @@ Limits of the accepted result:
   a named diagnostic at the macro call. Exit: `<tgmath.h>` calls with real
   floating and integer arguments agree with GCC 14 on Linux; complex arguments
   follow L04.
-  Closed on 2026-10-21 (EvoIR 2.18.0, commit 6d633c77). Real floating and
+  Closed on 2026-10-21 (EvoIR 2.18.0, commit a3eeeddc). Real floating and
   integer arguments select as in GCC 14, and each argument is evaluated once.
   glibc `<tgmath.h>` calls of unary, binary and ternary functions, `frexp`,
   `ldexp` and nested calls print GCC 14's 37 lines at O0 and O2 in the sealed
@@ -5665,7 +5665,7 @@ Limits of the accepted result:
   each argument is evaluated once. Exit: each class of `float`, `double` and
   `long double` agrees with GCC 14 at O0 and O2 on both targets and in both
   interpreters. In progress in rust-r7.
-  Closed on 2026-10-21 (EvoIR 2.15.0, commit 26052b0d). Every class of `float`,
+  Closed on 2026-10-21 (EvoIR 2.15.0, commit c52cfdd5). Every class of `float`,
   `double` and `long double` agrees with GCC 14 at O0 and O2 in the sealed lane,
   through the builtin and through glibc's `fpclassify`, and in both
   interpreters. [Tests](../../crates/evocc/tests/fpclassify_builtin.rs). The full
@@ -5683,7 +5683,7 @@ Limits of the accepted result:
   Exit: on Darwin `wchar_t`, `wint_t`, the wide literals and the predefined
   macros match Apple clang, a crossed test that passes and compares `wchar_t`
   values agrees with Apple clang, and Linux keeps GCC 14's `unsigned int`.
-  Closed on 2026-10-21 (EvoIR 2.18.1, commit 90748f9c). On Darwin, `wchar_t`,
+  Closed on 2026-10-21 (EvoIR 2.18.1, commit 99d1dad8). On Darwin, `wchar_t`,
   `wint_t`, the wide literals and the wide-character macros follow Apple clang;
   Linux keeps GCC 14's `unsigned int`. The lead's reproducer now matches Apple
   clang. Crossed calls agree with Apple clang in both directions at O0 and O2,
@@ -5705,7 +5705,7 @@ Limits of the accepted result:
   Exit: a store to a bit-field of an uninitialized object is no finding in
   either interpreter; a later read of a member that was never stored is still
   E3001; both rules have tests on both targets.
-  Closed on 2026-10-21 (EvoIR 2.19.0, EvoMIR 1.7.0, commit 2e2dc319). Memory
+  Closed on 2026-10-21 (EvoIR 2.19.0, EvoMIR 1.7.0, commit d4e97af5). Memory
   keeps one initializedness flag per bit. `load` and `store` take an optional
   `[mask=M]`, which the lowering emits for non-volatile bit-field accesses, and
   the C-HIR interpreter follows the same rule. A store to a bit-field
@@ -5752,7 +5752,7 @@ Limits of the accepted result:
   gate generates no masked access, so it cannot meet the difference today. Exit:
   both cases follow D23's rule, or each keeps a documented refusal with a test,
   and the randomized gate generates masked accesses.
-  Closed on 2026-10-21 (EvoIR 2.24.0, EvoMIR 1.11.0, commit 671205d5). A store
+  Closed on 2026-10-21 (EvoIR 2.24.0, EvoMIR 1.11.0, commit 2aab126b). A store
   to a volatile bit-field still reads its container as one volatile access, but
   that read demands no bit and the store initializes only the field's bits.
   EvoMIR loads and stores carry `[mask=M]`, and the EvoMIR interpreter follows
@@ -5833,7 +5833,7 @@ Limits of the accepted result:
   Also found by rust-r11 on 2026-10-21: on Linux, `long double
   __attribute__((vector_size(32)))` ends in E3101, an internal lowering error,
   instead of a named refusal; the release binary of 2026-10-20 does the same.
-  October 22 (EvoIR 2.28.1, commit 7938ccd9): the front end requires a scalar
+  October 22 (EvoIR 2.28.1, commit c23ec2df): the front end requires a scalar
   controlling expression and reports E2103 at a record, union, vector or void
   operand of `if`, `while`, `do`, `for`, `?:`, `!`, `&&` and `||`; vector
   operands of `!`, `&&` and `||` keep E2102, and a vector `?:` condition keeps
@@ -5882,7 +5882,7 @@ Limits of the accepted result:
   that EvoMIR 9.1 records). Native code and the EvoIR interpreter run both
   cases. Exit: the EvoMIR interpreter runs such records, padding and partly
   initialized members included, and the randomized gate covers them.
-  Closed on 2026-10-21 (EvoMIR 1.12.0, commit 091bf91c). The chunk loads and
+  Closed on 2026-10-21 (EvoMIR 1.12.0, commit 6d4d265e). The chunk loads and
   stores that move a by-value record through general registers carry a
   `[transport]` mark, and the EvoMIR interpreter keeps the initializedness of
   each bit and the pointer fragments through them; the 9.1 exception is removed.
@@ -5933,7 +5933,7 @@ Limits of the accepted result:
   a test runs with alignment checking enabled (SCTLR.A in the sealed image, if
   the lane allows it, or an exhaustive offset check of the emitted assembly),
   and native code without the option is unchanged.
-  Closed on 2026-10-22 (EvoMIR 1.13.0, commits 5159ae3b and 23c1e426). Under
+  Closed on 2026-10-22 (EvoMIR 1.13.0, commits a444181a and 7ade2cdc). Under
   `-mstrict-align`, lowering moves a record through general registers in pieces
   no wider than the alignment of their addresses, and aligns the slots that it
   gives such records to 8. A new check (EvoMIR 9.5, E4022) refuses any access
@@ -6064,7 +6064,7 @@ Limits of the accepted result:
     generate every migrated table; `src/generic` holds SSA destruction, linear
     scan, spill placement, slot compaction, the independent verifier, the
     argument cursor and the frame driver, and the workspace boundary test keeps
-    it free of ISA names. At `efcf8c57`: 24/24 original A/B objects, 12/12
+    it free of ISA names. At `aab201fd`: 24/24 original A/B objects, 12/12
     retained-g0 objects and 384/384 native objects on each of Darwin and Linux
     are byte-identical, both corpora execute and agree 384/384, and 10 g0
     certificates replay. Full workspace: 2,986 PASS / 0 FAIL / 4 ignored;
@@ -6085,7 +6085,7 @@ Limits of the accepted result:
     before a nonzero source-permitted, structurally eligible, TV-admitted result.
     The bounded preflight is closed as `NO_ADMITTED_OPPORTUNITY`
     ([record](../../docs/archive/notebook/codegen-negative-preflight-20261002.md)); the
-    full-workspace gate it was waiting for has since passed at `efcf8c57`.
+    full-workspace gate it was waiting for has since passed at `aab201fd`.
     N01 still counts 3/1/85/24/23 TU-local bodies absent from the reference
     objects, so the negative result is about the frozen admission rules, not
     about inlining. [Closure receipt](../../tests/contracts/codegen-n03-preflight-closure-20261002-receipt.json)
@@ -6110,7 +6110,7 @@ Limits of the accepted result:
     bounded synthetic RED, saturated call-preparation repair and refusal of
     recursive spill-temporary expansion. No copy preference or size claim;
     the historical multi-GiB reproducer must not be rerun unbounded.
-    RED `74473d62` reached the test-only 2,048-visit limit in both cases.
+    RED `87dc57f8` reached the test-only 2,048-visit limit in both cases.
     The repair now passes all 59 tests in the six focused allocator/ABI/SSA
     suites, including successful saturated scalar/wide/mixed call setup and
     finite refusal of impossible local pressure. T1 correctness is closed in
@@ -6123,7 +6123,7 @@ Limits of the accepted result:
     gain or broader allocation closure is claimed. Copy preferences and
     spill-quality work remain open; do not rerun to erase the cost misses.
     T2 [copy-hint plan](../../tests/contracts/codegen-n03c-copy-hints-20261003.json)
-    is frozen in `5a477d38`; `e5a9361f` records allocator and public-option
+    is frozen in `2012d1b8`; `10c0ce87` records allocator and public-option
     REDs. Same-class, already assigned locations are optional preferences
     behind `--regalloc-opt=copy-hints`, with unchanged interference checks,
     spill policy and independent verifier. T2 is now **closed opt-in** in the
@@ -6137,7 +6137,7 @@ Limits of the accepted result:
     library ratios are 1.643–2.488, still above 1.4. Defaults remain OFF;
     T1/C2 negative cost results are not upgraded. T3's
     [local reload plan](../../tests/contracts/codegen-n03c-reload-reuse-20261003.json)
-    is frozen in `22d8e3d1`, with REDs in `e44ed429`. The default-OFF
+    is frozen in `1e5d4c72`, with REDs in `de5d2e91`. The default-OFF
     `reload-reuse` implementation removes only same-slot, same-class,
     same-location local reloads after allocation; calls, physical clobbers,
     stores, edge uses and reserved expansion scratch block reuse. No live
@@ -6184,8 +6184,8 @@ Limits of the accepted result:
     remain part of N03d after C1; no closure is inferred from this plan.
     C2 is now frozen in [the local-selection plan](../../tests/contracts/codegen-n03d-local-20261002.json):
     adjacent single-use shift/extension/multiply and indexed-memory idioms,
-    emission only, default OFF. The real-driver RED was reproduced at `504e012a`;
-    implementation `b478bc7c` now has full-workspace 3,018/0/5 ignored and
+    emission only, default OFF. The real-driver RED was reproduced at `eda405ac`;
+    implementation `5ead5857` now has full-workspace 3,018/0/5 ignored and
     both 384-case native corpora ON/OFF green; all OFF historical hashes
     match and all six TU captures complete without proof/bundle failures.
     [C2 result](../../docs/archive/notebook/codegen-local-selection-20261002.md),
@@ -6202,7 +6202,7 @@ Limits of the accepted result:
     C3 is closed opt-in: [plan](../../tests/contracts/codegen-n03d-extensions-20261003.json),
     [result](../../docs/archive/notebook/codegen-extension-reuse-20261003.md),
     [receipt](../../tests/contracts/codegen-n03d-c3-20261003-receipt.json), subject
-    `93847196`. Exact local repeated Extend/Bfx/low-mask reuse; no opcode,
+    `2debb15c`. Exact local repeated Extend/Bfx/low-mask reuse; no opcode,
     interpreter, ABI, allocator or registry change. Full workspace
     3,051 PASS / 0 FAIL / 5 existing ignored; 16 focused Rust and 94 Python
     PASS. Both 384-case native corpora ON/OFF and 72 selected-TU executions
@@ -6218,7 +6218,7 @@ Limits of the accepted result:
     C4 residual control preflight is closed positive:
     [result](../../docs/archive/notebook/codegen-control-preflight-20261003.md),
     [receipt](../../tests/contracts/codegen-n03d-c4-20261003-receipt.json).
-    Subject `2ce2385c`; full workspace 3,051/0/5 existing ignored, 16 Python
+    Subject `3752dbdf`; full workspace 3,051/0/5 existing ignored, 16 Python
     PASS. Forty-eight retained object rows reconcile with S1; current
     B/unchecked has 109 Boolean-branch and 25 compare-combination candidates.
     All 25 combinations are inclusive nonnegative imm12 intervals; one
@@ -6231,7 +6231,7 @@ Limits of the accepted result:
     C5 is closed with compile-cost misses: [plan](../../tests/contracts/codegen-n03d-controls-20261003.json),
     [result](../../docs/archive/notebook/codegen-control-selection-20261003.md),
     [receipt](../../tests/contracts/codegen-n03d-c5-20261003-receipt.json).
-    Implementation `d71b40c4`, measured clean subject `21edc5e8`; EvoMIR 0.64.
+    Implementation `5d072c80`, measured clean subject `f8908b0c`; EvoMIR 0.64.
     Bounded adjacent private-use Boolean branches and inclusive imm12 intervals
     reuse existing MIR operations before unchanged allocation. Full workspace
     3,065 PASS / 0 FAIL / 5 existing ignored; 19 focused Rust and 60 Python PASS.
@@ -6270,7 +6270,7 @@ Limits of the accepted result:
     through the ABI interface, with EvoMIR revision text and ABI corpora.
     After N03a.
     **Closed opt-in, 2026-10-02.** [Frozen plan](../../tests/contracts/codegen-n03f-20261002.json)
-    at `161d81d0`: three opt-in sub-steps behind `--frame-opt=LIST`, paired
+    at `fe64284c`: three opt-in sub-steps behind `--frame-opt=LIST`, paired
     saves (F1), one shared epilogue per function (F2) and leaf-frame elision
     (F3); every default stays off in this slice and a default flip is a
     separate owner decision. Fresh options-off baselines were re-recorded at
@@ -6278,14 +6278,14 @@ Limits of the accepted result:
     deleted its retained objects at closure. The interrupted F1 branch
     `wip/n03f-paired-saves` (`3e5e4688`) has now been reviewed and integrated;
     F2/F3 and EvoMIR 0.56 are implemented behind the same default-off options.
-    RED checkpoints: `0771b134`, `fb12b2d9`; protection clarification:
-    `718f155f`. Nine focused frame tests PASS; native interactions PASS for
+    RED checkpoints: `3c36b3a1`, `99ef46f3`; protection clarification:
+    `b563ef3d`. Nine focused frame tests PASS; native interactions PASS for
     all four cumulative variants unsigned on Darwin and all eight variant /
     PAC combinations on sealed Linux (including canary exit 0/77).
     The Darwin PAC/unwind reference control itself fails (Clang-built subject,
     unsigned harness: exit 90, only two frames); that combination is explicitly
     NOT_VALIDATED, not counted as a successful unwind test.
-    At `af8687f1`: full workspace 2,997 PASS / 0 FAIL / 5 ignored; Clippy,
+    At `d8d1dd3b`: full workspace 2,997 PASS / 0 FAIL / 5 ignored; Clippy,
     format and regeneration PASS. OFF: 24/24 six-TU A/B and 384/384 per-OS
     objects match the baseline. ON: both 384-case corpora execute/agree with
     byte-identical twins, 17 ABI tests pass, all six unit harnesses run under
@@ -6321,7 +6321,7 @@ Limits of the accepted result:
   commit. Lands before the first N03 slice. Parallel lane, two weeks.
   Real Git/ELF injection 8→24→24 bytes correctly located `ff5b17a0`;
   [receipt](../../tests/contracts/codegen-n05-20261002-receipt.json). Fresh six-TU
-  collection completed at `7680ae23`: 12 byte-identical object pairs, 36 source
+  collection completed at `449d589e`: 12 byte-identical object pairs, 36 source
   compiles, 12 bounded native replays and 257 step measurements. Independent
   replay: zero completed rejection/bundle failure. Local pre-push activated
   and exercised through its real entry point; no remote push. Full workspace
@@ -6342,7 +6342,7 @@ Limits of the accepted result:
   lowering rule. Lean statements for patterns start on RISC-V and only after
   those steps. No hand-written ISA specification, no full-ISA proofs.
   E1's [frozen plan](../../tests/contracts/codegen-n07-encodings-20261003.json)
-  is closed by [implementation `4b945e9e`](../../docs/archive/notebook/codegen-encodings-20261003.md)
+  is closed by [implementation `f34c25bb`](../../docs/archive/notebook/codegen-encodings-20261003.md)
   and its [receipt](../../tests/contracts/codegen-n07-e1-20261003-receipt.json):
   full workspace 3,032 PASS / 0 FAIL / 5 ignored; 52 focused Rust and 45
   Python PASS. Both 384-case native corpora and 24 A/B/profile TU objects
@@ -6353,14 +6353,14 @@ Limits of the accepted result:
   E2/E3 migration baselines. Scoped disk net +60,121,088 bytes; about 74 GiB free.
   E2 is [closed for its bounded integer model](../../docs/archive/notebook/codegen-vendor-model-20261003.md):
   [receipt](../../tests/contracts/codegen-n07-e2-20261003-receipt.json), implementation
-  `060f9065`; 2,600 exact cases per interpreter/model/native/QEMU lane, four
+  `86285b7b`; 2,600 exact cases per interpreter/model/native/QEMU lane, four
   boundary refusals, full workspace 3,032/0/5 ignored and 51 Python PASS.
   All 768 native and 24 TU objects remain byte-identical; no new size benefit.
   No-op generation preserves mtimes. Retired duplicate E1 TU objects and
   temporary model products; current E2 replacements plus native baselines
   remain for E3. Scoped disk net at most +164,175,872 bytes; about 67 GiB free.
   E3 is [closed negative](../../docs/archive/notebook/codegen-bounded-smt-20261003.md):
-  implementation `98542c3f`; [inventory](../../tests/contracts/codegen-n07-e3-verdicts-20261003.json)
+  implementation `a7dd22ad`; [inventory](../../tests/contracts/codegen-n07-e3-verdicts-20261003.json)
   covers 59 instruction families, 44 specification rows, nine patterns and
   28 specialized paths. The pinned SMT generator fails before the first
   `add/64` query on `undefined_bitvector`; ordinary constant folding does not

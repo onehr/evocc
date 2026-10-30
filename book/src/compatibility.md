@@ -21,9 +21,9 @@ from recorded UTC run identifiers; they are not source-release or regeneration d
 | Receipt / lane | Input version / ref / commit | EvoCC checkout | Retained result | Passing / total | Run date |
 |---|---|---|---|---|---|
 | [cjson](https://github.com/onehr/evocc/blob/main/tests/contracts/ladder-cjson-receipt.json) | v1.7.19 (2025-09-09, github.com/DaveGamble/cJSON) | not recorded | PASS | 23/23 units | 2026-10-27 11:47:29 UTC |
-| [csmith](https://github.com/onehr/evocc/blob/main/tests/contracts/ladder-csmith-receipt.json) | commit 0cdc710315cfee9035e22ef4363ca479270d1934 | c65f6723 | INCOMPLETE | 932/1000 programs | 2026-10-27 11:11:51 UTC |
+| [csmith](https://github.com/onehr/evocc/blob/main/tests/contracts/ladder-csmith-receipt.json) | commit 0cdc710315cfee9035e22ef4363ca479270d1934 | 01aab995 | INCOMPLETE | 932/1000 programs | 2026-10-27 11:11:51 UTC |
 | [doom](https://github.com/onehr/evocc/blob/main/tests/contracts/ladder-doom-receipt.json) | commit dcb7a8dbc7a16ce3dda29382ac9aae9d77d21284 | not recorded | PASS | 81/81 units | 2026-10-27 12:26:36 UTC |
-| [torture](https://github.com/onehr/evocc/blob/main/tests/contracts/ladder-e0-receipt.json) | releases/gcc-16.2.0 | c65f6723 | PROFILE_CLEAN | 1543/1692 programs | 2026-10-27 11:08:42 UTC |
+| [torture](https://github.com/onehr/evocc/blob/main/tests/contracts/ladder-e0-receipt.json) | releases/gcc-16.2.0 | 01aab995 | PROFILE_CLEAN | 1543/1692 programs | 2026-10-27 11:08:42 UTC |
 | [jq](https://github.com/onehr/evocc/blob/main/tests/contracts/ladder-jq-receipt.json) | jq-1.8.2 | not recorded | PASS | 70/70 units | 2026-10-27 12:14:24 UTC |
 | [llvm-test-suite](https://github.com/onehr/evocc/blob/main/tests/contracts/ladder-llvm-test-suite-receipt.json) | llvmorg-23.1.0 (2919e55176a572ee085cb46b291c47b7092c363e) | not recorded | PROFILE_CLEAN | 1066/1735 programs | 2026-10-27 12:04:26 UTC |
 | [lua](https://github.com/onehr/evocc/blob/main/tests/contracts/ladder-lua-receipt.json) | 5.5.1 | not recorded | PASS | 34/34 units | 2026-10-27 12:17:40 UTC |
@@ -49,7 +49,7 @@ Compiled: 23.
 ### csmith
 
 Input commit: 0cdc710315cfee9035e22ef4363ca479270d1934. Target: aarch64-unknown-linux-gnu.
-Recorded checkout: c65f6723; run: 20261027T111151Z.
+Recorded checkout: 01aab995; run: 20261027T111151Z.
 Compiler SHA-256: ab0c90437192d6824ce884c71d80a028e1d785ae89a11fe58ecb0145d76de525.
 Scope: original seeds; unavailable oracles are not passes.
 Raw outcomes: agree=932, oracle-unusable=68.
@@ -65,7 +65,7 @@ Compiled: 81.
 ### torture
 
 Input commit: 78d4ac73dd391005b895a6148cd9831e28e1208b. Target: aarch64-unknown-linux-gnu.
-Recorded checkout: c65f6723; run: 20261027T110842Z.
+Recorded checkout: 01aab995; run: 20261027T110842Z.
 Compiler SHA-256: ab0c90437192d6824ce884c71d80a028e1d785ae89a11fe58ecb0145d76de525.
 Scope: mixed integer/FP suite; selected options consumed, evidenced inapplicability retained, unknown requirements remain unresolved.
 Raw outcomes: fail=6, not-applicable=61, pass=1554, refused=71.

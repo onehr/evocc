@@ -133,18 +133,18 @@ Each word in a result has a narrow meaning:
 - A skip, a timeout and a missing result are never a pass.
 
 With these words, here is the state of EvoCC on 2026-10-27. The release compiler of commit
-`08bf09bd` measured each item that gives no other date:
+`8177cff2` measured each item that gives no other date:
 
 - Linux 6.18.44 boots with all 2,799 target C files compiled by EvoCC. A second configuration
   booted with 7,008 files and 848 modules on 2026-09-28 (EvoCC `ab2eeb7b…`).
 - Ten of fifteen application lanes pass, and the other five have no compiler failure. Two Doom
   demos give the same frame, by hash, for each of 350 frames under EvoCC, GCC 14 and Clang 19.
-- On 2026-10-06 (commit `e657709b`), the proof-required sweep checked 107 of 107 small integer
+- On 2026-10-06 (commit `e85f5904`), the proof-required sweep checked 107 of 107 small integer
   functions to the final assembly text. Two more functions, optimized with `-Oeq-scalar`, were
   checked too. A native run of the checked code found no difference from the Lean model of the
   source in 14,194 comparisons.
 - The code is 1.8 to 2.3 times the size of GCC 14 `-O2` code on five library files. On
-  2026-10-01 (commit `e625b89c`), the checked rewrites saved 0.8 to 2.4 percent. The project makes
+  2026-10-01 (commit `5a21d523`), the checked rewrites saved 0.8 to 2.4 percent. The project makes
   no claim about speed.
 
 The [evidence document](https://github.com/onehr/evocc/blob/main/docs/evidence.md) keeps every

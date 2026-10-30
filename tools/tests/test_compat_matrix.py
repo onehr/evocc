@@ -27,7 +27,7 @@ class CompatibilityMatrixTests(unittest.TestCase):
             root = Path(directory)
             for name in ("tools", "tests/contracts", "book/src"):
                 (root / name).mkdir(parents=True)
-            for name in ("gen-compat-matrix.py", "bench.py"):
+            for name in ("gen-compat-matrix.py", "bench.py", "history_map.py"):
                 shutil.copyfile(ROOT / "tools" / name, root / "tools" / name)
             for path in sorted(RECEIPTS.glob("ladder-*-receipt.json")):
                 shutil.copyfile(path, root / "tests/contracts" / path.name)

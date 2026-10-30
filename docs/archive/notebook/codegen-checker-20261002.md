@@ -1,8 +1,8 @@
 # N04: bounded C checker interface
 
-**Bounded interface accepted.** Plan frozen in `917f8955`:
+**Bounded interface accepted.** Plan frozen in `626f29f8`:
 [contract](../../../tests/contracts/codegen-n04-20261002.json).
-Implementation: `7680ae23`. [Compact receipt](../../../tests/contracts/codegen-n04-20261002-receipt.json).
+Implementation: `449d589e`. [Compact receipt](../../../tests/contracts/codegen-n04-20261002-receipt.json).
 
 | Item | Evidence / status |
 | --- | --- |

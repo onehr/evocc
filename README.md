@@ -79,7 +79,7 @@ Line 7 of [`mean.c`](examples/mean.c) at four stages of the release compiler:
   </picture>
 </p>
 
-The release compiler of commit `08bf09bd` measured these results on 2026-10-27. Records:
+The release compiler of commit `8177cff2` measured these results on 2026-10-27. Records:
 [Linux kernel](tests/contracts/kernel-direct-virt-receipt.json),
 [SQLite test log](docs/images/showcase/captures.json),
 [application lanes, Doom and c-testsuite](tests/contracts/bench-receipt.json),

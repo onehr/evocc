@@ -146,8 +146,8 @@ this infrastructure check into application performance evidence.
 
 The executable plan is
 [`eqsat-native-aa-20260929.json`](../../../tests/contracts/eqsat-native-aa-20260929.json),
-committed in `935eb09` before any timing. Its implementation checkpoint is
-`252c5152ae53b9dccc0f041df0f84e5f6dd4df53`. The read-only audit checked 13
+committed in `874886e` before any timing. Its implementation checkpoint is
+`6fb3ed052892763b8145e915c5dcee2aaa8ad71d`. The read-only audit checked 13
 distinct artifact paths; the exact manifest SHA-256 is
 `fafdab8c50f19c1980c1cb79ed95cfb88b5b68bb9d00d5553bee9bfd11dab043`.
 
@@ -198,8 +198,8 @@ or AI/model search has been launched.
 
 The repaired plan,
 [`eqsat-native-aa-sdk-20260929.json`](../../../tests/contracts/eqsat-native-aa-sdk-20260929.json),
-was committed as `7210cac4` before execution. It names implementation
-`db5c4cc67bbec2a5459eb0e522754261f36b7f10`, preserves the original source,
+was committed as `48627f8f` before execution. It names implementation
+`b31428b29c31f92a72d98a7748fd45d2a40b3f90`, preserves the original source,
 protocol and resource bounds, and adds explicit SDK/link-editor selection.
 Its 16 declared artifact identities were checked before launch. Plan SHA-256:
 `55a8b266d6bf2b4ea07739272415fd6af744eb5141b82adb49b5d11045803915`.

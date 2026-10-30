@@ -1,6 +1,6 @@
 # N03a preparation: original object baselines
 
-Implementation: `856dfcd3`; A/B plans: `eff2235e`; retained-g0 plan: `4a03735f`.
+Implementation: `018aefec`; A/B plans: `3be04aae`; retained-g0 plan: `3650730a`.
 Plan: [N03a](../../../tests/contracts/codegen-n03a-20261002.json).
 Receipt: [baseline capture](../../../tests/contracts/codegen-n03a-baseline-20261002-receipt.json).
 This checkpoint is preparation, not acceptance of a backend refactor.

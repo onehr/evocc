@@ -7,16 +7,16 @@ what is left for the Rust or the Lean lane.
 
 ## Base and method
 
-- Base: commit `c5019b39`. The crates that the cited code lives in had no
+- Base: commit `9e9fccaf`. The crates that the cited code lives in had no
   working-tree change, except `crates/evocc/src/main.rs`; its lines are those
-  of `c5019b39`.
+  of `9e9fccaf`.
 - The principle: the code is the reference for what EvoCC does today. A
   passage that describes intent with no check is marked "Informative". A
   place where the code looks wrong is listed below as a defect, and the text
   does not bless it.
 - No Cargo, no Lake and no built binary ran. The Python checks below ran.
 - The audit's spec line numbers refer to the texts before batch 2
-  (`659bbe24`). Every passage was located again.
+  (`c9752fcf`). Every passage was located again.
 
 | Document | Before | After |
 | --- | --- | --- |

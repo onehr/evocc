@@ -1,6 +1,6 @@
 # R02e — certified guard first slice
 
-Implementation **`595272a2`**, review repair **`7b385567`**; [normative contract](../../../spec/evoir.md#812-certified-total-integer-guard-folding),
+Implementation **`871ea379`**, review repair **`3fef1dca`**; [normative contract](../../../spec/evoir.md#812-certified-total-integer-guard-folding),
 [frozen plan](../../../tests/contracts/eqsat-size-certified-guards-20261001.json).
 Exact scope: seven total predicates, independent `g0.ub.v1`, existing known bits
 and all-edge seeds; no signed-shift, P0 expansion or second slice.
@@ -13,7 +13,7 @@ Inherited P0 fact-transfer dependencies retain their prior native-backed trust.
 All six Rust/Lean groups rerun: **1,487,689 comparisons, zero differences**
 (1,325,045 P0 + 162,644 guards). Selected runs preserve other groups and their
 metadata. The Lean gate started from a clean tree; its receipt records
-`lean_worktree_clean: true`, Lean commit `595272a2`, and actual answers in all
+`lean_worktree_clean: true`, Lean commit `871ea379`, and actual answers in all
 six groups (`.evidence/eqsat-size/g0-review-gate-lean.log`). Producer nonzero
 transfer now uses `ones()`, with a stray-value-bit regression. Focused Python
 review tests: **18 Lean + 7 status PASS**; original acceptance: **103/103**.

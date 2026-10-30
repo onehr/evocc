@@ -10,7 +10,7 @@ Section 6 in order; each milestone names its tests from Section 5.
 
 ## Base, scope and evidence
 
-- Base: commit `6b1e0f10`. Every `crates/evocc-mir` line number cites that
+- Base: commit `0f598cce`. Every `crates/evocc-mir` line number cites that
   commit; those files had no uncommitted change when they were read.
   `crates/evocc-parser/src/lib.rs` had uncommitted changes, so its line
   numbers can drift a few lines.

@@ -86,7 +86,7 @@ The retained preflight records include rejected candidates and their replacement
 
 ### Frozen method
 
-The measured registration is `agent-repair-corpus-2`, commit `7eed5eac`.
+The measured registration is `agent-repair-corpus-2`, commit `2644dad5`.
 Each registration in this chapter was a local Git tag on the commit that the
 text names. The public repository has the commits, not the tags. To replay a
 run, create the tag on its commit, because the harness checks the tag name
@@ -208,14 +208,14 @@ Finite-input output agreement is not proof of correctness or absence of UB.
 
 ### Reproduce or extend
 
-Use a clean checkout of commit `7eed5eac`, release `evo` and `evocc`, and the
+Use a clean checkout of commit `2644dad5`, release `evo` and `evocc`, and the
 pinned image. Use a new output directory outside the repo. The owner supplies
 the credential. A dry run prints the plan; it does not validate execution
 prerequisites.
 
 ```sh
-git checkout 7eed5eac064e0993d0d26a967b50dc94c71cc55b
-git tag agent-repair-corpus-2 7eed5eac064e0993d0d26a967b50dc94c71cc55b
+git checkout 2644dad50c16a6c2360be1f1f133ff1e38c4b767
+git tag agent-repair-corpus-2 2644dad50c16a6c2360be1f1f133ff1e38c4b767
 python3 tools/experiment/repair.py --out /tmp/repair-replay --dry-run
 python3 tools/experiment/repair.py --corpus-tag agent-repair-corpus-2 --out /tmp/repair-replay
 python3 tools/experiment/report.py /tmp/repair-replay/receipt.json
@@ -249,7 +249,7 @@ for the whole run, and count an item as easy only after scored passes.
 
 The predictions were written before any measured request. They are in
 [`predictions-2.md`](https://github.com/onehr/evocc/blob/main/tools/experiment/predictions-2.md),
-frozen at commit `0701fea5` (`agent-repair-experiment-2`). Each comparison is
+frozen at commit `8ac3fa1d` (`agent-repair-experiment-2`). Each comparison is
 strict and separate for each model. Tokens, rounds, diff size and span overlap use only
 successful repetitions.
 
@@ -347,7 +347,7 @@ Qwen's is eight items. These populations are too small for a general claim.
 
 ### Measured run
 
-The registration `agent-repair-experiment-2` is commit `0701fea5`. It holds the
+The registration `agent-repair-experiment-2` is commit `8ac3fa1d`. It holds the
 corpus, prompt, predictions, protocol, harness and preflight receipt. The run
 started at 2026-10-08T16:17:48Z from a clean checkout of that commit. It used
 six parallel slots and the protocol's USD 160 reported-cost cap.
@@ -539,13 +539,13 @@ stopped in repetition 2, and the groups contain different items.
 
 ### Reproduce
 
-Use a clean checkout of commit `0701fea5`, the release `evo` and `evocc`
+Use a clean checkout of commit `8ac3fa1d`, the release `evo` and `evocc`
 binaries, the sealed image and a provider key with enough limit for the full
 plan.
 
 ```sh
-git checkout 0701fea5e15bb26d8944e6d589a61319a4d1e4f1
-git tag agent-repair-experiment-2 0701fea5e15bb26d8944e6d589a61319a4d1e4f1
+git checkout 8ac3fa1dd38f3aa8e85e96a45489c927227cf170
+git tag agent-repair-experiment-2 8ac3fa1dd38f3aa8e85e96a45489c927227cf170
 python3 tools/experiment/repair.py --protocol tools/experiment/protocol-2.json --dry-run --out /tmp/repair-2-replay
 python3 tools/experiment/repair.py --protocol tools/experiment/protocol-2.json --corpus-tag agent-repair-experiment-2 --parallel 6 --out /tmp/repair-2-replay
 python3 tools/experiment/report.py /tmp/repair-2-replay/receipt.json
@@ -597,7 +597,7 @@ This experiment asks a narrower question: does EvoCC feedback help a coding
 agent repair defects that the default GCC warnings and UBSan do not report?
 The registered method is [protocol-4.md](../../tools/experiment/protocol-4.md).
 The registration `agent-repair-experiment-4` is commit
-`5b765db0467dc92a94077e3f37617c04e16f24b0`. Measurement began from its clean
+`1a1e91754c54b83c687836220127c5e0eb6b156e`. Measurement began from its clean
 tree, after qualification and the six-session pilot.
 
 ### Method and qualification
@@ -831,7 +831,7 @@ programs, all agent models or JSON formatting alone.
 
 [Protocol 5](../../tools/experiment/protocol-5.md) was committed before
 measurement. The registration `agent-repair-experiment-5` is commit
-`9672d2d92691f984af28e94fda0e7d433fdd868e`. Both parts ran from that clean
+`859ab6a4501f579da75306875a0ae98c0780c17b`. Both parts ran from that clean
 commit. The corpora, prompt, conditions, scoring and analysis did not change
 after that commit. Kimi Code 2.0.2 logged `kimi-code/k3` and low effort in every
 session. Each session used a fresh Seatbelt workspace and a 100-step limit.
@@ -1040,7 +1040,7 @@ with the complete repaired program. It cannot run a tool or test its answer.
 
 [Protocol 8](../../tools/experiment/protocol-8.json) was committed before
 measurement. The registration `agent-repair-experiment-8` is commit
-`0b9cef894a1237bbe37848d0494a9615e6ae2b60`. All four runs started from its
+`3e24b50950a0981c8ee34d3ada62a7faa86bd1ff`. All four runs started from its
 clean tree at 10:36 UTC on 2026-10-29, one process for each model. The
 harness is [`silent_chat.py`](../../tools/experiment/silent_chat.py).
 
@@ -1098,7 +1098,7 @@ before the next pilot.
   request took 296 seconds, and one request reached the 300-second deadline.
   Qwen3.8 27B on Cerebras replaced it.
 
-The fourth pilot ran at the clean commit `6a3ded5e`. It met all six go
+The fourth pilot ran at the clean commit `9e9f9aec`. It met all six go
 criteria for all four models, and the registration records the SHA-256
 values of its receipts. All pilots cost $0.08. Pilot data stay out of the
 analysis.

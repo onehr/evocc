@@ -1,8 +1,8 @@
 # N03a result: behavior-preserving backend layering
 
-Implementation: `42a003d2` (register description), `cb65735d`, `a1717dc1`,
-`16cc9b2b` (instruction descriptors, SSA destruction, allocation and verifier),
-`efcf8c57` (ABI tables, argument cursor, frame driver; RED `cc02556e`).
+Implementation: `601c4538` (register description), `632d2667`, `0d78884c`,
+`370ebd87` (instruction descriptors, SSA destruction, allocation and verifier),
+`aab201fd` (ABI tables, argument cursor, frame driver; RED `99bbf26a`).
 [Plan](../../../tests/contracts/codegen-n03a-20261002.json);
 [receipt](../../../tests/contracts/codegen-n03a-20261002-receipt.json); step records
 [1](codegen-n03a-regfile-20261002.md) and [2](codegen-n03a-machine-20261002.md).
@@ -12,7 +12,7 @@ placement, slot compaction, the independent verifier, the argument cursor and
 the frame driver, and names no ISA. Selection, the AArch64 aggregate/HFA/HVA/
 variadic classifier, prologue/epilogue and assembly printing stay per-ISA.
 
-| Check at `efcf8c57` | Observed result |
+| Check at `aab201fd` | Observed result |
 | --- | --- |
 | Step-3 RED | Toy-ABI, ABI-binding and generic tests failed on absent interfaces (E0432); boundary test failed on a generic `sp` comment and 17 handwritten table sites; 13 generator tests errored |
 | Focused Rust / Python | 180 tests in 21 suites, incl. 23-shape × 2-OS placement snapshot; Python 46/46; Clippy, format, regeneration PASS |

@@ -7,7 +7,7 @@ no benchmark verdict, and they need no kernel rebuild and no large disk image.
 
 The six demo captures, the Doom frame and the five log cards come from the builds and the logs of
 the release campaign and the kernel replay of 2026-10-27, with the release compiler of commit
-`08bf09bd`. The three game captures date from 2026-09-29
+`8177cff2`. The three game captures date from 2026-09-29
 ([Three native C games](#three-native-c-games)).
 
 | Demo | What actually executes | Scope / results |
@@ -31,7 +31,7 @@ the release campaign and the kernel replay of 2026-10-27, with the release compi
 ## Three native C games
 
 The EvoCC build that emitted the game objects has the SHA-256 `5785fa7b1ba0…`
-([`games.json`](games.json)). No record names its source commit; the capture commit is `91fce9c8`.
+([`games.json`](games.json)). No record names its source commit; the capture commit is `85a892cd`.
 The games were not built again for release 0.1.0, because their pinned sources and data are not
 kept offline. EvoCC emitted all game C objects. The reference GNU toolchain assembled and linked
 them into AArch64 Linux executables. SDL2, Mesa llvmpipe, libc and libm, the image, font and audio

@@ -299,7 +299,7 @@ v4 vgive(v4 x) { return vsink4(x, x, x, x, x, x, x, x, x, x + x); }",
     },
 ];
 
-/// Started at `e5c05b23`; the reviewed updates are listed above.
+/// Started at `6911afd4`; the reviewed updates are listed above.
 const RECORDED: &[(&str, &str, &str)] = &[
     (
         "integer_stack_arguments",

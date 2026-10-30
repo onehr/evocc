@@ -29,9 +29,9 @@ A/B plan). No R03 activity or latency acceptance inherits this capture.
 
 ## Frozen subject and measurement boundary
 
-- Implementation: `b27e5e230eabd899459a429c7e172f4ba8077590`; manifest commit:
-  `2d39a968`. Earlier regional-fuel and historical-fixture corrections are
-  `3bb0666a` and `52ce286c` respectively.
+- Implementation: `af3ed5d00865fc98e1c4fe834fad086cb71d0865`; manifest commit:
+  `b0501841`. Earlier regional-fuel and historical-fixture corrections are
+  `7e565875` and `7c5c2061` respectively.
 - [Frozen manifest](../../../tests/contracts/eqsat-linux-pilot-20260930-scratch-fix.json):
   SHA-256 `9d21b5838ed38129248bdd898b8bf70e327680349068fb8f13d66f9e84740cc2`.
   Compiler, checker, backend, census, collector, Lean/imports, source/header,
@@ -200,18 +200,18 @@ comparison. No memory-footprint or compilation-speed benefit is claimed.
 
 ## Failures found, reduced and repaired
 
-1. **Regional EVP fuel**, `3bb0666a`: the first zstd pilot reported 815 firings
+1. **Regional EVP fuel**, `7e565875`: the first zstd pilot reported 815 firings
    against a 256 limit because the producer accumulated independent regions.
    The checker correctly rejected it. A 300-region RED now reports the correct
    maximum of one firing per region; standalone replay and interpreter checks
    pass. The checker/limit were not relaxed. The original zstd IR then replays
    correctly under the same input/output identity.
-2. **Historical sealed fixtures**, `52ce286c`: the full workspace caught a
+2. **Historical sealed fixtures**, `7c5c2061`: the full workspace caught a
    byte-exact test regression after that telemetry correction. All historical
    fixture files remain unchanged. Only three pinned old proof hashes admit
    independently recomputed global-to-regional fuel normalization; every other
    byte remains exact, and both old and corrected proofs are checked.
-3. **Collector scratch race and failed-preflight admission**, `b27e5e23`: a
+3. **Collector scratch race and failed-preflight admission**, `af3ed5d0`: a
    checker deleted a scratch file between the collector's existence/stat checks.
    The collector now tolerates only concurrent FileNotFound deletion; missing
    capture roots, permission/I/O failures and storage overruns still fail closed.

@@ -1,8 +1,8 @@
 # N05: bounded measurement automation accepted
 
-Implementation `7680ae23`; [plan](../../../tests/contracts/codegen-n05-20261002.json)
-frozen in `917f8955`, [live plan](../../../tests/contracts/codegen-n05-live-20261002.json)
-frozen in `7680ae23`. [Compact receipt](../../../tests/contracts/codegen-n05-20261002-receipt.json).
+Implementation `449d589e`; [plan](../../../tests/contracts/codegen-n05-20261002.json)
+frozen in `626f29f8`, [live plan](../../../tests/contracts/codegen-n05-live-20261002.json)
+frozen in `449d589e`. [Compact receipt](../../../tests/contracts/codegen-n05-20261002-receipt.json).
 Full workspace: 377 suites, 2,915 PASS / 0 FAIL / 4 ignored; Clippy/fmt PASS.
 Shared Python: 135 PASS. No Lean or registry change.
 
@@ -29,7 +29,7 @@ The actual Git/ELF injection produced 8 -> 24 -> 24 bytes with identical twins;
 receipt-first bisect identified `ff5b17a0`, without switching the checkout.
 It is a detector/localizer test, not an EvoCC application result. The local
 pre-push hook is now configured. Its real entry point accepted simulated update
-stdin for `7680ae23` with `OBSERVED`, no missing commits and no remote push.
+stdin for `449d589e` with `OBSERVED`, no missing commits and no remote push.
 It measures missing clean HEAD; missing historical implementation receipts
 block as NOT_RUN rather than silently checking out another revision.
 

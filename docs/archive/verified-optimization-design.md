@@ -13,8 +13,8 @@ measured results and limits; [TODO.md](../../TODO.md) gives the open tasks.
 
 ## 1. Authority and scope
 
-Inspected implementation: `91fce9c8a2a2bb43620dd02e91affaec76e9b7ac`;
-revision-5 source audit at `4235230` (the preceding design-only commit). The
+Inspected implementation: `85a892cd465fb00361720382dfd3e53aaa06a55c`;
+revision-5 source audit at `5672a9f` (the preceding design-only commit). The
 design was written against EvoIR 1.9.115 and EvoMIR 0.54. The semantic
 authorities are now the [EvoIR specification](../../spec/evoir.md) (revision 2.0.0),
 the [EvoMIR specification](../../spec/evomir.md) (revision 1.0.0) and the

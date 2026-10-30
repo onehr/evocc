@@ -1,7 +1,7 @@
 # N03f: opt-in frame and call overhead
 
-Implementation `a1b0d7f0`, tested checkpoint `af8687f1`; RED `0771b134` /
-`fb12b2d9`, protection amendment `718f155f`, EvoMIR 0.56.
+Implementation `02ed98ef`, tested checkpoint `d8d1dd3b`; RED `3c36b3a1` /
+`99ef46f3`, protection amendment `b563ef3d`, EvoMIR 0.56.
 [Plan](../../../tests/contracts/codegen-n03f-20261002.json);
 [receipt](../../../tests/contracts/codegen-n03f-20261002-receipt.json).
 F1 pairs adjacent saves without moving slots; F2 shares the complete epilogue;

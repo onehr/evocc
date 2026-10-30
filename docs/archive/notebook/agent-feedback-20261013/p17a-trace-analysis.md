@@ -9,7 +9,7 @@ hidden-test correctness. It changes no code, evidence or task file.
 
 ## Sources and method
 
-- Repository commit at analysis time: `6b1e0f10`. Frozen compiler:
+- Repository commit at analysis time: `0f598cce`. Frozen compiler:
   `.build/frozen/366fd796/evocc-darwin` (`evocc 0.1.0 (366fd796613e 2026-10-13)`).
 - P17 receipt `tests/contracts/agent-repair-20261008.json`, SHA-256
   `26132a5205389c4414d0e07ef39600039a10fd0a02a09ff3405c3f6413dd4c96`.
@@ -17,7 +17,7 @@ hidden-test correctness. It changes no code, evidence or task file.
   `226a490f2365782314bf88a0e251ebe7bff15a6a6e2547c3cb13b8dd3c1731b8`.
   The archive was unpacked outside the repository. Each transcript keeps the
   feedback, the request and the raw HTTP response, including `reasoning`.
-- Corpus at tag `agent-repair-corpus-2` (`7eed5eac`), five E3004 items under
+- Corpus at tag `agent-repair-corpus-2` (`2644dad5`), five E3004 items under
   `tests/fixtures/agent-repair/ub-*-overflow/`.
 - No model or API request was made. No Cargo command ran. The frozen compiler
   ran only for the model-free check in "Output delivery and correctness".

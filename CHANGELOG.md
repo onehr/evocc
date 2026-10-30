@@ -430,31 +430,31 @@ The first public version.
 ### Results at this version
 
 The gates, the kernel replay, the 15 application lanes, Doom, the size measurement and the CMake
-builds below ran on 2026-10-27 with the release compiler of commit `08bf09bd`. The other results
+builds below ran on 2026-10-27 with the release compiler of commit `8177cff2`. The other results
 give their dates and were not run again on the final commit. [docs/evidence.md](docs/evidence.md)
 keeps their limits.
 
-- On 2026-10-27 the final health gate (T05) passes on the clean tree of `fecd612f`, whose
-  compiler source is that of `08bf09bd`: the workspace gate, 1,209 Python tests, Ruff, the
+- On 2026-10-27 the final health gate (T05) passes on the clean tree of `9714aa41`, whose
+  compiler source is that of `8177cff2`: the workspace gate, 1,209 Python tests, Ruff, the
   textual grammar, both frozen layout corpora (128 and 22 cases), 13 isolated offline replays,
   the Lean gate, the generated pages, the relative links and the book build.
 
-- On 2026-10-27 both release archives were built from the clean commit `9e83b76a`, whose
-  compiler source is that of `08bf09bd`: `evocc-0.1.0-aarch64-apple-darwin.tar.gz` on macOS 26.6,
+- On 2026-10-27 both release archives were built from the clean commit `5125cc44`, whose
+  compiler source is that of `8177cff2`: `evocc-0.1.0-aarch64-apple-darwin.tar.gz` on macOS 26.6,
   and `evocc-0.1.0-aarch64-unknown-linux-gnu.tar.gz` in an AArch64 Debian 13 container with no
   network. Both pass the smoke steps of `release.yml`. On Linux, `evocc` and `evocc-checker` are
   static, and `tools/tests/test_sysroot.py` passes on the archive. A second macOS build from a
   checkout at another path gave the same bytes. The release assets are built again from the
   dated commit, and their `SHA256SUMS` is published with them.
 
-- On the clean tree of `08bf09bd` the full offline workspace gate passes 522 suites and 3,928
+- On the clean tree of `8177cff2` the full offline workspace gate passes 522 suites and 3,928
   tests with zero failures; 62 ignored tests run only on request, such as the sealed Linux lanes.
   Clippy and formatting pass. The Lean gate passes all its steps: 62 rule theorems against EvoIR
   2.39.0. Neither gate expands the verified language subset.
 - On 2026-10-07 the recorded agent repair loop reaches checked assembly in 12.41 seconds in the
   workspace gate. Its refusal demo returns the three required failures without publishing
   assembly. Paired JSON/proof-record tests pass three consecutive runs and the final gate;
-  both the full offline workspace and Lean gates pass on clean commit `200b4e73`.
+  both the full offline workspace and Lean gates pass on clean commit `d98cd41e`.
 - Linux 6.18.44 ARM64 boots with 2,799 of 2,799 target C objects compiled by EvoCC. The release
   compiler built every target C unit of this configuration in a fresh tree, in one uninterrupted
   Kbuild run. That kernel boots under HVF with pointer authentication and under TCG, as does the
@@ -469,7 +469,7 @@ keeps their limits.
   reference; it has no refusal and no mismatch. Toybox and musl give the same test results as
   their GCC builds. Two Doom demos give the same framebuffer hash for each of 350 frames under
   EvoCC, GCC 14 and Clang 19.
-- On 2026-10-06 (commit `e657709b`) the proof-required sweep checked 107 of 107 pilot entries to
+- On 2026-10-06 (commit `e85f5904`) the proof-required sweep checked 107 of 107 pilot entries to
   the final assembly text. A native run compared 14,194 vectors with the Lean source interpreter
   and found no difference.
 - On five library translation units, the code is 1.8 to 2.3 times the size of GCC 14 `-O2`

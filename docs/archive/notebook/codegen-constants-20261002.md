@@ -1,6 +1,6 @@
 # N03d C1: opt-in constant materialization
 
-Implementation `ebbf3839`; measurement subject `6eb0b585`; RED `0902b06c`;
+Implementation `5142e0ec`; measurement subject `10124226`; RED `f7cd8f1a`;
 EvoMIR 0.57. [Plan](../../../tests/contracts/codegen-n03d-constants-20261002.json),
 [receipt](../../../tests/contracts/codegen-n03d-c1-20261002-receipt.json).
 `--isel-opt=constants` selects strictly shorter MOVZ/MOVK, MOVN/MOVK or
@@ -10,8 +10,8 @@ legacy spelling. Default OFF; kernel/frame-pointer protections unchanged.
 Full workspace: **3,005 PASS / 0 FAIL / 5 ignored**, 390 suites; Clippy,
 formatting and regeneration PASS. Nine focused Rust tests and 80 Python
 tests pass, including 256 native value/NZCV checks. The gate started at
-`ebbf3839`; the later commit only corrected four unexecuted plan labels,
-not code/tests. All subsequent captures used clean `6eb0b585`.
+`5142e0ec`; the later commit only corrected four unexecuted plan labels,
+not code/tests. All subsequent captures used clean `10124226`.
 Darwin/Linux OFF and ON each execute/agree **384/384**, with identical
 object twins. OFF also matches every baseline object and all 24 six-TU
 A/B objects. Six captures each have 12 native harness executions and zero

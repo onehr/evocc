@@ -1,6 +1,6 @@
 # N03b/N03e: bounded negative preflight
 
-Implementation: `856dfcd3`; plans frozen in `7680ae23`.
+Implementation: `018aefec`; plans frozen in `449d589e`.
 Receipts: [original](../../../tests/contracts/codegen-n03-preflight-20261002-receipt.json),
 [closure](../../../tests/contracts/codegen-n03-preflight-closure-20261002-receipt.json).
 Disposition: **CLOSED_NEGATIVE_FIRST_SLICES / NO_ADMITTED_OPPORTUNITY**.
@@ -43,9 +43,9 @@ NOT RUN; no pass is admitted to default O2. The existing volatile-initializer
 source-bridge mismatch remains MISMATCH_NOT_VALIDATED.
 
 Gates: focused 11/11 PASS; the original 2,938-test run failed Clippy and stays
-in the original receipt. The complete recheck at `efcf8c57` passed 2,986 tests,
-0 failed, 4 ignored, plus Clippy, format and regeneration. At `a1b0d7f0`, the
-capture hash still matches and `evocc-passes` is unchanged since `856dfcd3`.
+in the original receipt. The complete recheck at `aab201fd` passed 2,986 tests,
+0 failed, 4 ignored, plus Clippy, format and regeneration. At `02ed98ef`, the
+capture hash still matches and `evocc-passes` is unchanged since `018aefec`.
 This closes the frozen negative slices; broader inlining/CSE needs a new
 design, not a weakened preflight. No measurement was rerun.
 Disk: original capture +75,377 apparent bytes; closure adds only compact

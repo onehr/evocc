@@ -2,7 +2,7 @@
 
 This runbook plans the acceptance work that runs after the last compiler
 repair: T04, K12, K13, K14, T02, K11 with K11f, and B10. It is a plan only.
-Nothing in it has run. It was prepared at HEAD `21f4c2a8` from `TODO.md`, the
+Nothing in it has run. It was prepared at HEAD `adea2e70` from `TODO.md`, the
 [kernel ledger](kernel-selftest-gaps-20260914.md), the receipts in
 `tests/contracts/`, the retained evidence and the tooling.
 
@@ -458,7 +458,7 @@ Keep the default populations: `--programs 500 --campaign all --budget 40`.
 
 Last retained denominators: ctest 220, torture 1,692, csmith 1,000, zlib 19,
 zstd 44, cjson 23, mbedtls 382, tinycc 11, toybox 203, musl 1,339, polybench
-30, llvm-test-suite 1,735, jq 70 (since `2bd2c24b` counts `src/main.c`), lua
+30, llvm-test-suite 1,735, jq 70 (since `1f0928ca` counts `src/main.c`), lua
 34, sqlite 86. Any other denominator needs a stated cause.
 
 **Predicate (TODO B10):** one serial run of all 15 lanes with one compiler

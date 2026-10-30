@@ -250,7 +250,7 @@ zlib cjson jq lua sqlite mbedtls zstd --jobs 2 --programs 500 --campaign all
 Compiler: `.build/floating-targeted/evocc-20260920-closure`, SHA-256
 `ff5f51e540abf40d9f660ade9193a5930ce2f9a274e18fe43d77b4f74c691882`.
 Capture: `.build/floating-targeted/applications-20260920-closure.txt`.
-HEAD remains `9f571cac0e6be6d27915aa82b4c8866ae84eaf9a`; the substantial
+HEAD remains `52f8e3bdeb91c17e8155d482c4690b19e95ab4e6`; the substantial
 working-tree changes are included, not represented by HEAD alone.
 
 For each sorted, unique tracked/untracked nonignored regular path, hash its
@@ -638,7 +638,7 @@ The previously running application queue has finished: unified run
 `20260915T210233.318258Z`, capture
 `.evidence/bench/20260915T210233.318258Z/summary.json`, immutable compiler
 `bbeac066b71954fb239d5876f7ee0fda5bf2218fff9f4ebba76a6a40a33a99eb`,
-HEAD `9f571ca` plus the recorded working-tree changes. All fifteen lanes ran
+HEAD `52f8e3b` plus the recorded working-tree changes. All fifteen lanes ran
 serially, with two emission workers, unchanged program limits and Csmith seeds.
 Neither that queue nor the supplemental kernel survey is still running.
 
@@ -1136,7 +1136,7 @@ boot and selftest results are not promoted by this application benchmark batch.
 
 ## Identity and command
 
-- Checkout: `428980207a421cc3b8273a6a952600a20a82a535`.
+- Checkout: `cef2de223376635cb14678d2e89869119cd765dc`.
 - Driver: `target/frontend/release/evocc`, SHA-256
   `160568e35535306cb0a673baf922945c998959365707becbcb4ae316dbaf2fe6`.
 - Main run: `20260914T154622.690858Z`,
@@ -1248,7 +1248,7 @@ deferred; existing refusal counts below remain the previous measured baseline.
 
 ### Targeted repairs after the review
 
-Measured 2026-09-15 at HEAD `9f571ca` plus working-tree changes. Current release
+Measured 2026-09-15 at HEAD `52f8e3b` plus working-tree changes. Current release
 SHA-256: `59dae2616510eead3fed79285bc8fe0c3831e028efde2156b9e81d43cdca3db1`.
 These measurements do not replace any full-run numerator in the Results table.
 
@@ -1324,9 +1324,9 @@ its recorded omissions, now stops at `sqlite3.c:36452:8`, `__builtin_isnan`
 in `sqlite3IsNaN(double)`. It is still refused and was not installed; no new
 full benchmark numerator is inferred from this targeted result.
 
-Final reviewed-subset validation (working tree based on `9f571ca`):
+Final reviewed-subset validation (working tree based on `52f8e3b`):
 
-- `CARGO_TARGET_DIR=target/frontend CARGO_BUILD_JOBS=2 CARGO_NET_OFFLINE=true tools/gate-changed.sh 9f571ca --offline -j 2`:
+- `CARGO_TARGET_DIR=target/frontend CARGO_BUILD_JOBS=2 CARGO_NET_OFFLINE=true tools/gate-changed.sh 52f8e3b --offline -j 2`:
   **2,311 passed / 0 failed / 4 pre-existing ignored**, 282 test targets;
   Clippy `-D warnings` and fmt passed. This count is the changed/reverse-dependent
   crate set, expanded by the memory change, not a newly measured full workspace.
@@ -2089,7 +2089,7 @@ lowering tests, **23/23** typeof scope
 regressions and **175/175** lifecycle/TLS/vector/atomic/call/query regressions.
 These totals include negative cases pinning retained refusals; they are not
 twenty-five newly passing benchmark programs. Textual shapes are **51/51**, zero
-differences. This round's final changed-code gate against `9f571ca` passed **2,438
+differences. This round's final changed-code gate against `52f8e3b` passed **2,438
 tests / 0 failed / 4 historical ignored**, in 301 result groups across 16
 affected/dependent crates; Clippy `-D warnings` and fmt passed. The ladder
 Python tests passed **148/148**, Ruff and `git diff --check` were clean.
@@ -2114,7 +2114,7 @@ forms. In particular `20020225-2`, `930930-2` and static-relocation row
 GCC accepts it but Clang rejects it even in GNU89, so acceptance is not a shared
 profile requirement. Original raw results are unchanged pending actual replay.
 
-The baseline for this extension is `9f571ca`, with the same release-driver
+The baseline for this extension is `52f8e3b`, with the same release-driver
 SHA-256 listed above. The initial batch keeps that binary unchanged.
 The first repair retest uses driver `607934eeed76306920ea07644acda53bf268155b0482c23fae470225d9783245`
 (distant block-address emission); the next uses
@@ -2233,7 +2233,7 @@ their separate targeted implementation results are recorded above.
 
 Validation after the compiler repairs:
 
-- `CARGO_TARGET_DIR=target/frontend CARGO_BUILD_JOBS=2 CARGO_NET_OFFLINE=true tools/gate-changed.sh 9f571ca --offline -j 2`:
+- `CARGO_TARGET_DIR=target/frontend CARGO_BUILD_JOBS=2 CARGO_NET_OFFLINE=true tools/gate-changed.sh 52f8e3b --offline -j 2`:
   **1,868 passed / 0 failed / 4 ignored**, over the nine changed/dependent
   crates, followed by Clippy `-D warnings` and fmt **PASS**. This is the
   changed-crate closure, not a new full-workspace count; the four existing
@@ -2402,7 +2402,7 @@ a mixed test PASS does not close the full 382-object milestone.
 - `ruff check tools tests/acceptance`:
   **PASS**.
 - `git diff --check`: **PASS**.
-- `tools/gate-changed.sh 428980207a421cc3b8273a6a952600a20a82a535`:
+- `tools/gate-changed.sh cef2de223376635cb14678d2e89869119cd765dc`:
   no crate changed; no Rust tests or compiler rebuild required.
 - Real Mbed TLS subject execution: **selftest and 148/148 CTest PASS**;
   capture `.evidence/ladder/mbedtls/20260914T165302Z/`.

@@ -5,7 +5,7 @@ The September 7 measurements below are historical; they are not the current
 benchmark or kernel acceptance status.
 
 Evaluation started 2026-09-07, run `20260907T141450.311159Z`, subject
-`4e86995bc357615abd0df698c4bf64097a5fa026`. Compiler binary SHA-256:
+`ad6176f32bf5b122830106390019898c99a9efe3`. Compiler binary SHA-256:
 `b13d4a08539dfb6056e61f47631768357ced2e9f404247d7893593643c9ca6e6`.
 This change adds an evaluation interface; it changes no compiler semantics.
 
@@ -19,7 +19,7 @@ The [status page](../../status.md) is generated from those receipts. This review
 records interpretation, not a second acceptance authority.
 
 The musl correction is measured by a second invocation,
-`20260907T153648.272156Z`, checkout `a7779e0`, with the same compiler digest:
+`20260907T153648.272156Z`, checkout `388c399`, with the same compiler digest:
 
 ```sh
 python3 tools/bench.py musl --no-build --jobs 4 --budget 20
@@ -200,7 +200,7 @@ the compiler failures enumerated above.
 | `python3 -m unittest discover -s tools/k1/tests` | 80 passed |
 | `ruff check tools tests/acceptance` | PASS |
 | `cargo fmt --all -- --check` | PASS |
-| `bash tools/gate-changed.sh 8a05871` | No crate changed; no Rust tests selected |
+| `bash tools/gate-changed.sh 13ca033` | No crate changed; no Rust tests selected |
 | `git diff --check` | PASS |
 
 The 173 Python tests also pass in an isolated `git clone --no-local` checkout,
@@ -212,7 +212,7 @@ were checked independently before writing this review.
 
 ## Address-operand measurement
 
-Subject `ce81980`, release SHA-256
+Subject `8ad4ea3`, release SHA-256
 `256036c08ef66f493dff435d4504eea6ec3ea988745a237c7b5cea36c3b9fded`:
 
 - `python3 tools/survey-cohort.py --command-record-root .build/reference/gcc-lane-1 --action lower --evocc target/frontend/release/evocc --jobs 4 --timeout 60`:
@@ -230,7 +230,7 @@ These measurements precede the signed-shift, stack-realignment and tied-input
 fixes. They are not closure evidence for those later commits. Raw lowering
 and mixed-link unit denominators are distinct and are never added together.
 
-## Native replay on `33bc3d4`
+## Native replay on `2f15059`
 
 The release driver digest is
 `8cda0bfd926552d1d118487d9c7e9afca71c1e38706e87e9b3b468c464238e84`.

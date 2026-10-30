@@ -227,7 +227,7 @@ observation. Code-size benefit is distinct from the inconclusive latency result.
 
 - Manifest SHA-256:
   `84a5dc34affb06189e29c558b5a444600aaaef9ea8794fa30ce08585ab5b7713`;
-  preregistration commit `4e25506f`.
+  preregistration commit `22900805`.
 - Outer receipt SHA-256:
   `cbed2b185b4c9c2a2f349fca8f4d4ab10c9f2e15d995255969e8ad2f9cf9241f`.
 - Raw guest receipt SHA-256:

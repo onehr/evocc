@@ -6,7 +6,7 @@ It specifies future work. EvoCC does not yet compile for RISC-V.
 
 ## Base, scope and evidence
 
-- Source base: `6a1519b9`. Paths below refer to that tree, before any backend
+- Source base: `2ff5cf38`. Paths below refer to that tree, before any backend
   restructuring. R04a will move some of these definitions.
 - Scope: RV64GC, LP64D, little-endian Linux userspace. No kernel backend.
 - Measurements: GCC 14 cross-compilation and QEMU user execution on 2026-10-28.

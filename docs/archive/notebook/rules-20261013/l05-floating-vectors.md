@@ -10,7 +10,7 @@ record. Section 7 lists the points that the evidence does not settle.
 | Item | Identity |
 | --- | --- |
 | Compiler | `.build/frozen/366fd796/evocc-darwin`, `evocc 0.1.0 (366fd796613e 2026-10-13)`, SHA-256 `93eacee4e6e917049d041346c9ecbeff1266f8b17dd26bc684eeeed1a53c4c04` |
-| Specifications | `spec/evoir.md` Revision 2.1.0 and `spec/evomir.md` Revision 1.0.1 at HEAD `366fd796` |
+| Specifications | `spec/evoir.md` Revision 2.1.0 and `spec/evomir.md` Revision 1.0.1 at HEAD `546fe46a` |
 | Linux references | GCC 14.2.0-19 (`gcc-14`) and Clang 19.1.7 (`clang-19`) in `evo-nexlab:sealed`, image `sha256:e8d52bdced1fa49a5a56cde7e1173c54bd81832cc111441f6a31148ec03ead93`, glibc 2.41, linux/arm64, no network |
 | Darwin reference | Host Apple clang 21.0.0 (clang-2100.1.1.101), arm64-apple-darwin25.6.0 |
 | Linux target | `--target=aarch64-unknown-linux-gnu --sysroot=sysroot/aarch64-unknown-linux-gnu`, GNU11 |
@@ -284,7 +284,7 @@ interpreter. EvoIR and native refuse them with E3050.
   callee, with no diagnostic. Case 3 is an ordinary `struct { f4 a, b; }`.
   The cause is
   `homogeneous_vector_aggregate` in `crates/evocc-lower/src/lib.rs` (line
-  3639 at HEAD `366fd796`): it accepts only integer lanes, and it requires
+  3639 at HEAD `546fe46a`): it accepts only integer lanes, and it requires
   equal lane count and width where AAPCS64 requires only equal vector size.
 - **Integer defect found on the way.** The same function does not classify
   `struct { int x4; short x8; }` as an HVA. EvoCC callee with a GCC or Clang caller

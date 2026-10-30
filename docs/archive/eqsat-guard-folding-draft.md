@@ -3,7 +3,7 @@
 Draft 1 — 2026-10-01. **Exact first slice OWNER_APPROVED.**
 The normative integration is EvoIR 1.9.116 Section 8.12 and `g0.ub.v1` in
 Section 11.6. [First-slice acceptance](notebook/eqsat-certified-guards-20261001.md)
-is complete at `595272a2`: full workspace and Lean green, six independently
+is complete at `871ea379`: full workspace and Lean green, six independently
 replayed TU chains and reproducible native objects. P0 stays unchanged; no
 second slice is authorized, designed or scheduled.
 

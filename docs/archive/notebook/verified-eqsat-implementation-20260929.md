@@ -2,7 +2,7 @@
 
 Scope: [design revision 5](../verified-optimization-design.md), starting with TODO R01a.
 This is not G2, R02 performance acceptance, an AI search result, or full
-implementation of the design. The starting checkout was `a4c5209`.
+implementation of the design. The starting checkout was `5b794b2`.
 
 ## R01a shared verification chain
 
@@ -11,7 +11,7 @@ sealed-certificate suite failed all three tests because chain/census directories
 were incorrectly placed among certificate triples. These historical scoped
 counts remain valid but do not close R01a. The subsequent
 [review corrections and full-workspace requalification](eqsat-review-closure-20260929.md)
-at `31234f5` close all four review blockers and R01a. This does not admit an
+at `b3af7e9` close all four review blockers and R01a. This does not admit an
 application census without R02a's own manifests and correctness gates.
 
 The driver and policy evaluator now call the same policy-aware persistent

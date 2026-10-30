@@ -7,12 +7,12 @@ receipt or task file.
 
 ## Base, scope and evidence
 
-- Base: commit `d362bde0`. The cited parts of `crates/evocc-mir`,
+- Base: commit `7e1eb2b2`. The cited parts of `crates/evocc-mir`,
   `crates/evocc-chir`, `crates/evocc-lower`, `lean/EvoIR/Alloc`,
   `lean/EvoIR/Asm`, `lean/EvoIR/MachineTransport*.lean`, `spec/evomir.md`
   (1.2.1) and `spec/verification.md` (1.1.1) had no uncommitted edits when
   read. `crates/evocc/src/main.rs` had edits by another agent, so its line
-  numbers are those of `d362bde0`.
+  numbers are those of `7e1eb2b2`.
 - Compiler: the frozen release `.build/frozen/366fd796/evocc-darwin`,
   SHA-256 `93eacee4e6e917049d041346c9ecbeff1266f8b17dd26bc684eeeed1a53c4c04`
   (the same bytes as `target/frontend/release/evocc` at the time). Adapter:
@@ -94,8 +94,8 @@ goes to the end of a one-successor predecessor, else to the top of the target
 112 copies.
 
 History (measured: `git log -S`). The exclusion arrived with forwarding
-(`6eafa9a0`, 2026-09-24): "Inline asm is deliberately excluded initially: its
-tied/read-write constraints require a separate audit." `c4458630` (2026-09-26)
+(`7fb2277e`, 2026-09-24): "Inline asm is deliberately excluded initially: its
+tied/read-write constraints require a separate audit." `d928c063` (2026-09-26)
 admitted ordinary `asm` without fixed bindings. The only recorded hazard is the
 joint copy of indirect dispatch over a self-edge
 (`tests/fixtures/loop-value-transport.out:11-14`, `ssa.rs:209-211`). `asm goto`
@@ -391,14 +391,14 @@ So N08's exit is reachable for `asm-goto-live-transport.c` with A and R2. For
 It is a validation-scope rule, not a repair of a known miscompile. The quality
 plan says: "The kernel profile and any frame-pointer-requesting option keep
 today's output until the kernel gates have been run with the new code"
-(`docs/archive/codegen-quality-plan.md:502-507`). `718f155f` (2026-10-02,
+(`docs/archive/codegen-quality-plan.md:502-507`). `b563ef3d` (2026-10-02,
 N03f) amended the plan: frame-pointer requests and kernel markers suppress all
 three frame variants, not only leaf frames (the handoff amendment in
-`tests/contracts/codegen-n03f-20261002.json`). `a1b0d7f0`, 24 minutes later,
-put that condition into `emit_function`. `bb2f3b5f` (2026-10-03, N03c T2)
+`tests/contracts/codegen-n03f-20261002.json`). `02ed98ef`, 24 minutes later,
+put that condition into `emit_function`. `4acf3304` (2026-10-03, N03c T2)
 moved it to `CodegenOptions::protects_codegen` (`emit.rs:70-79`), so that
-selection and allocation variants share it (`native.rs:245`). `21f4c2a8` and
-`f82d5e61` only describe it. `-mgeneral-regs-only`, the system-register guard
+selection and allocation variants share it (`native.rs:245`). `adea2e70` and
+`62242eff` only describe it. `-mgeneral-regs-only`, the system-register guard
 and a nonzero patchable entry serve as kernel markers; arm64 Kbuild always
 passes the first. EvoMIR Section 1.4 says "the variants are not validated
 there" (`spec/evomir.md:160-165`). Today the guard changes no kernel object:

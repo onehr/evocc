@@ -14,6 +14,9 @@ ROOT = Path(__file__).resolve().parents[2]
 SPEC = importlib.util.spec_from_file_location("render_readme", ROOT / "tools/render-readme.py")
 render = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(render)
+HISTORY = importlib.util.spec_from_file_location("history_map", ROOT / "tools/history_map.py")
+history_map = importlib.util.module_from_spec(HISTORY)
+HISTORY.loader.exec_module(history_map)
 
 
 def asm_block(text):
@@ -109,7 +112,7 @@ class ScoreboardTests(unittest.TestCase):
         kernel = render.receipt("kernel-direct-virt-receipt.json")
         run = render.receipt("bench-receipt.json")["run"]
         caption = readme.split("scoreboard-light.svg", 1)[1].split("## Quick start", 1)[0]
-        self.assertIn(f"`{kernel['compilerCommit'][:8]}`", caption)
+        self.assertIn(f"`{history_map.current(kernel['compilerCommit'])[:8]}`", caption)
         self.assertIn(f"{run[:4]}-{run[4:6]}-{run[6:8]}", caption)
 
     def test_committed_scoreboard_is_current(self):

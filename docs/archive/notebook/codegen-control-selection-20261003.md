@@ -1,7 +1,7 @@
 # N03d C5: bounded integer control selection
 
-Implementation `d71b40c4`; clean measured subject/plans `21edc5e8`; RED
-`d46e2210`; work plan `b9ce3937`; EvoMIR 0.64.
+Implementation `5d072c80`; clean measured subject/plans `f8908b0c`; RED
+`be5ce134`; work plan `d3d65932`; EvoMIR 0.64.
 [Plan](../../../tests/contracts/codegen-n03d-controls-20261003.json),
 [receipt](../../../tests/contracts/codegen-n03d-c5-20261003-receipt.json).
 `--isel-opt=controls` selects two adjacent private-use integer idioms before

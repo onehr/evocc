@@ -6,9 +6,9 @@ this packet, **D** a documented fact with its source, and **I** an inference.
 
 ## Subject
 
-- Compiler: `.build/frozen/366fd796/evocc-darwin`, `evocc 0.1.0 (366fd796613e
+- Compiler: `.build/frozen/366fd796/evocc-darwin`, `evocc 0.1.0 (546fe46a26e8
   2026-10-13)`, SHA-256 `93eacee4e6e917049d041346c9ecbeff1266f8b17dd26bc684eeeed1a53c4c04`;
-  `spec/evoir.md` Revision 2.1.0 and `spec/evomir.md` Revision 1.0.1 at HEAD `366fd796`.
+  `spec/evoir.md` Revision 2.1.0 and `spec/evomir.md` Revision 1.0.1 at HEAD `546fe46a`.
 - Linux: GCC 14.2.0-19 and Clang 19.1.7 in `evo-nexlab:sealed`, image
   `sha256:e8d52bdced1fa49a5a56cde7e1173c54bd81832cc111441f6a31148ec03ead93`,
   glibc 2.41; helpers from `libgcc-14-dev` 14.2.0-19 `libgcc.a`, SHA-256

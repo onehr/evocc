@@ -9,7 +9,7 @@ directory is in `lean/EvoIR/Rewrite/`.
 
 ## Base and method
 
-- Base: commit `d362bde0`. The Lean tree had no working-tree change. Only
+- Base: commit `7e1eb2b2`. The Lean tree had no working-tree change. Only
   `lean/EvoIR/Rewrite/Tests.lean` changed. No checker, theorem or
   definition outside the test file changed.
 - Toolchain: Lean `v4.32.2` (`lean/lean-toolchain`). No Cargo ran.

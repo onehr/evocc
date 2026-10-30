@@ -1,6 +1,6 @@
 # N03c T3: local resident spill reloads
 
-Clean subject `f79373da`; RED `e44ed429`; plan `22d8e3d1`; EvoMIR 0.62.
+Clean subject `aa829138`; RED `de5d2e91`; plan `1e5d4c72`; EvoMIR 0.62.
 [Plan](../../../tests/contracts/codegen-n03c-reload-reuse-20261003.json),
 [receipt](../../../tests/contracts/codegen-n03c-t3-20261003-receipt.json).
 `--regalloc-opt=reload-reuse` removes only a repeated logical-slot reload

@@ -10,7 +10,7 @@ milestone names its tests from Section 5.
 
 ## Base, scope and evidence
 
-- Base: commit `ff966284`. `crates/evocc-evoir/src/lib.rs` and
+- Base: commit `5010b27a`. `crates/evocc-evoir/src/lib.rs` and
   `spec/evoir.md` had uncommitted edits by other agents when they were read,
   so their line numbers can drift. This note cites the specification by
   section, not by line.

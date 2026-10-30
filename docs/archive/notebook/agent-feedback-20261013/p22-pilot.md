@@ -10,7 +10,7 @@ registered. Pilot data stay out of the measured analysis.
 - Protocol: Protocol B in `protocols.md`, with the amendment of 2026-10-20
   (F is the current `full-1` with the corrected T03s scope sentence). Machine
   form: `tools/experiment/protocol-7.json`, status `unregistered`.
-- Harness: `tools/experiment/agent_repair.py` at commit `8d1ef06c`.
+- Harness: `tools/experiment/agent_repair.py` at commit `d1a7e4da`.
 - Compiler: release `evo` `7519053b` and `evocc` `49ddc244`,
   `evocc 0.1.0 (7fec1ce553a3 2026-10-20)`. The binaries did not change during
   the pilot.

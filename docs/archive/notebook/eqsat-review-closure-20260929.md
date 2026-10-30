@@ -61,7 +61,7 @@ after exit 0; logs and compiler/checker hashes remain in
 `.evidence/eqsat-review-20260929-WesLHU/`. This package check preceded the MIR
 caller follow-up below; the final full-workspace gate qualifies that follow-up.
 
-The final source subject is commit `31234f5`. With a clean tracked worktree,
+The final source subject is commit `b3af7e9`. With a clean tracked worktree,
 the full-workspace command above exited **0** and printed
 `gate-changed: full workspace green`:
 

@@ -30,6 +30,9 @@ repair = importlib.util.module_from_spec(_SPEC)
 _SPEC.loader.exec_module(repair)
 Failure, Stop = repair.Failure, repair.Stop
 ROOT = repair.ROOT
+_HISTORY = importlib.util.spec_from_file_location("history_map", ROOT / "tools/history_map.py")
+history_map = importlib.util.module_from_spec(_HISTORY)
+_HISTORY.loader.exec_module(history_map)
 PROTOCOL = HERE / "protocol-6.json"
 URL = repair.URL
 ENDPOINTS = "https://openrouter.ai/api/v1/models/{}/endpoints"
@@ -160,7 +163,8 @@ def preflight(protocol, protocol_path):
     prompt = ROOT / protocol["prompt_file"]
     if repair.digest(prompt) != protocol["prompt_sha256"]:
         raise Failure("prompt_changed")
-    if git("rev-parse", protocol["corpus_tag"] + "^{commit}") != protocol["corpus_commit"]:
+    # A registered protocol keeps the commit it recorded; the history rewrite maps name its successor.
+    if git("rev-parse", protocol["corpus_tag"] + "^{commit}") != history_map.current(protocol["corpus_commit"]):
         raise Failure("corpus_tag_moved")
     corpus = [path / name for path in items(protocol).values() for name in protocol["item_files"]]
     if repair.run(["git", "diff", "--quiet", protocol["corpus_tag"], "--", *(str(p.relative_to(ROOT)) for p in corpus)])["exit_code"]:

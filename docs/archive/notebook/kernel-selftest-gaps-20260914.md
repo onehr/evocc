@@ -933,7 +933,7 @@ volatile events, guards, ordinary block arguments and atomics are not rewritten.
 The permanent C/MIR reductions pass both language interpreters, pre-allocation
 MIR, independent allocation verification, 48 AArch64 assembler checks and
 12 sealed native controls (three compilers × O0/O2 × ordinary/strict alignment).
-Changed gate against `b92cc58`: **1008 PASS, 0 FAIL, 4 historical ignored**;
+Changed gate against `9dae2af`: **1008 PASS, 0 FAIL, 4 historical ignored**;
 Clippy and fmt pass. The two unchanged old-config KVM commands were recovered
 from the subject tree and checked against their recorded hashes, avoiding the
 concurrently changing reference build. Exported names/kinds still agree; text
@@ -958,7 +958,7 @@ bytes). `.build/floating-targeted/runtime-config-20260926/reference.json` and
 `reference.log` preserve the completed command and identity.
 
 Targeted compiler checkpoint: `io-pgfault.o`, `iommu-sva.o` and IOMMUFD's
-`selftest.o` now all emit and assemble with the final `aef1a3a` release binary,
+`selftest.o` now all emit and assemble with the final `3d498e2` release binary,
 matching GCC exported names/kinds. Their original argv and generated-header
 hashes are in `runtime-config-20260926/iopf-objects.json`; nothing is installed.
 An unchanged iommufd ELF plus its original libc/loader/libcap form a **3 MiB**
@@ -1336,7 +1336,7 @@ totals are unchanged; the new audit prevents interpreting them as all inner
 assertions passing. The later seven-program serial reference genuinely prints
 `23 / 0 / 0`, so its outcome is not retroactively discarded.
 
-Separately, compiler commit `752e193` folds pure executable integer arithmetic
+Separately, compiler commit `64c97ee` folds pure executable integer arithmetic
 through the existing executed-expression evaluator. It does not use the more
 permissive ICE evaluator or discard entered labels, effects or reached UB.
 The focused controls pass both interpreters and GCC14/Clang19/EvoCC native;
@@ -2080,9 +2080,9 @@ remain below. No full-suite PASS or complete expanded configuration is claimed.
   failed captures; the source test and its assertions were not changed.
 - Seven more expanded-configuration modules assemble with matching symbols
   after pure floating constant arithmetic is resolved to its integer result.
-  Commit `1e8a5f0`, replay `floating-constants-20260914`. Total tailored repairs
+  Commit `6485a57`, replay `floating-constants-20260914`. Total tailored repairs
   were **36 of the original 52 refusals**, not a new full-survey numerator.
-- `bb98e29` applies the approved allocation-size attribute exception and shared
+- `7afe10c` applies the approved allocation-size attribute exception and shared
   dynamic object-size resolution. All ten original refusing units assemble
   with matching symbols in `dynamic-extents-20260914`; the changed gate passes.
   Tailored repairs now cover **46/52** old refusals. The 2,897 built-in records
@@ -2093,7 +2093,7 @@ remain below. No full-suite PASS or complete expanded configuration is claimed.
   now normalizes conditions to truth values and captures converted arguments.
   All ten actual-header replays emit, assemble, match symbols and install;
   the 46-test query suite, changed gate and GCC/Clang/EvoCC native fixture pass.
-  Commit `0d1fab9`; the original incomplete composition is retained.
+  Commit `30ae55a`; the original incomplete composition is retained.
 - The complete 2,897-object composition passes its generated-input fixed point,
   export-table check and post-link object-hash audit (zero GCC fallback), but
   **linking fails** on six impossible compile-time assertion calls in two
@@ -2103,7 +2103,7 @@ remain below. No full-suite PASS or complete expanded configuration is claimed.
   execution context, not as source ICEs. The query suite is 49/49 and changed
   gate is green; both original units re-emit with no assertion calls.
   The earlier approval-capacity failures prevented launches, not test passes.
-  After approval resumed, `cfc5d64`'s GCC/Clang/EvoCC native fixture passed,
+  After approval resumed, `34db507`'s GCC/Clang/EvoCC native fixture passed,
   both objects installed, the generated export object was recompiled, and
   full linking completed. All **2,897/2,897 built-in target-C object hashes**
   survive the post-link audit, with **zero GCC fallback**. Capture:
@@ -2324,7 +2324,7 @@ test/expectation or changing full-run totals. [Exact identities and evidence](..
   same seven breakpoint failures; its 28 padding regressions are now repaired.
 - The two built-in KUnit compilation refusals require dynamic object size
   inferred from `alloc_size(1)` / `(1,2)`. Ten units depend on that rule.
-  Revision 1.9.97 records the user-approved exception; `bb98e29` passes 45
+  Revision 1.9.97 records the user-approved exception; `7afe10c` passes 45
   focused tests, the changed gate, and all ten original-unit replays. The
   built-in objects have been rebuilt; later link blockers are repaired and
   the full EvoCC KUnit run now exists.
@@ -2480,7 +2480,7 @@ are in `builtin-probes/20260914-gnu-inline/oracles.out`.
 An independent refusal in `machine_halt` reduces to `stop(); while (1);`:
 dead address pruning discarded loop-only effect parameters. The repair roots
 existing mem/world parameters without changing validator rules or loop
-termination; commit `783a4e7` passes its four control-flow variants, the 56-test
+termination; commit `a6647cd` passes its four control-flow variants, the 56-test
 query suite and changed gate, and the original `process.o` emits assembly.
 The other two parser refusals are static numeric-pointer comparisons in
 trace-field signedness metadata, not 100 independent recovery errors.
@@ -2497,9 +2497,9 @@ repeats both emissions with empty stderr in 10.263 and 6.138 seconds, and its
 native fixture again exits zero. An initial shortcut bypassed static fuel
 accounting and failed the existing budget test; it was removed before commit.
 Both that budget test and the nonrecursive deep-initializer tests pass.
-Commit `386339d` closes the narrow compiler repair; its changed gate reports
+Commit `6695c94` closes the narrow compiler repair; its changed gate reports
 1,576 passed / zero failed / three existing ignored tests, Clippy and fmt
-clean. Commit `783a4e7` closes the independent infinite-loop token repair.
+clean. Commit `a6647cd` closes the independent infinite-loop token repair.
 Full supplemental composition and execution remain pending. After the inline
 repair, targeted `.vmlinux.export.o` and `arch/arm64/kernel/process.o` replays
 assemble and have exact reference-symbol parity (zero and 26 external
@@ -2574,7 +2574,7 @@ replace the earlier 935-program runtime inventory.
 
 The supplemental userspace runtime now contains bpftrace 0.23.2 and its
 runtime libraries; chrooting into that exact root and running `bpftrace
---version` exits zero. Commit `09f72ff` adds the declared dependency.
+--version` exits zero. Commit `d0043e6` adds the declared dependency.
 The earlier 935-program payload was not changed, and the three tracing-based
 ublk cases have not yet run against the new kernel configuration. Installing
 the command does not substitute for the required kernel tracepoints.
@@ -3886,7 +3886,7 @@ scratch disk, and original replays reuse the retained runtime pair.
 
 ### Direct Kbuild build, without seeded objects — 2026-10-11
 
-Commits `20d48ff6`, `dbf569c8` and `e5bf1a72` repair driver probes and assembly
+Commits `11ddb7eb`, `06f5992c` and `68e32c41` repair driver probes and assembly
 transport, retain evaluation before constant-result asm operands, preserve
 inlined constant pointers through assignments, and detect test-time C object
 replacement in copied application trees. The first full gate exposed cJSON's
@@ -3898,7 +3898,7 @@ one clean Linux 6.18.44 `tinyconfig` build from the existing case-sensitive
 source tree. `mrproper` removes the diagnostic output; no `.o` remains before
 configuration. Kbuild then uses the fixed EvoCC binary through Image linking.
 No target object is copied in, no `.cmd` is rewritten, and no banner is edited.
-The compiler hash is unchanged at the end. `compile.h` names EvoCC `e5bf1a72`.
+The compiler hash is unchanged at the end. `compile.h` names EvoCC `68e32c41`.
 
 | Measurement | Result |
 | --- | ---: |
@@ -3989,13 +3989,13 @@ existing case-sensitive Linux 6.18.44 source. All 91,117 regular source files
 and raw symlink targets match the pinned archive. No new source tree or disk
 image was created. This is a new replay, not the missing 7,008-unit population.
 
-Two real Kbuild failures were repaired. `32194938` diagnoses conflicting
+Two real Kbuild failures were repaired. `a0475b96` diagnoses conflicting
 command-line macro definitions under the existing warning policy. This fixes
 Linux's negated `CC_HAS_INT128` probe and restores the PTP VM clock driver
-without manual configuration changes. `03600f80` uses address-taken label
+without manual configuration changes. `ded50043` uses address-taken label
 exits for the missing-return lint; it removes a false W0005 in the original
 BPF interpreter. The original BPF unit passes GCC and EvoCC with unchanged
-flags. `f47febd4` binds selftest compilation and source hashes to one source
+flags. `364f5fd1` binds selftest compilation and source hashes to one source
 root. No C source, generated assembly, command record or banner was patched.
 
 | Measurement | Result |
@@ -4018,7 +4018,7 @@ recompilation. Every final C output matches an invocation in the unchanged
 compiler's final build log or BPF replay; the retained BPF object hash also
 matches. This is a uniform direct build, not one uninterrupted clean build.
 The compiler hash is `4dbabc30…`; the Image hash is `ce7bd3e3…`.
-Kbuild generated the EvoCC `03600f80` banner itself. GNU tools still build
+Kbuild generated the EvoCC `ded50043` banner itself. GNU tools still build
 47 host C outputs, preprocess one device tree, assemble and link.
 
 The two kernels run identical GCC-built selftest executables, initramfs and

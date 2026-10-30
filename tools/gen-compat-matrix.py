@@ -9,6 +9,7 @@ import re
 import sys
 
 import bench
+import history_map
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -113,7 +114,7 @@ def main():
     parser.add_argument("--check", action="store_true", help="reject a stale chapter without writing")
     args = parser.parse_args()
     try:
-        expected = render()
+        expected = history_map.current_text(render())
         if args.check:
             if not OUTPUT.is_file() or OUTPUT.read_text(encoding="utf-8") != expected:
                 raise ValueError("compatibility matrix is stale; run python3 tools/gen-compat-matrix.py")

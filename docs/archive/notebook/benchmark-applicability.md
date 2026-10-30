@@ -26,7 +26,7 @@ the [evaluation notebook](benchmark-evaluation-20260915.md).
 ## Csmith unavailable-reference accounting
 
 Capture `.evidence/ladder/csmith/20260909T193124Z/results.jsonl`, subject
-`691b654`, retains all 1,000 original campaign/seed identities: 932 agree and
+`9f6eb9d`, retains all 1,000 original campaign/seed identities: 932 agree and
 68 remain oracle-unusable, with zero compiler refusals or mismatches.
 Every per-program result, including all five execution statuses and checksums,
 is identical to capture `20260909T162714Z`; generator options, defines and

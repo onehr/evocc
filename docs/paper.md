@@ -28,9 +28,9 @@ Coding agents reduce the cost of writing code, not the cost of trusting it. In t
 agents' records were plausible and wrong more than once. A preprocessor gate reported 33 of 33
 fixtures passing after the failing fixture had left its corpus (commit `b765c241`). A receipt called
 1,280 certificate replays independent, but the replays used rules that the certificates supplied
-(`957afe6b`). An audit of the specifications against the code of a frozen release candidate found
+(`6599b1f5`). An audit of the specifications against the code of a frozen release candidate found
 seven defects that gave silent wrong code or broke a fail-closed rule, and no existing test
-exercised them (`2e426061`).
+exercised them (`8cd0fee4`).
 
 We argue that a compiler that coding agents write can be built and evaluated if no claim rests on
 an agent's report. Each agent product is a proposal that a check accepts or refuses, and the check
@@ -328,13 +328,13 @@ runs `run`, `check`, `explain`, `fix --plan` and `prove` twice on fixed inputs a
 byte-identical JSON apart from temporary paths (`crates/evocc/tests/determinism.rs`). `evo mcp`
 serves `run`, `check`, `explain`, `prove` and `fix_plan` over the Model Context Protocol, with no
 tool that edits a file. Since 2026-10-09, a clean check ends with "This does not check that the
-results are correct." (commit `000d58f0`).
+results are correct." (commit `477a1263`).
 
 ## 7 Evaluation
 
-The release campaign ran on 2026-10-27 with one build of the compiler of commit `08bf09bd` (SHA-256
+The release campaign ran on 2026-10-27 with one build of the compiler of commit `8177cff2` (SHA-256
 `ab0c9043…` on macOS, `3520c267…` for Linux); other results give their own date and commit.
-Release 0.1.0 (`37d214da`) has the same compiler source. The current code (`5ec1cb7f`) produces
+Release 0.1.0 (`c59d21b4`) has the same compiler source. The current code (`f529fe95`) produces
 AArch64 objects byte-identical to those of the 0.1.0 compiler on a 792-object identity population;
 we did not repeat the campaign at that commit. The Linux lanes run in a sealed AArch64 container on
 an Apple silicon Mac, and the kernels boot in QEMU.
@@ -347,8 +347,8 @@ assembled, linked and built host programs, and six kernel options had no effect.
 
 | Scope | Date, compiler | Result |
 |---|---|---|
-| Direct Kbuild | 2026-10-27, `08bf09bd` | 2,799 of 2,799 target C files; boots under HVF with pointer authentication and under TCG; 9 paired selftest programs pass 125 of 125 subtests on the EvoCC and the GCC kernel |
-| Original KVM selftests | 2026-10-27, `08bf09bd` | GCC kernel: 10 of 10 modes of two programs; EvoCC kernel: each reaches its 120-second limit after 6 modes |
+| Direct Kbuild | 2026-10-27, `8177cff2` | 2,799 of 2,799 target C files; boots under HVF with pointer authentication and under TCG; 9 paired selftest programs pass 125 of 125 subtests on the EvoCC and the GCC kernel |
+| Original KVM selftests | 2026-10-27, `8177cff2` | GCC kernel: 10 of 10 modes of two programs; EvoCC kernel: each reaches its 120-second limit after 6 modes |
 | BPF and modules | 2026-09-28, digest `ab2eeb7b…` | 7,008 of 7,008 target C files and 848 modules; boots and powers off |
 | Built-in KUnit | 2026-09-22 | of 1,504 cases, EvoCC 1,432 pass, 12 fail, 60 skip; GCC 1,438, 7, 59; 31 modules pass 765 of 765 cases on both |
 | Installed kselftest | 2026-09-22 | of 970 programs, EvoCC 529 pass, GCC 532; incomplete |
@@ -374,7 +374,7 @@ not be judged. The campaign changed no population, budget, timeout, flag or disp
 | Toybox; musl with libc-test | INCOMPLETE | 203 and 1,339 units; the test results of the GCC builds, with no added failure |
 | Doom | PASS | 81 units; two demos, twice under each of EvoCC, GCC 14 and Clang 19: 12 runs of 350 frames with matching hashes |
 
-*Table 4. Lanes, 2026-10-27, compiler `08bf09bd`. Sources: [benchmark receipt](../tests/contracts/bench-receipt.json)
+*Table 4. Lanes, 2026-10-27, compiler `8177cff2`. Sources: [benchmark receipt](../tests/contracts/bench-receipt.json)
 and the `ladder-*-receipt.json` files in [`tests/contracts/`](../tests/contracts/).*
 
 Ten of the fifteen application lanes pass, and none of the other five has a compiler failure. The
@@ -386,7 +386,7 @@ Ordinary compilations carry no proof, so their evidence is differential. Csmith 
 1,000 programs in two campaigns without floating point, packed structures or volatile accesses, one
 with bit-fields. EvoCC matched the agreeing GCC and Clang checksums for 932; for the other 68, a
 reference run gave no checksum. No program gave a mismatch, a refusal or a trap
-([receipt](../tests/contracts/ladder-csmith-receipt.json)). On 2026-10-01 (commit `7b385567`), the
+([receipt](../tests/contracts/ladder-csmith-receipt.json)). On 2026-10-01 (commit `3fef1dca`), the
 Rust optimizer, checker and interpreter agreed with the Lean definitions on 1,487,689 of 1,487,689
 compared vectors ([receipt](../tests/contracts/lean-correspondence-receipt.json)).
 
@@ -402,11 +402,11 @@ the object, not by its address (open task D33).
 
 ### 7.3 RQ3: What does the proof-required path cover?
 
-On 2026-10-06 (commit `8770b186`), proof-required mode checked 17 pilot modules, with every function
+On 2026-10-06 (commit `eed7f2f3`), proof-required mode checked 17 pilot modules, with every function
 as an entry and a cut-point proposal for each loop entry. All 107 entries were checked to final
 assembly text, and none was refused. They include the unchanged `abs` of musl and `FixedMul` of
 doomgeneric; the others are fixtures for control flow, loops and calls. Two optimized cases passed,
-with one guard fold and one scalar fold. At commit `e657709b`, the sweep passed again with
+with one guard fold and one scalar fold. At commit `e85f5904`, the sweep passed again with
 byte-identical output.
 
 The native run tested the trusted end of the chain. The checked output ran on Linux AArch64 for
@@ -427,20 +427,20 @@ register, and no result changed. The optimized cases agreed in 328 comparisons
 | Zstandard `zstd_decompress.c` | 31,252 | 30,652 | 14,492 | 2.16 | 1.9% | 0 |
 | cJSON `cJSON.c` | 26,484 | 26,292 | 14,400 | 1.84 | 0.7% | 0 |
 
-*Table 5. Bytes of `.text`, 2026-10-27, compiler `08bf09bd`. "Checks" is the share of the checked
+*Table 5. Bytes of `.text`, 2026-10-27, compiler `8177cff2`. "Checks" is the share of the checked
 size that the UB traps take; the last column is the change of the checked size. Sources:
 [default](../tests/contracts/application-size-default-20261027-receipt.json) and
 [EqSat](../tests/contracts/application-size-eqsat-20261027-receipt.json) receipts.*
 
 The checks are not the main cause of the gap: the unchecked code is still 1.70 to 2.20 times the
-size of GCC's. A census of the same units on 2026-10-02 (commit `7680ae23`) found the largest excess
+size of GCC's. A census of the same units on 2026-10-02 (commit `449d589e`) found the largest excess
 in frame code, constant materialization and memory access
 ([ledger](archive/notebook/codegen-census-20261002.md)). Unlike EvoCC (§3.2), GCC also optimizes
 under the assumption that UB is absent.
 
 The proved rewrites buy almost nothing. With `-Oeq-scalar`, the checked total of the five units and
 a small fixture fell from 213,808 to 213,740 bytes, by 0.03%; with an earlier backend, on 2026-10-01
-(commit `e625b89c`), the rewrites saved 0.8% to 2.4% on the units that changed
+(commit `5a21d523`), the rewrites saved 0.8% to 2.4% on the units that changed
 ([measurements](evidence.md#checked-eqsat-measurements)). The median of three compile times grew 1.9
 to 3.4 times, in wall-clock time on a shared host. On 2026-09-30, fixed proof templates proved 1,174
 of 1,222 candidate rules, but no rule, policy or shortcut track met its admission criterion, so none
@@ -452,7 +452,7 @@ itself. Runs of six or more consecutive frame accesses or moves made up 6.1% of 
 and 2.0% of GCC's ([receipt](../tests/contracts/kernel-direct-virt-receipt.json)).
 
 The Lean development of release 0.1.0 has 68,830 lines in 392 files (`git grep -c ''` at
-`37d214da`): 29,854 for the source and EvoIR semantics and `source-to-evoir`, 19,841 for EvoMIR and
+`c59d21b4`): 29,854 for the source and EvoIR semantics and `source-to-evoir`, 19,841 for EvoMIR and
 `lowering`, 6,277 for the AArch64 subset and `frame-emission`, 3,814 for `rewrite`, 3,431 for
 `allocation`, 1,387 for the rule and known-bits proofs and 747 for the pipeline. The lowering checker matches output
 forms construct by construct, while the allocation checker relates abstract states at block
@@ -470,13 +470,13 @@ signed-rank tests over items.
 
 | # | Date | Registration | Subjects | Result |
 |---|---|---|---|---|
-| 1 | 2026-10-08 | `7eed5eac` | a chat model; 30 programs | ceiling: C3 87 of 90, C1 88, Clang with UBSan 82 |
-| 2 | 2026-10-08 | `0701fea5` | two chat models; 30 programs | inconclusive: stopped at 444 of 900 repetitions by a spending limit |
+| 1 | 2026-10-08 | `2644dad5` | a chat model; 30 programs | ceiling: C3 87 of 90, C1 88, Clang with UBSan 82 |
+| 2 | 2026-10-08 | `8ac3fa1d` | two chat models; 30 programs | inconclusive: stopped at 444 of 900 repetitions by a spending limit |
 | 3 | 2026-10-09 | pilots | the coding agent | no comparison: the unconfined agent downloaded the upstream source |
-| 4 | 2026-10-09 | `5b765db0` | the coding agent; 24 items | equal repairs; fewer steps only in an unregistered analysis |
-| 5 | 2026-10-09 | `9672d2d9` | the coding agent; 36 items | 3 of 4 predictions held |
+| 4 | 2026-10-09 | `1a1e9175` | the coding agent; 24 items | equal repairs; fewer steps only in an unregistered analysis |
+| 5 | 2026-10-09 | `859ab6a4` | the coding agent; 36 items | 3 of 4 predictions held |
 | 6, 7 | 2026-10-20 | pilots | — | pilots only |
-| 8 | 2026-10-29 | `0b9cef89` | four chat models; 24 items | fewer tokens for 3 models, more repairs for 1 |
+| 8 | 2026-10-29 | `3e24b509` | four chat models; 24 items | fewer tokens for 3 models, more repairs for 1 |
 
 *Table 6. The agent experiments; [method, receipts and transcripts](../book/src/evaluation-agents.md).*
 
@@ -526,11 +526,11 @@ acceptance harness.
 | Date | Commit (number) | Event |
 |---|---|---|
 | 2026-08-10 | `b6175a2a` (1) | frozen lab contracts and a fail-closed acceptance harness |
-| 2026-09-09 | `8cff4de8` | Lean proofs of the 55 scalar rules and the known-bits table |
-| 2026-09-13 | `eb1b9300` (1,380) | first complete boot of a kernel built by EvoCC, day 34 |
-| 2026-10-04 to 06 | `63c1f5b8` to `e657709b` (1,951) | 99 commits add 66,742 lines of Lean for the `core-v1` checkers; the sweep of §7.3 |
-| 2026-10-27 | `08bf09bd` (2,321) | the compiler of the release campaign |
-| 2026-10-28 | `37d214da` (2,342) | release 0.1.0, day 79 |
+| 2026-09-09 | `1843c47f` | Lean proofs of the 55 scalar rules and the known-bits table |
+| 2026-09-13 | `3a25a89a` (1,380) | first complete boot of a kernel built by EvoCC, day 34 |
+| 2026-10-04 to 06 | `5a4e96ad` to `e85f5904` (1,951) | 99 commits add 66,742 lines of Lean for the `core-v1` checkers; the sweep of §7.3 |
+| 2026-10-27 | `8177cff2` (2,321) | the compiler of the release campaign |
+| 2026-10-28 | `c59d21b4` (2,342) | release 0.1.0, day 79 |
 
 *Table 7. Milestones from `git log`; the number counts the commits that a commit contains.*
 
@@ -558,16 +558,16 @@ Each open task in `TODO.md` has a next action and an exit condition that names a
 | # | Date, record | What went wrong | What caught it | What changed |
 |---|---|---|---|---|
 | 1 | 2026-08-12, `b765c241` | a gate commit removed failing fixture 024 and reported 33 of 33 | review, 77 minutes later (`6092ce21`) | the gate requires 34 cases and a separate token serializer |
-| 2 | 2026-08-23, `957afe6b` | 1,280 replays called independent used the certificates' own rules | review of each call site's authority | a tested field names the authority; later a separate checker |
-| 3 | 2026-09-01, `00adf559` | pointer roots of places admitted one form at a time | the kernel parse survey | one rule for all pointer-typed roots; clean parses of a 16-unit cohort rose from 3 to 9 |
-| 4 | 2026-09-07, `b87a88b7` | Csmith runs trapped where GCC and Clang agreed: its runtime shifted 1 into the sign bit | EvoCC's own trap | one repaired runtime for all compilers |
+| 2 | 2026-08-23, `6599b1f5` | 1,280 replays called independent used the certificates' own rules | review of each call site's authority | a tested field names the authority; later a separate checker |
+| 3 | 2026-09-01, `1b7e7a75` | pointer roots of places admitted one form at a time | the kernel parse survey | one rule for all pointer-typed roots; clean parses of a 16-unit cohort rose from 3 to 9 |
+| 4 | 2026-09-07, `4e407b6d` | Csmith runs trapped where GCC and Clang agreed: its runtime shifted 1 into the sign bit | EvoCC's own trap | one repaired runtime for all compilers |
 | 5 | 2026-09-29, [ledger](archive/notebook/verified-eqsat-implementation-20260929.md) | two producer defects in the EqSat chain; a gate without the checker crate | rejected replays; review | regression tests; the gate covers the checker |
-| 6 | 2026-10-04, `409b84e3` | the Rust allocation verifier ignored spill-slot contents | review before its port to Lean | the Lean checker tracks spill slots |
+| 6 | 2026-10-04, `a9a4e9ac` | the Rust allocation verifier ignored spill-slot contents | review before its port to Lean | the Lean checker tracks spill slots |
 | 7 | 2026-10-08, experiment 2 | the harness took 914 HTTP 403 refusals for response errors | transcript analysis | the report applies the registered stop |
 | 8 | 2026-10-09, experiment 3 | the agent fetched the upstream Zstandard source with `curl` | audit of the session commands | an OS sandbox |
-| 9 | 2026-10-13, `2e426061` | 7 defects gave silent wrong code or broke a fail-closed rule, among them an `asm` clobber of `x19` that the prologue did not save | a read-only audit of the specifications against code, tests and probes, with 53 findings | all seven repaired by 2026-10-14 |
-| 10 | 2026-10-27, `02d84269` | a clean Lean build timed out in `bv_decide`; a cached build hid it | a clean build | a 60-second solver limit |
-| 11 | 2026-10-29, `d68dc9ea` | 29 files over 1,500 lines (the largest 21,062) and 192 functions over 150 lines | review of the structure | a size check; splits that kept the 792 identity objects |
+| 9 | 2026-10-13, `8cd0fee4` | 7 defects gave silent wrong code or broke a fail-closed rule, among them an `asm` clobber of `x19` that the prologue did not save | a read-only audit of the specifications against code, tests and probes, with 53 findings | all seven repaired by 2026-10-14 |
+| 10 | 2026-10-27, `36aaa4b6` | a clean Lean build timed out in `bv_decide`; a cached build hid it | a clean build | a 60-second solver limit |
+| 11 | 2026-10-29, `f40be062` | 29 files over 1,500 lines (the largest 21,062) and 192 functions over 150 lines | review of the structure | a size check; splits that kept the 792 identity objects |
 
 *Table 8. Failures, the checks that caught them, and the repairs.*
 

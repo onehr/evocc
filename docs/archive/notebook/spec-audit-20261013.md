@@ -6,7 +6,7 @@ changes no specification, code or task file.
 
 ## Base and method
 
-- Commit: `366fd796`. Every code location cites this commit. Other work
+- Commit: `546fe46a`. Every code location cites this commit. Other work
   changed some source files in the working tree during the audit, so a line
   in the working tree can differ.
 - Compiler: `.build/frozen/366fd796/evocc-darwin`, which prints
@@ -56,11 +56,11 @@ changes no specification, code or task file.
 ## Starting point: E4006 and E4008
 
 Decision: both rows were errata, not new authority. The code was right
-before the text. T03a corrected the text in `a8a592d4` (2026-09-23). The
+before the text. T03a corrected the text in `ef011218` (2026-09-23). The
 edit added no feature.
 
 - **E4006** (`not-lowered: indirect-branch`, EvoMIR §10 l.1422). Commit
-  `bbcbbbc9` (2026-09-13) implemented computed branches before the text
+  `ebca8425` (2026-09-13) implemented computed branches before the text
   changed. Lowering is at `crates/evocc-mir/src/lower.rs:2909-2921`, and
   emission at `crates/evocc-mir/src/emit.rs:3305`. No source file emits
   E4006. Positive tests:
@@ -75,7 +75,7 @@ edit added no feature.
   (l.4221-4227) defines the form: `ptr.to_int` of each operand,
   `sub.bits<64>`, then `sdiv.bits<64>` by `sizeof(T)`. "Exact" is a property
   of defined executions, not an opcode. Each step is an existing EvoMIR §5.1
-  row. The front end has used this form since `514582bf` (2026-09-06). Probe
+  row. The front end has used this form since `ffce18e2` (2026-09-06). Probe
   P16 shows it. Positive test:
   `crates/evocc-lower/tests/relocations_and_addresses.rs:512`. Gap: a
   zero-size element gives a division by zero with no guard (A08).
@@ -122,9 +122,9 @@ edit added no feature.
 ## Findings, most severe first
 
 Spec lines are those of the pinned revisions above. Code lines are those of
-`366fd796`. The probes P1 to P16 are listed at the end.
+`546fe46a`. The probes P1 to P16 are listed at the end.
 
-| ID | Clause | Code (`366fd796`) | Tests | Status | Sev | Kind | Task |
+| ID | Clause | Code (`546fe46a`) | Tests | Status | Sev | Kind | Task |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | A01 | evomir §6.7 l.830-835: `x19`-`x28` are callee-saved. target §5 B4 l.142: the verifier checks preservation. | `crates/evocc-mir/src/generic/allocation.rs:240-246` builds the saved set from the assignment only. `crates/evocc-mir/src/emit.rs:454` saves that set. An `asm` that clobbers `d8` gets a save; one that clobbers `x19` or `x20` does not. The verifier never reads the set. | none | CONTRADICTED | S1 | implementation defect | T03g |
 | A02 | evomir §6.2 l.759-768: a signed narrow argument gets `sext` to `bits<32>`; the callee zero-extends a narrow result. | `crates/evocc-mir/src/lower.rs:3579-3586` zero-extends every narrow argument at the boundary ("Recorded gap"). `lower.rs:3031-3039` zero-extends every narrow result. Apple arm64 extends both by signedness. | `crates/evocc-mir/tests/section9_calling_convention_probe.rs:47` (unsigned shapes only) | CONTRADICTED (argument); the result rule is wrong for Darwin | S1 | implementation defect and erratum | T03h |
@@ -434,12 +434,12 @@ stale (A33) although the slice counted the §5.4 clauses as tested.
 
 One line each for the parts in flux:
 
-- D01: at `366fd796`, E2911 still names two diagnostics
+- D01: at `546fe46a`, E2911 still names two diagnostics
   (`crates/evocc-parser/src/floating.rs:145`, `:166`).
-- D02: at `366fd796`, `epoch 0` still passes
+- D02: at `546fe46a`, `epoch 0` still passes
   (`crates/evocc-proof/src/evp1.rs:407-409`,
   `crates/evocc-proofcheck/src/lib.rs:168`).
-- D03: at `366fd796`, `crates/evocc-mir/src/text_parse.rs` still has no
+- D03: at `546fe46a`, `crates/evocc-mir/src/text_parse.rs` still has no
   production for the `spill.*` and `arg.*` forms.
 - `diagnostics.md` §2: an EvoMIR refusal sits on `<command-line>` (A12), and
   a command-line diagnostic covers the whole invocation instead of the

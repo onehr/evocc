@@ -19,7 +19,7 @@ execution. Prefer extending the current representations and shared paths.
 ## Supplied project evidence — distinguish from your own measurements
 
 - Target: `aarch64-unknown-linux-gnu`, LP64, little-endian, GNU C11.
-- Checkout baseline: `9f571cac0e6be6d27915aa82b4c8866ae84eaf9a` with substantial
+- Checkout baseline: `52f8e3bdeb91c17e8155d482c4690b19e95ab4e6` with substantial
   uncommitted changes. **HEAD alone does not identify the subject.** If given
   repository access, inspect the current files; otherwise label these facts
   as supplied evidence, not independently verified implementation behavior.

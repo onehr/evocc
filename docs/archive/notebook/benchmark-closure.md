@@ -7,7 +7,7 @@ Current expanded kernel/KUnit/selftest limitations:
 The dated entries below retain earlier observations, including earlier
 NOT_RUN and failed results; use those two ledgers for the current reading.
 
-Baseline: `e6c7938`; all-lane measurement `20260907T141450.311159Z`,
+Baseline: `3e23300`; all-lane measurement `20260907T141450.311159Z`,
 musl rerun `20260907T153648.272156Z`, compiler SHA-256
 `b13d4a08539dfb6056e61f47631768357ced2e9f404247d7893593643c9ca6e6`.
 The [evaluation](benchmark-evaluation.md) and its linked raw records are the
@@ -36,7 +36,7 @@ control has measured **1,324 PASS, 8 FAIL, 108 SKIP** (details and limitations
 in [its receipt](../../../tests/contracts/kernel-kunit-receipt.json)).
 
 This is a **uniform all-EvoCC build**: all 2,799 objects were recompiled with
-`782272f`, including allocator repair `aad1657` and read-only string storage,
+`f5ced87`, including allocator repair `c1fbd99` and read-only string storage,
 against the actual generated headers, then
 assembled, installed and retained through the complete link. The earlier
 76-object repair booted but left twelve smaller-frame objects on the exec
@@ -82,30 +82,30 @@ correctness and unselected runtime tests remain separate gates.
 
 | ID / priority | Observed blocker or unmeasured gate | Owner / next tailored check | Closure |
 |---|---|---|---|
-| K-R01 / P0 | Only `arch/arm64/kernel/cpuinfo.o` substituted formerly caused an Oops in `kfree` via `kobject_set_name_vargs` and `cpuid_cpu_online`. Original capture (`.evidence/k1/measure-20260910T160033Z/bisection-1/round-014/boot/boot.json`). | C-HIR linkage: adjacent strings in `section(".data..percpu" "")` were decoded as a section name containing quotes/spaces. Fixed by `9d889fa`, RED `a7af1a6`. | Original single-unit relink **0**, boot **PASS**, installed object preserved: replay (`.evidence/k1/attributes-cpuinfo-20260912/boot/boot.json`). Final combination still OPEN. |
-| K-R02 / P0 | Only `arch/arm64/kernel/hw_breakpoint.o` substituted formerly timed out without useful serial output. Original capture (`.evidence/k1/measure-20260910T160033Z/bisection-2/round-014/boot/boot.json`). | Same malformed per-CPU section as K-R01; shared string-fragment decoding fixed by `9d889fa`. No timeout change. | Original single-unit relink **0**, boot **PASS**, installed object preserved: replay (`.evidence/k1/attributes-hw-breakpoint-20260912/boot/boot.json`). Final combination still OPEN. |
-| K-L01 / P0 | `arch/arm64/kernel/irq.o` formerly failed linking with undefined `irq_shadow_call_stack_ptr`. Original log (`.evidence/k1/measure-20260910T160033Z/bisection-3/round-013/substitution/relink.log`). | A no-argument internal inline configuration function returned false, but the unreachable reference survived. RED `bddc65f`; `a4009fd` exposes only proved constant leaf returns, retaining return conversions and effectful calls. | Original single-unit link **0**, boot **PASS**: replay (`.evidence/k1/constant-inline-irq-20260912/boot/boot.json`); affected gate **1,425 passed / 0 failed / 3 existing ignored**, Clippy and fmt PASS. Full combination still OPEN. |
-| K-L02 / original replay PASS | Large combination failed building nVHE `hyp-reloc.S`: `Unexpected RELA type 311`. Link log (`.evidence/k1/measure-20260910T160033Z/attempt-04/substitution/relink.log`). | Kbuild replay dropped `-fno-PIE`; RED `144a83e`, repair `0719ce5` preserves explicit address modes and macros, weak GOT and default PIE. | HYPREL and nVHE sub-link passed in `nvhe-addresses-20260912`; the subsequent distinct K-L04 failure is below. Final eleven-object relink **0**, boot **PASS** in the repaired replay (`.evidence/k1/nvhe-configuration-20260912/boot/boot.json`). Mode gate: **648/0**, Clippy/fmt; K1 Python **100/100**, Ruff. |
-| K-L03 / original replay PASS | Earlier September 9 reductions isolated link failures in `debug-monitors.o` and `entry-common.o`. [Prior report](benchmark-evaluation.md#native-replay-on-33bc3d4). | Their old undefined references are absent with the current compiler; both original objects were included in the five-object combined check below. No duplicate compiler repair was needed. | Combined relink **0**, boot **PASS**, all five installed objects retained: replay (`.evidence/k1/known-failures-20260912/boot/boot.json`). Full required-C combination still OPEN. |
-| K-L04 / original replay PASS | After K-L02, nVHE linked with undefined `__kvm_nvhe_kvm_vcpu_apply_reg_masks`: an unreachable call survived `vcpu_has_nv(vcpu)`, which returns false in this build. Original log (`.evidence/k1/nvhe-addresses-20260912/relink.log`). | RED `550ff80`, repair `29704aa`: use a proved internal inline return only after evaluating the real call and arguments; preserve effectful/unproved calls and source constant-expression rules. | Eleven original objects assembled, retained, relink **0**, boot **PASS**; affected gate **1,431 passed / 0 failed / 3 existing ignored**, Clippy/fmt. Final full composition remains OPEN. |
-| K-L05 / tailored and original object replay PASS, full link OPEN | `20260913T024049Z` installed all 2,799 objects, then `ld -r` found duplicate `bpf_arch_text_copy`, `bpf_int_jit_compile`, `arch_alloc_bpf_trampoline`, `execmem_arch_setup`. Each fallback writes `* __weak name`, whose attribute was stranded on a pointer layer instead of reaching symbol linkage. | RED `bec1deb`; move only symbol-only `weak`/`alias` marks into the owning named declaration's inventory, preserving their spelling/position once and leaving pointer layout attributes unchanged. | 73 targeted tests and Clippy/fmt PASS; both oracles O0/O2 and native EvoCC with both oracle overrides plus its own override return zero. Original core.o / trampoline.o / execmem.o emit and assemble in 6.471 / 5.643 / 2.426 seconds. Complete relink and boot remain OPEN. |
-| K-B01 / original group link and boot PASS | Kbuild replaced `alternative.o`, `signal32.o`, `vdso.o` after regenerating `vdso-offsets.h`. | RED `39e48d7`; prepare, recompile the selected objects against the actual build headers, install, verify content stability, then link. Five-object replay (`.evidence/k1/prepared-headers-20260912-v2/substitution.json`): no overwritten object; the three consumers are byte-proven through vmlinux (allowing relocations). | Boot PASS (`.evidence/k1/prepared-headers-20260912-v2/boot/boot.json`), Image `af053a63...`; this closes the reproduced three-object overwrite, not the unmeasured full-composition lineage audit. |
+| K-R01 / P0 | Only `arch/arm64/kernel/cpuinfo.o` substituted formerly caused an Oops in `kfree` via `kobject_set_name_vargs` and `cpuid_cpu_online`. Original capture (`.evidence/k1/measure-20260910T160033Z/bisection-1/round-014/boot/boot.json`). | C-HIR linkage: adjacent strings in `section(".data..percpu" "")` were decoded as a section name containing quotes/spaces. Fixed by `744b3f2`, RED `4aafcf3`. | Original single-unit relink **0**, boot **PASS**, installed object preserved: replay (`.evidence/k1/attributes-cpuinfo-20260912/boot/boot.json`). Final combination still OPEN. |
+| K-R02 / P0 | Only `arch/arm64/kernel/hw_breakpoint.o` substituted formerly timed out without useful serial output. Original capture (`.evidence/k1/measure-20260910T160033Z/bisection-2/round-014/boot/boot.json`). | Same malformed per-CPU section as K-R01; shared string-fragment decoding fixed by `744b3f2`. No timeout change. | Original single-unit relink **0**, boot **PASS**, installed object preserved: replay (`.evidence/k1/attributes-hw-breakpoint-20260912/boot/boot.json`). Final combination still OPEN. |
+| K-L01 / P0 | `arch/arm64/kernel/irq.o` formerly failed linking with undefined `irq_shadow_call_stack_ptr`. Original log (`.evidence/k1/measure-20260910T160033Z/bisection-3/round-013/substitution/relink.log`). | A no-argument internal inline configuration function returned false, but the unreachable reference survived. RED `81e504e`; `bc229de` exposes only proved constant leaf returns, retaining return conversions and effectful calls. | Original single-unit link **0**, boot **PASS**: replay (`.evidence/k1/constant-inline-irq-20260912/boot/boot.json`); affected gate **1,425 passed / 0 failed / 3 existing ignored**, Clippy and fmt PASS. Full combination still OPEN. |
+| K-L02 / original replay PASS | Large combination failed building nVHE `hyp-reloc.S`: `Unexpected RELA type 311`. Link log (`.evidence/k1/measure-20260910T160033Z/attempt-04/substitution/relink.log`). | Kbuild replay dropped `-fno-PIE`; RED `7af034d`, repair `1c07eb6` preserves explicit address modes and macros, weak GOT and default PIE. | HYPREL and nVHE sub-link passed in `nvhe-addresses-20260912`; the subsequent distinct K-L04 failure is below. Final eleven-object relink **0**, boot **PASS** in the repaired replay (`.evidence/k1/nvhe-configuration-20260912/boot/boot.json`). Mode gate: **648/0**, Clippy/fmt; K1 Python **100/100**, Ruff. |
+| K-L03 / original replay PASS | Earlier September 9 reductions isolated link failures in `debug-monitors.o` and `entry-common.o`. [Prior report](benchmark-evaluation.md#native-replay-on-2f15059). | Their old undefined references are absent with the current compiler; both original objects were included in the five-object combined check below. No duplicate compiler repair was needed. | Combined relink **0**, boot **PASS**, all five installed objects retained: replay (`.evidence/k1/known-failures-20260912/boot/boot.json`). Full required-C combination still OPEN. |
+| K-L04 / original replay PASS | After K-L02, nVHE linked with undefined `__kvm_nvhe_kvm_vcpu_apply_reg_masks`: an unreachable call survived `vcpu_has_nv(vcpu)`, which returns false in this build. Original log (`.evidence/k1/nvhe-addresses-20260912/relink.log`). | RED `5017567`, repair `544122f`: use a proved internal inline return only after evaluating the real call and arguments; preserve effectful/unproved calls and source constant-expression rules. | Eleven original objects assembled, retained, relink **0**, boot **PASS**; affected gate **1,431 passed / 0 failed / 3 existing ignored**, Clippy/fmt. Final full composition remains OPEN. |
+| K-L05 / tailored and original object replay PASS, full link OPEN | `20260913T024049Z` installed all 2,799 objects, then `ld -r` found duplicate `bpf_arch_text_copy`, `bpf_int_jit_compile`, `arch_alloc_bpf_trampoline`, `execmem_arch_setup`. Each fallback writes `* __weak name`, whose attribute was stranded on a pointer layer instead of reaching symbol linkage. | RED `4509ecd`; move only symbol-only `weak`/`alias` marks into the owning named declaration's inventory, preserving their spelling/position once and leaving pointer layout attributes unchanged. | 73 targeted tests and Clippy/fmt PASS; both oracles O0/O2 and native EvoCC with both oracle overrides plus its own override return zero. Original core.o / trampoline.o / execmem.o emit and assemble in 6.471 / 5.643 / 2.426 seconds. Complete relink and boot remain OPEN. |
+| K-B01 / original group link and boot PASS | Kbuild replaced `alternative.o`, `signal32.o`, `vdso.o` after regenerating `vdso-offsets.h`. | RED `7239c3f`; prepare, recompile the selected objects against the actual build headers, install, verify content stability, then link. Five-object replay (`.evidence/k1/prepared-headers-20260912-v2/substitution.json`): no overwritten object; the three consumers are byte-proven through vmlinux (allowing relocations). | Boot PASS (`.evidence/k1/prepared-headers-20260912-v2/boot/boot.json`), Image `af053a63...`; this closes the reproduced three-object overwrite, not the unmeasured full-composition lineage audit. |
 | K-B02 / P1 | Current survey projects `.o.cmd` arguments and records omitted flags; it is not a complete `CC=evocc` Kbuild invocation. | Driver/build integration: audit omitted options by semantics, ABI, instrumentation and safe no-op; cover generated/header probes and assembler-with-cpp. Record HOSTCC/init ownership explicitly instead of inferring it from target C coverage. | Every build-required option/path is implemented or justified under the frozen target, with no silent semantic omission or target-C fallback. |
-| K-G01 / K6 CLOSED 2026-09-13 | Full run `20260913T075423Z` compiled/installed all 2,799 and passed the generated-input fixed point and complete link; its boot exposed K-R06. | `aad1657` repaired physical spill reuse; 76 original units were recompiled. Both compiler identities are explicit, with zero reference target-C fallback. | `20260913T090822Z-incremental`: all 2,799 object hashes retained, complete link **0**, standard boot **PASS**; [receipt](../../../tests/contracts/kernel-full-receipt.json). K7 is a later separate measurement below. |
+| K-G01 / K6 CLOSED 2026-09-13 | Full run `20260913T075423Z` compiled/installed all 2,799 and passed the generated-input fixed point and complete link; its boot exposed K-R06. | `c1fbd99` repaired physical spill reuse; 76 original units were recompiled. Both compiler identities are explicit, with zero reference target-C fallback. | `20260913T090822Z-incremental`: all 2,799 object hashes retained, complete link **0**, standard boot **PASS**; [receipt](../../../tests/contracts/kernel-full-receipt.json). K7 is a later separate measurement below. |
 | K-S01 / tailored GREEN, full link OPEN | Kernel min/max needs optimization-time `constant_p` on proved local values; authorized September 13, §10.1.14 revision 1.9.93. Later consumers exposed assignment facts, finite SSA joins, immutable representation reads and a private constant-table reduction. | Shared C-HIR facts serve both interpreters and lowering; bounded SSA propagation preserves evaluated calls, poison and obligations. 39 query regressions and 448 C-HIR/lower tests PASS; the composed fixture links and exits zero with both sealed oracles and native EvoCC. | Original test_run.o, filter.o and skbuff.o now emit without assertion calls. Full combination still requires fresh compile/link/boot; K-S02 is a separate explicit profile conflict. |
 | K-S02 / tailored GREEN, full link OPEN | `fs/ext4/ioctl.o` retained `__compiletime_assert_753`: `memtostr_pad` needs `__builtin_object_size(s_es->s_volume_name, 1) == 16`. | User authorized proved bounds on September 13; §10.1.14 revision 1.9.94 replaces the explicit always-unknown rule. Parser and consumers share a declaration/layout-backed query, with unknown fallback, unevaluated operands and checked claimed bounds. | Original .o.cmd emission exits zero without assertion calls; native reduced fixture passes with EvoCC and both sealed oracles. 510 focused tests PASS. The kernel assertion and configuration are unchanged; the actual full link/boot remains the next gate. |
 | K-P01 / original release replay PASS | During `20260913T014446Z`, `drivers/hid/hid-input.o` exhausted the 180-second compiler budget. A separate 190-second replay also timed out; CPU samples of it and `mm/memory.c` locate repeated interval scans in linear-scan allocation. | Expire assigned intervals; index merged fixed-register ranges, including future calls/clobbers; binary-search the ordered call positions. No register pool, spill policy, validator or watchdog change. | A 16,384-call RED took 5.31 seconds with just one live ordinary value. All five original commands now emit and assemble; measured times below. The fresh full composition remains required. |
 | K-P02 / original assembly replay PASS | With K-P01 alone, all five timed-out units emit in 8.23–24.40 seconds, but three assemblers are killed at the unchanged 1 GiB container budget. `copy_present_ptes` has 2,164,954 assembly lines and a roughly 2.6 MiB frame: unused cyclic block parameters create artificial liveness and spill traffic. | In out-of-SSA, seed parameter demand from real instruction/control operands and propagate it back through every incoming edge. Omit only undemanded copies; retain original operations, ABI parameters, targets, effects, calls and lifetime actions. | RED: 2,113 copies for a loop with one live value; GREEN: at most 34, zero spills. All five original units assemble with unchanged container resources. Old pressure fixtures now make their checked values observable rather than depending on dead transport. |
 | K-P03 / CLOSED with K-R06 | After K-P02, `copy_present_ptes` reserved 365,248 bytes below its saved frame pair. Permanent storage per spilled value exceeded the configured 16 KiB task stack. | Initial interval reuse reduced that frame; K-R06 completes physical reuse using actual CFG interference instead of convex block-layout ranges. Virtual identities, source objects and live values remain unchanged. | Initial RED: 480 slots for 32 disjoint regions; GREEN at most 40. Final original `mm/memory.o` maximum frame is 5,808 bytes; the complete kernel now boots. |
-| K-R06 / CLOSED 2026-09-13 | Full boot overflows the task stack in the BPF JIT; `build_insn` reserves 14,224 bytes. Convex spill lifetimes make mutually exclusive CFG arms appear simultaneous. | RED `36613bc`: 24 disjoint arms retain 935 slots. `aad1657` builds conflicts from exact CFG liveness, including dead stores and loop-carried values, and colors only private physical spill storage. | Native arm/loop tests and related MIR tests **65/65**; original BPF frame **14,224 → 256 bytes**. Replay of 75 other large-frame units plus full link gives all 2,799 retained and boot **PASS**. |
-| K-G02 / K7 selected subset CLOSED 2026-09-13 | Boot alone did not exercise upstream runtime selftests. | `5205d63` RED; `fe69b20` adds the existing-Image adapter, identical reference-built payload, per-program watchdog and exit/TAP checks. No compiler or kernel rebuild. | `20260913T100557Z`: both kernels **9/9 programs, 125/125 subtests PASS**, zero fail/skip/timeout; [receipt](../../../tests/contracts/kernel-selftest-receipt.json). KUnit and unselected selftests NOT_RUN. |
-| K-R07 / CLOSED 2026-09-14 | The first expanded selftest run overflowed the stack before BEGIN. Twelve objects on its exec/fault/I/O path still used the allocator preceding `aad1657`: the earlier repair recompiled only units with a frame above 2 KiB. | Recompile the same source/flags with the existing spill fix, preserving the 16 KiB stack. The 59 matched C frames total **15,712 → 12,672 bytes**, excluding assembly exception frames. No new compiler semantics or test exemption. | The uniform 2,799-object Image `eaab6181ec27` boots; full run `20260913T145405Z` starts all **935/935 programs on each kernel**, NOT_RUN 0. The earlier failed bootstrap is preserved, not rewritten as a pass. |
-| K-R08 / CLOSED 2026-09-14 | Full run `20260913T120409Z` exposes seven reference-PASS programs crashing in `kfree_const` while freeing a mount. `alloc_vfsmnt(NULL)` stores `"none"` directly; its symbol `__evocc.string.695` is incorrectly in `.data`, outside `__start_rodata..__end_rodata`. Overlayfs reaches the same crash but also fails on GCC for another reason. | RED `69b6016`, repair `782272f`: select read-only storage from `GlobalKind::StringLiteral` before considering zero-fill compression. Ordinary writable objects, kernel sources and test predicates remain unchanged. | Emission and five-lane native fixture tests pass; the full rebuild retains all 2,799 objects. Targeted replay and full run `20260913T145405Z` both pass all seven previous reference-PASS regressions. Overlayfs no longer crashes; its ordinary failure remains on both kernels. |
+| K-R06 / CLOSED 2026-09-13 | Full boot overflows the task stack in the BPF JIT; `build_insn` reserves 14,224 bytes. Convex spill lifetimes make mutually exclusive CFG arms appear simultaneous. | RED `c1c0931`: 24 disjoint arms retain 935 slots. `c1fbd99` builds conflicts from exact CFG liveness, including dead stores and loop-carried values, and colors only private physical spill storage. | Native arm/loop tests and related MIR tests **65/65**; original BPF frame **14,224 → 256 bytes**. Replay of 75 other large-frame units plus full link gives all 2,799 retained and boot **PASS**. |
+| K-G02 / K7 selected subset CLOSED 2026-09-13 | Boot alone did not exercise upstream runtime selftests. | `5a3cc1c` RED; `b7424e8` adds the existing-Image adapter, identical reference-built payload, per-program watchdog and exit/TAP checks. No compiler or kernel rebuild. | `20260913T100557Z`: both kernels **9/9 programs, 125/125 subtests PASS**, zero fail/skip/timeout; [receipt](../../../tests/contracts/kernel-selftest-receipt.json). KUnit and unselected selftests NOT_RUN. |
+| K-R07 / CLOSED 2026-09-14 | The first expanded selftest run overflowed the stack before BEGIN. Twelve objects on its exec/fault/I/O path still used the allocator preceding `c1fbd99`: the earlier repair recompiled only units with a frame above 2 KiB. | Recompile the same source/flags with the existing spill fix, preserving the 16 KiB stack. The 59 matched C frames total **15,712 → 12,672 bytes**, excluding assembly exception frames. No new compiler semantics or test exemption. | The uniform 2,799-object Image `eaab6181ec27` boots; full run `20260913T145405Z` starts all **935/935 programs on each kernel**, NOT_RUN 0. The earlier failed bootstrap is preserved, not rewritten as a pass. |
+| K-R08 / CLOSED 2026-09-14 | Full run `20260913T120409Z` exposes seven reference-PASS programs crashing in `kfree_const` while freeing a mount. `alloc_vfsmnt(NULL)` stores `"none"` directly; its symbol `__evocc.string.695` is incorrectly in `.data`, outside `__start_rodata..__end_rodata`. Overlayfs reaches the same crash but also fails on GCC for another reason. | RED `d3c8e6f`, repair `f5ced87`: select read-only storage from `GlobalKind::StringLiteral` before considering zero-fill compression. Ordinary writable objects, kernel sources and test predicates remain unchanged. | Emission and five-lane native fixture tests pass; the full rebuild retains all 2,799 objects. Targeted replay and full run `20260913T145405Z` both pass all seven previous reference-PASS regressions. Overlayfs no longer crashes; its ordinary failure remains on both kernels. |
 
 ### Selected kernel runtime selftests (2026-09-13)
 
 Command: `python3 -u tools/bench.py kernel-selftest --allow-qemu-drift`.
-Run `20260913T100557Z`, adapter commit `fe69b20`,
+Run `20260913T100557Z`, adapter commit `b7424e8`,
 capture (`.evidence/kselftest/20260913T100557Z/summary.json`).
 The [selection contract](../../../tests/contracts/kernel-selftest-contract.json)
 names nine unchanged upstream Linux 6.18.44 test programs before execution:
@@ -145,7 +145,7 @@ Each program has a 120-second watchdog; the explicit selftest workload budget is
 Checks: `python3 -m unittest discover -s tools/k1/tests -p 'test_*.py'`
 **116/116 PASS**; `python3 -m unittest discover -s tools/ladder/tests -p test_bench.py`
 **20/20 PASS**; Ruff on changed Python files, `/bin/bash -n tools/k1/lib.sh`,
-`tools/gate-changed.sh eb1b930` and `git diff --check` **PASS**. No Rust crate
+`tools/gate-changed.sh 3a25a89` and `git diff --check` **PASS**. No Rust crate
 changed. No full workspace rebuild, clone or repeated full kernel survey was
 needed. `du -sh .build/kselftest` measures approximately **109 MiB**, reused by
 subsequent runs rather than copied per flight.
@@ -158,7 +158,7 @@ its historical K7 NOT_RUN state at the time of the earlier boot measurement.
 ### All-collection kernel selftests (2026-09-13; historical startup failure)
 
 Command: `python3 -u tools/bench.py kernel-selftest-all --jobs 2 --reuse-selftest-build --allow-qemu-drift`.
-Adapter `cbd1ace`; final attempt `20260913T111521Z`;
+Adapter `791da24`; final attempt `20260913T111521Z`;
 [receipt](../../../tests/contracts/kernel-selftest-full-receipt.json).
 The unmodified upstream Makefiles enumerate **128 collections**, including
 hotplug and with no `SKIP_TARGETS`. All **935 declared programs/scripts are
@@ -196,13 +196,13 @@ stops the batch and preserves NOT_RUN instead of repeating the same boot
 failure 935 times. Program-level PASS is not a count of nested assertions.
 
 Harness checks: K1 Python **122/122**, bench Python **21/21**, Ruff and shell
-syntax **PASS**; `tools/gate-changed.sh 6b4e62a` reports no changed Rust crate.
+syntax **PASS**; `tools/gate-changed.sh 0273969` reports no changed Rust crate.
 The runtime/build directory is **1.9 GiB** and all full-selftest captures total
 approximately **3.8 MiB** (`du -sh`); no workspace clone or new kernel build.
 
 #### Startup repair (2026-09-13)
 
-The failing chain contained twelve objects still built before `aad1657`.
+The failing chain contained twelve objects still built before `c1fbd99`.
 Recompiling them with that already-tested compiler, using their original
 commands and the actual prepared headers, reduced cumulative stack demand.
 The frame comparison (`.evidence/k1/exec-stack-20260913/frame-comparison.json`)
@@ -254,7 +254,7 @@ improvement or a timing effect. All recorded PASS programs have process exit
 zero. Missing BTF, architecture-conditioned collections, uninstalled modules,
 and skipped tests remain explicit coverage limits, not passes.
 
-Repair `782272f` selects read-only storage for string literals. Its complete
+Repair `f5ced87` selects read-only storage for string literals. Its complete
 2,799-object replacement build is recorded in
 `read-only-storage-20260913` (`.evidence/k1/read-only-storage-20260913/preparation.json`).
 The source and instruction text are unchanged: every assembly difference is
@@ -305,7 +305,7 @@ initramfs; it does not reuse the old control results.
 #### Complete comparison on the repaired Image (2026-09-14)
 
 Command: `python3 -u tools/bench.py kernel-selftest-all --jobs 2 --reuse-selftest-build --allow-qemu-drift`.
-Run `20260913T145405Z`, execution code `87b854e`, same subject Image
+Run `20260913T145405Z`, execution code `dfbc1c8`, same subject Image
 `eaab6181ec27` and reference Image `b6f206dea584b` as above. All **935/935**
 installed programs were attempted on each kernel, with at most two concurrent
 VMs. The controller and all its VMs have exited. The runner took **8,471.9 s**;
@@ -359,7 +359,7 @@ require diagnosis; matching a GCC failure is not proof of correctness.
 
 Focused classification validation: `python3 -m unittest discover -s tools/k1/tests`
 **125 PASS**; `python3 -m unittest discover -s tools/ladder/tests -p test_bench.py`
-**22 PASS**; Ruff clean. `tools/gate-changed.sh 87b854e` reports no changed Rust
+**22 PASS**; Ruff clean. `tools/gate-changed.sh dfbc1c8` reports no changed Rust
 crate, so it does not rebuild kernel/compiler binaries or claim a fresh
 workspace run.
 
@@ -392,15 +392,15 @@ The fuller mm runtime exposes two independent compiler defects:
 
 | ID | Root cause and repair | Actual targeted kernel result |
 |---|---|---|
-| K-R09 / targeted PASS | `release_pages(mr->pages, nr)` passes a pointer to a transparent-union parameter. Old lowering copied from the pointer's pointee, passing a page pointer instead of the page-pointer array. RED `7c155c7`, fix `b13af54` constructs the matching union member through existing checked initialization. | Sealed GCC/Clang O0/O2 and both mixed-ABI directions pass. One repaired EvoCC object links with all 2,799 target hashes retained. `mm:run_vmtests.sh -t gup_test` on both kernels: 6 wrapper programs PASS; longterm subtests 8 PASS / 62 SKIP / 0 FAIL. The other five programs have one skipped inner test each. No `release_pages` crash. |
-| K-R10 / targeted PASS | `cow` alone overflows the unchanged 16 KiB stack, independently of GUP. Block-local nonescaping temporary objects unnecessarily keep separate physical storage. RED `08c5e14`, fix `3b2a446` reuses only equal-size/alignment objects with disjoint direct access intervals, retaining escaped, cross-block and volatile objects. | `try_to_migrate_one` 3184→2288 B, `__split_huge_pmd_locked` 3120→1984 B, `madvise_cold_or_pageout_pte_range` 1952→992 B. After these three object replays, `-t cow` completes on Image `25fa46a4d45f`: **285 PASS / 4 XFAIL / 523 SKIP / 0 FAIL**, identical to GCC. No stack-size or test-budget change. |
+| K-R09 / targeted PASS | `release_pages(mr->pages, nr)` passes a pointer to a transparent-union parameter. Old lowering copied from the pointer's pointee, passing a page pointer instead of the page-pointer array. RED `d0bbf94`, fix `9971a6d` constructs the matching union member through existing checked initialization. | Sealed GCC/Clang O0/O2 and both mixed-ABI directions pass. One repaired EvoCC object links with all 2,799 target hashes retained. `mm:run_vmtests.sh -t gup_test` on both kernels: 6 wrapper programs PASS; longterm subtests 8 PASS / 62 SKIP / 0 FAIL. The other five programs have one skipped inner test each. No `release_pages` crash. |
+| K-R10 / targeted PASS | `cow` alone overflows the unchanged 16 KiB stack, independently of GUP. Block-local nonescaping temporary objects unnecessarily keep separate physical storage. RED `bb3a81d`, fix `12e104a` reuses only equal-size/alignment objects with disjoint direct access intervals, retaining escaped, cross-block and volatile objects. | `try_to_migrate_one` 3184→2288 B, `__split_huge_pmd_locked` 3120→1984 B, `madvise_cold_or_pageout_pte_range` 1952→992 B. After these three object replays, `-t cow` completes on Image `25fa46a4d45f`: **285 PASS / 4 XFAIL / 523 SKIP / 0 FAIL**, identical to GCC. No stack-size or test-budget change. |
 
 Captures: GUP comparison (`.evidence/kselftest-full/transparent-union-20260914/`),
 independent original cow failure/control (`.evidence/kselftest-full/cow-isolated-20260914/`),
 cow repair and complete object-hash audit (`.evidence/kselftest-full/private-frame-reuse-20260914/`).
 The original K6 Image `eaab6181ec27` and receipt are unchanged. These are targeted
 repair compositions, not a fresh complete 935-program or uniform-compiler run.
-Changed-crate gate against `b13af54`, Clippy `-D warnings`, fmt and 130 K1 Python
+Changed-crate gate against `9971a6d`, Clippy `-D warnings`, fmt and 130 K1 Python
 tests pass; long-running tests already ignored before this change remain ignored.
 
 The complete, unfiltered mm script then finishes on the repair Image:
@@ -431,7 +431,7 @@ out of **6,310 target-C records**, including **704 generated module C
 records**, with zero timeout, panic, assembler refusal or symbol drift.
 The build-class split is **2,895 assembled / 2 refused built-ins** and
 **3,363 assembled / 50 refused module units**. It used eight workers and the
-frozen repair binary from `3b2a446`. The four-worker
+frozen repair binary from `12e104a`. The four-worker
 attempt was explicitly interrupted after 3,500 cached results; the resumed run
 reused those hash-bound results and examined the remaining 2,810 records. It neither installs
 GCC target objects as substitutes nor overwrites K6. Subject KUnit execution,
@@ -439,34 +439,34 @@ EvoCC module installation, BTF type metadata and other shared failures remain
 open. BTF needs real compiler type metadata, not borrowed reference-kernel BTF.
 
 The expanded survey's first repaired class is GNU comma variadic forwarding:
-RED `11d5c88`, GREEN `30db97c`. Original-unit replay
+RED `6c31364`, GREEN `276e759`. Original-unit replay
 `variadic-replay-20260914` changes **20 E0110 + 2 E0112 to 22 assembled**, with
 symbol parity, no installed objects and no inferred boot/module count.
-The `-isystem` driver ordering fix `a6a3461` also passes its changed gate;
+The `-isystem` driver ordering fix `5e7d1c2` also passes its changed gate;
 the affected NEON unit still needs an actual resource-header/intrinsic replay.
 
 Two more bounded repairs pass focused, native and changed-crate gates before
-their original-unit replays. `bc8b6ea` resolves only a direct unsigned wide
+their original-unit replays. `df8d7a0` resolves only a direct unsigned wide
 bit-field mask under an explicit unsigned narrowing cast: the two original
 Nouveau units change from E2939 to assembled. Neighboring ambiguous arithmetic
-remains refused. `7ac16fd` preserves `v0`–`v31` asm clobbers separately from GPRs
+remains refused. `73e667f` preserves `v0`–`v31` asm clobbers separately from GPRs
 and saves the callee-saved low halves of v8–v15 when SIMD preservation applies:
 the original mlx5 `wc.o` changes from E3021 to assembled. The native preservation
 probe and its `-mgeneral-regs-only` negative control match both sealed compilers.
 Captures `narrow-mask-replay-20260914` and `vector-clobber-replay-20260914` retain
 all three symbol-parity checks; no repaired module was installed by these replays.
 
-`dbe9c11` then fixes address-of-string lowering and the lost complete-array
+`33b1ca5` then fixes address-of-string lowering and the lost complete-array
 type, including embedded zero bytes, wide literals, stride, static pointers and
 the previous silent acceptance of whole-array assignment. Its 43 focused tests,
 both interpreters, native arm64 and changed gate pass; original brcmfmac
 `firmware.o` assembles in `string-address-replay-20260914`.
-`f2b2c07` fixes commuted integer-plus-symbol static addends without admitting
+`675d1e9` fixes commuted integer-plus-symbol static addends without admitting
 integer-minus-symbol expressions. Its 36 relocation tests, native arm64 and
 changed gate pass; original iwlwifi `pcie/drv.o` assembles in
 `commuted-address-replay-20260914`. Neither replay installs an object.
 
-`2f05f42` accepts `__alignof` through the existing alignment operator and
+`4438608` accepts `__alignof` through the existing alignment operator and
 comma-separated `__label__` names through the existing scoped identity path.
 The 34 focused tests, native arm64 fixtures and changed gate pass;
 `gnu-parser-replay-20260914` assembles both original zstd and ALSA units with
@@ -486,7 +486,7 @@ and product size 21; O0 answers unknown. The side-effectful query remains unknow
 without incrementing its operand. Probe `20260914-dynamic-object-size/flow.out`
 keeps these distinct from the earlier ambiguous printf-order observation.
 
-`952464d` records the dynamic-size RED. Before the September 14 approval,
+`fa2189a` records the dynamic-size RED. Before the September 14 approval,
 **K7-DYNAMIC-ALLOC-SIZE** was a body conflict:
 Section 10.1.9's explicit preserved-only default did not permit applying
 `alloc_size(1)` / `(1,2)` to allocation extents. The sealed flow and fixture
@@ -505,7 +505,7 @@ an installed kernel object, or an EvoCC KUnit execution.
 The user approved the exception on September 14; revision 1.9.97 records it.
 `dynamic-extents-20260914` then replays all ten original units: **10 assembled,
 0 refused, 0 symbol drift, 0 timeout**, with no installation or relink. The
-changed gate against `1e8a5f0` passes, including Clippy and fmt. Captured
+changed gate against `6485a57` passes, including Clippy and fmt. Captured
 allocation arguments, selected extents and offsets resolve through one shared
 C-HIR path for both interpreters and lowering. Across the tailored replays,
 **46/52** old refusals are repaired; six executable-NEON module units remain.
@@ -518,7 +518,7 @@ symbols in `floating-constants-20260914`, with no installation or relink. The
 shared fold uses source precision and ordinary integer conversions; it does not
 admit runtime floating arithmetic. Both sealed oracles at O0/O2 and native EvoCC
 execute `tests/fixtures/floating-constant-integers.c` with exit zero. The changed
-gate against `9ee51d1` passes (including the separately pending dynamic-size
+gate against `5b7abe8` passes (including the separately pending dynamic-size
 draft). Thus **36/52** earlier refusals have original-unit tailored repairs;
 this is not a new 6,310-unit survey. Remaining: ten dynamic-size units and six
 NEON units. The latter reach GCC's real `arm_neon.h` and fail at `__Int8x8_t`;
@@ -548,8 +548,8 @@ result: the PRP test compared jiffies across an unlocked interval, and iwlmvm
 still imported a callback reachable only through an unused private table.
 The final comparison is not a claim that those earlier attempts passed.
 
-`286b4ed` preserves sequential and bounded finite initializer facts for
-constant queries. `c4de608` follows one reachability graph through private
+`c3f8d09` preserves sequential and bounded finite initializer facts for
+constant queries. `7a6c56c` follows one reachability graph through private
 functions and tables, retaining public/hidden, used, section, alias and asm
 roots. Original module replay and loading, rather than focused tests alone,
 validate these repairs. The composed module graph contains **3,407 EvoCC C
@@ -572,9 +572,9 @@ with an explicit **8 GiB supplemental VM profile** in `mremap-memory-20260914`.
 All four 2 GiB mapping cases then pass; the original 2 GiB profile is unchanged.
 The inner result is **22 PASS / 1 FAIL / 3 XFAIL**, plus five passing
 `mremap_dontunmap` cases. The remaining failure explicitly reports unavailable
-USERFAULTFD. The upstream wrapper nevertheless exits zero: `b03b302` now
+USERFAULTFD. The upstream wrapper nevertheless exits zero: `7df25dc` now
 retains that wrapper verdict but exposes nested failure summaries and blocks
-an all-tests pass pending review. `a0dc2f4` separately enables explicitly
+an all-tests pass pending review. `35dcef7` separately enables explicitly
 listed KUnit suites to run through debugfs after module setup, preserving
 their original boot results and refusing absent init-only rerun interfaces.
 
@@ -589,12 +589,12 @@ did regenerate `.vmlinux.export.o`, caught by the installed-object audit.
 
 | ID | Actual new full-link blocker | Current tailored result / next action |
 |---|---|---|
-| K-L06 | `flags & 0` retained disabled DAX / page-table-sync calls; constant division in field masks retained `__field_overflow`. | Extend the existing bounded CFG facts, retaining original arithmetic, poison consumption and guards. RED `091cd55`; actual affected `.o.cmd` replays no longer emit these calls. |
-| K-L07 | Unused static marker addresses create runtime relocations into discarded `.no_trim_symbol`. | Trace machine value demand through pure computations and incoming edges; do not drop accesses, calls, lifetimes or the marker data. RED `091cd55`; original vfio/pnfs units no longer emit the marker-address instructions. |
-| K-L08 | `btf_parse_base` ignores its data arguments with BTF disabled, but the caller still refers to absent `__start_BTF` / `__stop_BTF`. | Tailored and original object PASS: `87bcb6c` RED, `a109420` keeps ABI positions and argument effects, replacing only unused private-call transport. Public/interposable calls retain their arguments. Original BTF replay takes 8.756 seconds and has neither absent address reference. |
+| K-L06 | `flags & 0` retained disabled DAX / page-table-sync calls; constant division in field masks retained `__field_overflow`. | Extend the existing bounded CFG facts, retaining original arithmetic, poison consumption and guards. RED `a24251a`; actual affected `.o.cmd` replays no longer emit these calls. |
+| K-L07 | Unused static marker addresses create runtime relocations into discarded `.no_trim_symbol`. | Trace machine value demand through pure computations and incoming edges; do not drop accesses, calls, lifetimes or the marker data. RED `a24251a`; original vfio/pnfs units no longer emit the marker-address instructions. |
+| K-L08 | `btf_parse_base` ignores its data arguments with BTF disabled, but the caller still refers to absent `__start_BTF` / `__stop_BTF`. | Tailored and original object PASS: `c8b43de` RED, `7bd1975` keeps ABI positions and argument effects, replacing only unused private-call transport. Public/interposable calls retain their arguments. Original BTF replay takes 8.756 seconds and has neither absent address reference. |
 | K-L09 | `fs/proc/array.o` emits the `__scoped_seqlock_bug` optimization canary despite its dominating loop-state guard. | Tailored and original object PASS: observe repeated reads only on nonescaping, nonvolatile local storage with no intervening write. Exclude unreachable continuations after loop exits from predecessor queries; retain all loads, guards, effects and possible error calls. Original replay: 3.232 seconds, canary calls zero. |
-| K-L10 | Honoring hidden pragmas exposed unused external declarations: `.hidden __compiletime_assert_608` alone makes the EFI link require a definition even after the call has disappeared. | RED `18cf82c`; emit external visibility only for references surviving machine allocation, including relocations and symbolic asm operands. Definitions retain their metadata. The 92-test symbol/relocation gate passes, including an actual native link without the absent definitions. Original complete-link retry follows. |
-| K-B03 | `modpost` generates the final `.vmlinux.export.c` after ordinary preparation, and final make recompiles it with GCC. | `e03f564` RED, `fb7a5b6` invokes the real producer before compiling this original target-C record with EvoCC and checks content after final make. K1 Python 109/109; complete diagnostic link passes with the generated source stable and all 2,799 installed target-C objects retained. |
+| K-L10 | Honoring hidden pragmas exposed unused external declarations: `.hidden __compiletime_assert_608` alone makes the EFI link require a definition even after the call has disappeared. | RED `1c997d4`; emit external visibility only for references surviving machine allocation, including relocations and symbolic asm operands. Definitions retain their metadata. The 92-test symbol/relocation gate passes, including an actual native link without the absent definitions. Original complete-link retry follows. |
+| K-B03 | `modpost` generates the final `.vmlinux.export.c` after ordinary preparation, and final make recompiles it with GCC. | `f22c81f` RED, `26639d1` invokes the real producer before compiling this original target-C record with EvoCC and checks content after final make. K1 Python 109/109; complete diagnostic link passes with the generated source stable and all 2,799 installed target-C objects retained. |
 
 The complete diagnostic composition now **links successfully**:
 `.evidence/k1/complete-link-20260913/result.json`.
@@ -618,7 +618,7 @@ Sealed GCC-14 and Clang-19 both use direct page-relative addressing for a strong
 hidden declaration under `-fpie`/`-fPIC`, and retain GOT addressing for a weak one;
 the existing hidden-attribute lowering already implements that distinction.
 The user authorized the correction on September 13; revision 1.9.95 records it.
-RED `3213f0e` fails on missing hidden metadata, with no build error. The scoped
+RED `0c291cc` fails on missing hidden metadata, with no build error. The scoped
 default now uses the existing symbol path and survives `-E` replay. Sealed
 oracle results and their small source live in `tests/fixtures/visibility-pragma-oracle.*`.
 Targeted tests are green; all 40 original records that force-include `hidden.h`
@@ -629,7 +629,7 @@ K-L10 before boot, recorded in
 
 The targeted gate also exposed a dead-computation regression: retaining an
 `adds` arithmetic result could remove its mandatory, unused flags consumer.
-RED `784ef59` pins both live bundles and entirely dead bundles. Demand now
+RED `3947459` pins both live bundles and entirely dead bundles. Demand now
 closes over adjacent flags chains without changing either validator. The
 external-symbol, attribute, wide-integer and allocator suites pass 182/182;
 these tests do not establish a successful boot.
@@ -644,7 +644,7 @@ console on Image `7cfa16a1b3d548dac0f897f0eb05d584410fc855fa7402ecd3cf33f256bf05
 The bounded first-exception trace points to `__pi_match_options`, brk #3005,
 not the previous GOT fault. `mmfr0.fields` has one populated entry plus an empty
 sentinel, but its object occupied 56 bytes instead of 80. Traversal consequently
-read the next descriptor's text as a shift count. RED `ba89539` checks six exact
+read the next descriptor's text as a shift count. RED `03275b8` checks six exact
 object extents and execution; both sealed oracles agree. Normalization now counts
 visited subobjects even when sparse initialization emits no scalar action. The
 118-test initializer/external-symbol gate passes, including both interpreters
@@ -665,7 +665,7 @@ body has no destructor call. The small
 zero under both sealed compilers at O0/O2, while both EvoCC interpreters report
 program value 2 and native EvoCC exits 2 (missing release), as recorded in
 [`cleanup-scope-exits.txt`](../../../tests/fixtures/cleanup-scope-exits.txt).
-The user authorized the applied exception, now revision 1.9.96. RED `9f56104`
+The user authorized the applied exception, now revision 1.9.96. RED `c545a4e`
 fails in both interpreters and native execution without a build error.
 Ordinary cleanup calls now execute before lifetime end, in reverse declaration
 order on each actual exit. Tailored tests also check early return before a
@@ -675,7 +675,7 @@ break/continue shortcut now preserves required lifetime and callback actions.
 No new IR kind or kernel-specific workaround is used. Original kernel replay
 initially found eight duplicate-label failures among 17 IRQ units: the same
 inlined callback body was emitted at several mutually exclusive exits. A
-multi-return native/interpreter RED reproduces it; `379790c` keeps private
+multi-return native/interpreter RED reproduces it; `0a15970` keeps private
 callback label lookup local to each emission without changing concrete CFG edges.
 All 17 original IRQ units now emit and assemble. The complete diagnostic link
 retains 2,799/2,799 objects, with stable export input, in
@@ -760,7 +760,7 @@ This verifies the interaction of those five fixes/rechecks, not a 2,799-object
 boot or K6: every other target C object in this trial remains reference-built.
 
 The separate eleven-object nVHE replay `nvhe-configuration-20260912` uses
-`29704aa`'s release SHA-256
+`544122f`'s release SHA-256
 `fbc920dd292a9e6567320f301b6391ff2ad615244fc79225e822051175f62cbf`.
 Seven unchanged assembly outputs reuse digest-checked objects; all eleven
 installed objects are retained through the successful link and nonce-bound
@@ -870,7 +870,7 @@ Command: `python3 tools/bench.py kernel --survey-only --evocc
 Run `survey-20260912T092730.260925Z`; capture summary (`.evidence/k1/survey-20260912T092730.260925Z/substitution.json`),
 per-unit results (`.evidence/k1/survey-20260912T092730.260925Z/units.jsonl`),
 and [bench receipt](../../../tests/contracts/bench-receipt.json).
-The measured checkout was `8f6cf84` with pre-existing receipt/status edits;
+The measured checkout was `fc3a334` with pre-existing receipt/status edits;
 the frozen driver SHA-256 was
 `73de74e803e3f0b2e5a22d624b25b06e7254a4e7e9c44855ffe403a7f357ef00`.
 The later compiler repair below is deliberately not included in these numbers.
@@ -915,33 +915,33 @@ units, not diagnostic occurrences or predictions of the next run.
 
 | ID / state | Units | Code | First-error family | Example unit | Next tailored check / owner |
 |---|---:|---|---|---|---|
-| K-C01 / original compile replay PASS | 78 | E3101 | Goto destination discarded; `fb05c80` | `arch/arm64/kernel/signal.o` | All 78 affected originals compile/assemble in `initializer-and-goto-20260912`; runtime/full composition remains separate. |
-| K-C02 / original compile replay PASS | 29 | E3026 | Static address/relocation | `drivers/base/dd.o` | `d387e65` passed 27 originals; `29704aa` passes the final `drivers/tty/sysrq.o` and `net/core/neighbour.o` in the two-object replay (`.evidence/k1/absolute-place-addresses-20260912/substitution.json`), with no access provenance invented. Combined runtime remains separate. |
-| K-C03 / original compile replay PASS | 21 | E3101 | Integer-valued static initializer not folded | `drivers/acpi/acpi_apd.o` | `d387e65`: all 21 affected originals compile/assemble; both interpreters and native fixtures pass, with static exposure and a non-exposure negative case. |
-| K-C04 / original compile replay PASS | 6 | E3021 | Asm `i` operand | `net/ipv4/arp.o` | RED `f312954`: the netfilter `__builtin_constant_p` guard was false, but lowering still visited its short-circuited right operand. Evaluate the left operand and retain its obligations, omit only a skipped right operand with no incoming label edge. All six originals assemble and match symbols in the replay (`.evidence/k1/guarded-immediates-20260912/substitution.json`). No immediate constraint is weakened. |
-| K-C05 / original compile replay PASS | 5 | E3101 | Aggregate value in scalar lowering | `arch/arm64/kvm/hyp/nvhe/ffa.nvhe.o` | RED `fabe30a`: register operands transfer the complete four-/eight-byte object representation using ordinary guarded loads/stores and existing assembly effects. Both oracle and subject native fixtures pass; all five originals assemble and match symbols in `aggregate-and-case-20260912`. |
-| K-C06 / original compile replay PASS | 5 | E3101 | Zero pointer-offset scale | `fs/super.o` | RED `7f152a4`, fix `7e79813`: both interpreters preserve evaluated indices, pointer identity and E3001. Both oracles O0/O2 and subject native fixtures agree; gate **1,433/0**, Clippy/fmt PASS. All five original units assemble and match symbols in the replay (`.evidence/k1/zero-sized-pointer-offsets-20260912/substitution.json`). |
+| K-C01 / original compile replay PASS | 78 | E3101 | Goto destination discarded; `df8a03e` | `arch/arm64/kernel/signal.o` | All 78 affected originals compile/assemble in `initializer-and-goto-20260912`; runtime/full composition remains separate. |
+| K-C02 / original compile replay PASS | 29 | E3026 | Static address/relocation | `drivers/base/dd.o` | `c71c76e` passed 27 originals; `544122f` passes the final `drivers/tty/sysrq.o` and `net/core/neighbour.o` in the two-object replay (`.evidence/k1/absolute-place-addresses-20260912/substitution.json`), with no access provenance invented. Combined runtime remains separate. |
+| K-C03 / original compile replay PASS | 21 | E3101 | Integer-valued static initializer not folded | `drivers/acpi/acpi_apd.o` | `c71c76e`: all 21 affected originals compile/assemble; both interpreters and native fixtures pass, with static exposure and a non-exposure negative case. |
+| K-C04 / original compile replay PASS | 6 | E3021 | Asm `i` operand | `net/ipv4/arp.o` | RED `7ce37e6`: the netfilter `__builtin_constant_p` guard was false, but lowering still visited its short-circuited right operand. Evaluate the left operand and retain its obligations, omit only a skipped right operand with no incoming label edge. All six originals assemble and match symbols in the replay (`.evidence/k1/guarded-immediates-20260912/substitution.json`). No immediate constraint is weakened. |
+| K-C05 / original compile replay PASS | 5 | E3101 | Aggregate value in scalar lowering | `arch/arm64/kvm/hyp/nvhe/ffa.nvhe.o` | RED `fee851d`: register operands transfer the complete four-/eight-byte object representation using ordinary guarded loads/stores and existing assembly effects. Both oracle and subject native fixtures pass; all five originals assemble and match symbols in `aggregate-and-case-20260912`. |
+| K-C06 / original compile replay PASS | 5 | E3101 | Zero pointer-offset scale | `fs/super.o` | RED `705c825`, fix `5037e8c`: both interpreters preserve evaluated indices, pointer identity and E3001. Both oracles O0/O2 and subject native fixtures agree; gate **1,433/0**, Clippy/fmt PASS. All five original units assemble and match symbols in the replay (`.evidence/k1/zero-sized-pointer-offsets-20260912/substitution.json`). |
 | K-C07 / original compile replay PASS | 4 | E2939 | Wide bit-field promotion | `drivers/irqchip/irq-gic-v2m.o` | Bounded declared-base direct-shift profile, preserving the other E2939 categories. Both interpreters and native value tests pass; all four originals compile/assemble with symbol parity in `wide-field-shift-20260913`. GCC/Clang disagreement is recorded, not called consensus. |
-| K-C08 / original compile replay PASS | 2 | E2202 | EFI wide-character initializer type | `drivers/firmware/efi/libstub/file.o` | Replay omitted supported `-fshort-wchar`; RED `6c11a5c`, fix `54d265a`. Both original EFI units assemble and match symbols in the replay (`.evidence/k1/efi-characters-20260912/substitution.json`); K1 Python **101/101**, Ruff PASS. No parser acceptance rule changed. |
-| K-C09 / original compile replay PASS | 2 | E3021 | `+r@x30` register binding | `arch/arm64/kernel/process.o` | RED `67ad4cf`: pin x30 only at explicit asm operands; ordinary allocation still excludes it and every prologue/epilogue saves/restores the return address. Four sealed O0/O2 runs and native read-write/tied/asm-goto/call tests pass. Both original units assemble and match symbols in the replay (`.evidence/k1/link-register-20260912/substitution.json`). |
-| K-C10 / original compile replay PASS | 2 | E3030 | Aggregate varargs | `net/9p/client.o` | RED `2d375a0`; ordinary anonymous operands carry byval shape and aggregate va_arg copies a list entry into a destination object. Both interpreters pass; eight GCC/Clang O0/O2 mixed-call directions pass. Both originals assemble with symbol parity in the replay (`.evidence/k1/aggregate-variadic-20260912/substitution.json`), compiler `ac5eaf9f...`; no install/boot claim. |
+| K-C08 / original compile replay PASS | 2 | E2202 | EFI wide-character initializer type | `drivers/firmware/efi/libstub/file.o` | Replay omitted supported `-fshort-wchar`; RED `188ff68`, fix `e22ad35`. Both original EFI units assemble and match symbols in the replay (`.evidence/k1/efi-characters-20260912/substitution.json`); K1 Python **101/101**, Ruff PASS. No parser acceptance rule changed. |
+| K-C09 / original compile replay PASS | 2 | E3021 | `+r@x30` register binding | `arch/arm64/kernel/process.o` | RED `7e9c608`: pin x30 only at explicit asm operands; ordinary allocation still excludes it and every prologue/epilogue saves/restores the return address. Four sealed O0/O2 runs and native read-write/tied/asm-goto/call tests pass. Both original units assemble and match symbols in the replay (`.evidence/k1/link-register-20260912/substitution.json`). |
+| K-C10 / original compile replay PASS | 2 | E3030 | Aggregate varargs | `net/9p/client.o` | RED `fe5e8eb`; ordinary anonymous operands carry byval shape and aggregate va_arg copies a list entry into a destination object. Both interpreters pass; eight GCC/Clang O0/O2 mixed-call directions pass. Both originals assemble with symbol parity in the replay (`.evidence/k1/aggregate-variadic-20260912/substitution.json`), compiler `ac5eaf9f...`; no install/boot claim. |
 | K-C11 / original compile replay PASS | 2 | E3034 | Function-pointer arithmetic | `arch/arm64/net/bpf_jit_comp.o` | Byte arithmetic uses the existing exposed-address conversions; reached calls still check target/signature. Both BPF originals compile/assemble with symbol parity in `function-addresses-20260913`. |
-| K-C12 / original compile replay PASS | 2 | E3101 | Packed pointer relocations at byte offsets 2 and 12 | `drivers/acpi/acpica/exdump.o` | RED `3d8f6c1`; user-authorized Section 2.1 correction in revision 1.9.91. Validator and shared memory separate pointer width from access alignment. Both interpreters, sealed oracles and subject native fixtures pass; both original ACPICA units assemble and match symbols in the replay (`.evidence/k1/packed-relocations-20260912/substitution.json`). Bounds, nonoverlap and provenance remain checked. |
+| K-C12 / original compile replay PASS | 2 | E3101 | Packed pointer relocations at byte offsets 2 and 12 | `drivers/acpi/acpica/exdump.o` | RED `a8addb1`; user-authorized Section 2.1 correction in revision 1.9.91. Validator and shared memory separate pointer width from access alignment. Both interpreters, sealed oracles and subject native fixtures pass; both original ACPICA units assemble and match symbols in the replay (`.evidence/k1/packed-relocations-20260912/substitution.json`). Bounds, nonoverlap and provenance remain checked. |
 | K-C13 / original compile replay PASS | 1 | E3029 → E3034 → assembled | Computed goto | `kernel/bpf/core.o` | Explicit storage/effect edges pass C-HIR, EvoIR, MIR, proof replay and native tests. After the shared function-address fix, the original compiles/assembles with symbol parity in `function-addresses-20260913`. |
-| K-C14 / original compile replay PASS | 1 | E3101 | Numeric pointer round trip in a case constant | `kernel/signal.o` | RED `fabe30a`: permit numeric pointer casts in the shared iterative static evaluator, preserving its fuel and forbidden-expression checks. Both interpreters/oracles/native fixtures pass; the original assembles and matches symbols in `aggregate-and-case-20260912`. |
+| K-C14 / original compile replay PASS | 1 | E3101 | Numeric pointer round trip in a case constant | `kernel/signal.o` | RED `fee851d`: permit numeric pointer casts in the shared iterative static evaluator, preserving its fuel and forbidden-expression checks. Both interpreters/oracles/native fixtures pass; the original assembles and matches symbols in `aggregate-and-case-20260912`. |
 | K-C15 / TARGETED PASS | 1 | E3101 | Volatile union copy | `kernel/rcu/update.o` | Exact-width representation copy preserves initializedness, pointer fragments and independent read/write events; original replay `volatile-union-20260913`: 1/1 assembled, not installed or booted. |
 
 ### Targeted compile repairs after relocations (2026-09-12)
 
 The affected-crate Cargo gate passed **1851 tests, 0 failed, 4 existing long
-campaign tests ignored**. Command: `CARGO_TARGET_DIR=target/tailored CARGO_BUILD_JOBS=2 CARGO_NET_OFFLINE=true tools/gate-changed.sh 3977afc --locked --offline -j2`.
+campaign tests ignored**. Command: `CARGO_TARGET_DIR=target/tailored CARGO_BUILD_JOBS=2 CARGO_NET_OFFLINE=true tools/gate-changed.sh 0b8757e --locked --offline -j2`.
 The first run found the old short-circuit CFG golden and blanket aggregate
 varargs rejection; their replacements retain value assertions and keep the
 floating-record refusal. The final Clippy-only adjustment uses a borrowed
 one-element slice: `cargo clippy --workspace --all-targets --locked --offline -j2 -- -D warnings`
 then passed; the memory **31/31** and variadic **7/7** tests were rerun.
 
-Final independent replay of committed `6df3eac` used
+Final independent replay of committed `2757251` used
 `git clone --no-local --no-hardlinks` into a new checkout with a fresh Cargo
 target. `cargo test --workspace --no-fail-fast --locked --offline -j2`
 passed **2,216 tests, 0 failed, 4 existing ignored**, across 292 test targets
@@ -984,7 +984,7 @@ exception, implicit token or implicit frame-address namespace was introduced.
 
 ### Explicit indirect bindings (2026-09-13)
 
-Tests-only `67c0eac` recorded **6 failed / 9 passed / zero build errors**:
+Tests-only `f433607` recorded **6 failed / 9 passed / zero build errors**:
 unknown `br.indirect` syntax and the existing E3029 lowering refusal. The
 implementation retains ordinary local SSA, full successor sets including
 static label relocations, positional address/effect binding, and distinct
@@ -1043,8 +1043,8 @@ unique measurements. `target/tailored` remains the active compiler/test tree.
 
 ### Kbuild option audit (2026-09-12)
 
-Implementation follow-up, 2026-09-13: `09444c4`, `2dd204d`, `12acefa` and
-`755e1dd` now preserve automatic zero initialization, hosted/builtin state,
+Implementation follow-up, 2026-09-13: `2890840`, `8d31349`, `cffe5b7` and
+`99543d9` now preserve automatic zero initialization, hosted/builtin state,
 strong guards, PAC returns, general-register-only mode, strict alignment,
 optimization macros, tiny symbol addresses and requested unwind tables.
 `build-options-20260913` freshly compiles/assembles **7/7** representative
@@ -1096,7 +1096,7 @@ completed successfully with both headers at the reference `#1`, and the
 is changed. The two interrupted pre-link attempts remain incomplete; cached
 compilations are reusable only under their unchanged input/compiler keys.
 
-Full attempt `20260912T191806Z` (subject `b358bf1`, driver SHA-256
+Full attempt `20260912T191806Z` (subject `8463753`, driver SHA-256
 `09bb3c373685fb033470e3435b601da25bccb81f2e62a03e3a61fee2ed4f27df`)
 finished **2,757 assembled / 42 refused / 0 timeout / 0 panic**. Installation,
 link and boot did not run. The refusals were 25 case constants, 16 integer
@@ -1131,7 +1131,7 @@ work below supersede that checkpoint; they do not rewrite the last full run.
 
 ### Constant-flow closure follow-up (2026-09-13)
 
-`4f7d254` and `2228355` record the next failing regression boundary. The fix
+`10da220` and `b73508d` record the next failing regression boundary. The fix
 carries finite integer facts across completed SSA edges, remembers a proven
 single defining assignment only after execution and inside its valid scope,
 and reads immutable private initializer representations without inventing
@@ -1233,7 +1233,7 @@ then-open identities against compiler `0b9f8f22...`: 18 refused, no new
 failure classes. After the explicit link-register fix, `link-register-20260912`
 assembles both affected originals with compiler `97ce544d...`, no symbol
 drift or cache hits, and no install/relink. Validation: the assembly CLI suite
-passed **44/44**; `tools/gate-changed.sh 3977afc --locked --offline --lib -q -j 2`
+passed **44/44**; `tools/gate-changed.sh 0b8757e --locked --offline --lib -q -j 2`
 passed **37/37** library tests plus all-target Clippy and fmt. This is a
 targeted gate, not a new full-workspace or full-kernel result; **16** of the
 original 161 compile refusals still need work after this repair.
@@ -1247,7 +1247,7 @@ with byte alignment, and lets the shared pointer memory API accept actual
 power-of-two access alignment independently of the target pointer width.
 The existing byte/provenance representation and assembler emitter are reused.
 
-`3d8f6c1` records five new failing tests with no build errors. The focused
+`a8addb1` records five new failing tests with no build errors. The focused
 GREEN command passed **100/100**:
 `CARGO_TARGET_DIR=target/tailored cargo test -p evocc-memory --lib -p evocc-evoir --test relocations_and_addresses -p evocc-lower --test relocations_and_addresses --locked --offline --no-fail-fast -j 2`.
 Tests cover offsets 0..7, the exact 2/12 packed layout, object/function/exposed
@@ -1284,7 +1284,7 @@ status renderer check pass; the full-survey receipt remains unchanged.
 
 The completed affected-crate gate passed **1,845 tests / 0 failures / 4
 pre-existing ignored**, Clippy `-D warnings` and workspace formatting:
-`CARGO_TARGET_DIR=target/tailored CARGO_BUILD_JOBS=1 CARGO_NET_OFFLINE=true tools/gate-changed.sh 855686e --locked --offline -q -j1 -- --test-threads=4`.
+`CARGO_TARGET_DIR=target/tailored CARGO_BUILD_JOBS=1 CARGO_NET_OFFLINE=true tools/gate-changed.sh 93249b1 --locked --offline -q -j1 -- --test-threads=4`.
 It covers the eleven affected/reverse-dependent crates, not a new full
 workspace or isolated-clone milestone replay; those remain part of the
 final campaign after the remaining known defects are repaired.
@@ -1310,7 +1310,7 @@ is not counted as a pass.
 The corrected affected gate then passed **1,435 tests / 0 failures / 3 existing
 ignored**, Clippy `-D warnings`, and workspace formatting; K1 Python tests
 passed **101/101** and Ruff/diff-check were clean. Command:
-`CARGO_TARGET_DIR=target/tailored CARGO_BUILD_JOBS=1 tools/gate-changed.sh fabe30a --locked --offline -q -j1 -- --test-threads=4`.
+`CARGO_TARGET_DIR=target/tailored CARGO_BUILD_JOBS=1 tools/gate-changed.sh fee851d --locked --offline -q -j1 -- --test-threads=4`.
 This is the affected-crate gate, not the still-pending full workspace/offline
 replay and full-composition milestone acceptance.
 
@@ -1322,7 +1322,7 @@ Breakdown: goto **78/78**, integer relocations **21/21**, numeric addresses
 **27/29**. It installs nothing and performs no relink; its records are in
 the targeted capture (`.evidence/k1/initializer-and-goto-20260912/substitution.json`),
 with per-unit SHA-256 `cf7413ac7a33b4d48e43c480bdf844e5d13d7458d02c6441145abbf920c4ca0a`.
-`d387e65` passes the affected gate (**1,801 passed, 0 failed, 4 existing
+`c71c76e` passes the affected gate (**1,801 passed, 0 failed, 4 existing
 ignored**, Clippy/fmt) and the final updated Section 9 sentinel separately.
 Both sealed reference compilers run the three static-address fixtures at
 O0/O2 (**12 zero exits**), and both link drivers run their subject assembly
@@ -1336,10 +1336,10 @@ to discard the destination. The repair reuses the existing expression-aware
 function-reference walk for both target checks and lowering; no validator or
 runtime obligation was removed, and no new traversal framework was added.
 
-RED `3b7fd97` reproduces the loop step, a backward expression jump, and an
+RED `2343974` reproduces the loop step, a backward expression jump, and an
 initializer jump in `tests/fixtures/expression-goto-targets.c`. C-HIR and both
 sealed compilers returned zero while lowering reported the missing target.
-GREEN `fb05c80` passes the same fixture through both interpreters and
+GREEN `df8a03e` passes the same fixture through both interpreters and
 Linux arm64 native assembly/link/execution. An additional unevaluated-sizeof
 case ensures a jump that is not executed cannot retain an unsupported body.
 
@@ -1376,7 +1376,7 @@ both interpreters on attempted dereference. No compiler acceptance rule was
 changed to satisfy these stale tests.
 
 Validation: `CARGO_TARGET_DIR=target/tailored CARGO_BUILD_JOBS=1
-tools/gate-changed.sh 8f6cf84 --locked --offline -q -j1 -- --test-threads=4`
+tools/gate-changed.sh fc3a334 --locked --offline -q -j1 -- --test-threads=4`
 passed: 729 tests, zero failures, three pre-existing ignored long campaigns;
 Clippy `-D warnings` and workspace formatting passed. The selected crates were
 `evocc`, `evocc-eqopt`, `evocc-lower`, `evocc-policy`, `evocc-proofcheck`, and
@@ -1415,7 +1415,7 @@ an isolated workspace replay were not run for this tailored repair.
 
 ### Tailored-first execution plan (2026-09-10)
 
-Starting checkout: `21f522d`. The last torture capture remains
+Starting checkout: `72f3573`. The last torture capture remains
 `20260909T215349Z`: 1,268 PASS, 268 compiler failures, 11 FP-deferred,
 145 evidenced not-applicable and zero oracle-unusable, out of 1,692 original
 identities. The 268 unresolved programs are not 268 independent defects:
@@ -1528,8 +1528,8 @@ not a claim that no unknown compiler bug can exist.
 
 ### Approved arithmetic and alignment work
 
-All five rules below were granted in `dff089b`, with the two reviewed
-alignment corrections in `177378e`. They are implementation and original-run
+All five rules below were granted in `a89933a`, with the two reviewed
+alignment corrections in `2206b31`. They are implementation and original-run
 validation work, not pending authority. The separate constant-expression and
 memory/ABI rules still awaiting body revisions have measured probes ready.
 
@@ -1568,7 +1568,7 @@ and outcomes are in `.evidence/builtin-probes/20260909-large-layout/`.
 | 15 | Variable-length objects | `20260909T215349Z`: 20 torture E2203 refusals plus other lanes; explicit profile limitation, not a solved test or silent miscompile | `torture musl` | OPEN |
 | 16 | Remaining diagnostic classes | Torture 328 raw refusals in `20260909T215349Z`; five-way classifier records 268 compiler failures overall, including unclassified refusals | `torture musl` | OPEN: not every refusal has an evidenced disposition yet |
 | 17 | Torture applicability/options | `20260909T215349Z`: 1,268 PASS / 268 compiler failure / 11 FP deferred / 145 not applicable / 0 oracle-unusable; 1,692 unchanged identities | `torture` | PARTIAL: five additional measured FP classifications, no new original PASS; additional unclassified programs may still require FP execution |
-| 18 | Unavailable Csmith references | Fresh `20260909T193124Z`, subject `691b654`: all 1,000 emit; 932 agree, 68 oracle-unusable, zero mismatch; every identity, runtime checksum/verdict, generator option and runtime digest unchanged | `csmith` | OPEN: four repeating source paths identified, 64 undetermined; every unavailable identity is listed in the applicability notebook, and none is a PASS |
+| 18 | Unavailable Csmith references | Fresh `20260909T193124Z`, subject `9f6eb9d`: all 1,000 emit; 932 agree, 68 oracle-unusable, zero mismatch; every identity, runtime checksum/verdict, generator option and runtime digest unchanged | `csmith` | OPEN: four repeating source paths identified, 64 undetermined; every unavailable identity is listed in the applicability notebook, and none is a PASS |
 | 19 | cJSON subject test linkage | Native mutations of either installed object fail; original replay relinks both objects into the public test and 54 public-API assertions without recompiling their implementations | `cjson` | CLOSED: mechanism replayed in `20260908T121307Z`; 0/2 subject objects means the milestone is still INCOMPLETE |
 | 20 | Reference baseline failures | musl 17 and toybox 1; separate environmental/applicability faults from subject regressions | `musl toybox` | OPEN |
 | 21 | Missing milestone adapters | Mbed TLS, PolyBench, llvm-test-suite, jq, Lua and SQLite: six NOT_IMPLEMENTED entries. Full-kernel and selected kselftest adapters now run; prerequisites and FP deferral remain visible, not silently waived | named adapters | OPEN |
@@ -1577,7 +1577,7 @@ and outcomes are in `.evidence/builtin-probes/20260909-large-layout/`.
 
 ### Variable record members and original-program classification
 
-Tests-only `571c7f7` compiled with 17 passes and one failure: a typedef hid
+Tests-only `99fa2a6` compiled with 17 passes and one failure: a typedef hid
 a variable array member from the parser's written-bracket check, so an
 invalid record was silently accepted. The canonical member check now covers
 arrays, unions and pointer layers, preserving E2203. A tailored regression
@@ -1609,7 +1609,7 @@ count is unchanged, and ordinary VLA support remains OPEN.
 
 ### Block-static variable-array pointers
 
-Tests-only `eb380c4` compiled with 73 passes and one E2203 failure.
+Tests-only `05ea989` compiled with 73 passes and one E2203 failure.
 The shared fixed-storage declaration path now captures block-static pointer
 bounds on every reached declaration while leaving static initialization and
 identity unchanged. Inline copies use an explicit address cast to view the
@@ -1631,7 +1631,7 @@ and scope reclamation remain OPEN; no campaign count changed.
 
 ### Local variable-array pointers over fixed storage
 
-Tests-only `9c0cb03` compiled with 72 passes and one E2203 failure.
+Tests-only `99d2060` compiled with 72 passes and one E2203 failure.
 Automatic pointer declarations now reuse bound capture before initialization,
 including uninitialized pointers, fixed arrays of pointers, register objects
 and for initializers. An inline regression also exposed stale capture IDs in
@@ -1653,14 +1653,14 @@ pass. Four sealed reference runs and two native subject runs pass
 (`local-array-pointers.out`).
 
 Unchanged originals `20040411-1` and `pr22061-2` also pass four reference and
-two native subject runs each on `962d85b` (`captured-array-originals.out`).
+two native subject runs each on `0963bd5` (`captured-array-originals.out`).
 The latter does not execute its unused variable-array function, so it is not
 evidence for actual VLA storage. No full campaign ran and frozen benchmark
 receipts remain unchanged; dynamic storage and scope reclamation remain OPEN.
 
 ### Multidimensional parameter strides
 
-Tests-only `7480eb7` compiled with 97 passes and three E2203 failures:
+Tests-only `7c6030b` compiled with 97 passes and three E2203 failures:
 definition-entry strides, inner prototype stars and integer-bound validation.
 Prototype-style definitions now capture every variable dimension once at
 entry using the existing size-object path; their outer array layer still
@@ -1698,7 +1698,7 @@ No full campaign ran; all benchmark receipt numbers remain unchanged.
 
 ### Captured array strides through pointer operations
 
-Tests-only `0eafa69` compiled with 68 passes and one E2102
+Tests-only `0673bf6` compiled with 68 passes and one E2102
 `invalid-update-operands` failure. A shared layout factorization now gives
 subscripts, arithmetic, updates, pointer differences and sizeof the same
 captured bounds, without inventing a static size. Bound values travel along
@@ -1729,7 +1729,7 @@ reclamation remain OPEN; no full campaign ran or changed its measured counts.
 
 ### Literal string comparisons and embedded NUL
 
-Tests-only `b9c34e4` compiled with seven passes and two semantic failures:
+Tests-only `588682a` compiled with seven passes and two semantic failures:
 literal comparisons reached E2927 because of a same-named static declaration,
 while the measured nonliteral binding conflict was silently accepted.
 A further RED pinned `strlen("a\0tail")` folding to the wrong length (E2911
@@ -1751,7 +1751,7 @@ no full campaign was run and benchmark receipts remain unchanged.
 
 ### Captured array sizes and forbidden scope entry
 
-Tests-only `077e6c2` compiled with 64 existing passes and three E2203
+Tests-only `541434a` compiled with 64 existing passes and three E2203
 failures. Block-scope variable array typedefs now retain bound identities,
 initialize compiler-owned size objects once per reached declaration, and
 elaborate `sizeof` into reads of those objects. Distinct captured types do
@@ -1784,7 +1784,7 @@ by a fabricated fixed layout. No full campaign or milestone count changed.
 
 ### Ordinary stack-allocation binding
 
-Tests-only `3a90067` compiled with two semantic failures: an implicit GNU89
+Tests-only `dc28dc3` compiled with two semantic failures: an implicit GNU89
 `alloca` had the wrong return type (E2202), and conflicting external bindings
 were silently accepted. Compatible external declarations and GNU89 implicit
 calls now reuse the explicit builtin's prototype and allocation path; GNU11
@@ -1808,7 +1808,7 @@ Actual VLA declarations, captured sizes and scope reclamation remain OPEN.
 
 ### Runtime-sized function-lifetime stack storage
 
-Tests-only `0e711af` compiled and failed on the missing dynamic allocation
+Tests-only `902a13e` compiled and failed on the missing dynamic allocation
 text form and two E3046 lowerings. `__builtin_alloca` now has an actual
 manifest site and once-evaluated byte-size operand, becomes `alloca.dynamic`
 with mem/world threading, and reaches a native `stack.alloc` operation.
@@ -1847,7 +1847,7 @@ or whole VLA-family closure is claimed from this result.
 
 ### Array parameter bounds at definition entry
 
-Tests-only `e47bf43` compiled with three declared E2203 failures and three
+Tests-only `d271541` compiled with three declared E2203 failures and three
 existing parameter checks passing. The parser now retains the bound expression,
 adjusts the outer array parameter once, and elaborates definition-only bound
 effects as ordinary C-HIR entry statements. Recursion and inline substitution
@@ -1875,7 +1875,7 @@ Actual dynamic objects remain OPEN and no campaign or milestone count changes.
 
 ### Volatile bit-field execution
 
-Tests-only `fc3288a` compiled and failed twice on the declared volatile
+Tests-only `67da806` compiled and failed twice on the declared volatile
 bit-field refusal, independently in C-HIR execution and lowering. Volatile
 reads and read/modify/writes now preserve the container's neighboring bits
 and carry the existing world token; packed containers are split into bounded
@@ -1901,7 +1901,7 @@ their measured counts remain unchanged.
 
 ### Exact wide checked arithmetic
 
-Tests-only `4198a69` compiled with ten PASS and four semantic failures:
+Tests-only `67cc11b` compiled with ten PASS and four semantic failures:
 E2913 at the old wide-builtin parser boundary and E3044 at the old exact
 intermediate-width limit. The parser now uses the shared integer-class
 predicate, and lowering retains its existing narrow fast path while wider
@@ -1933,13 +1933,13 @@ at their last measured values.
 
 ### Hosted wide division and spill adjacency
 
-Tests-only `27d2b6e` records 38 passing tests, nine semantic failures and
+Tests-only `a1f410e` records 38 passing tests, nine semantic failures and
 zero build errors. Division/remainder now execute through the existing
 width-aware integer kernels and lower to caller-clobber-aware runtime calls,
 with the original zero-divisor and signed MIN/-1 obligations intact.
 The live-pair C fixture then exposed a separate E4020: spill reloads/stores
 broke the required adjacency of carry-producing and consuming instructions.
-Tests-only `db5351e` pins that reproducer plus two deterministic spill cases.
+Tests-only `f4f75d4` pins that reproducer plus two deterministic spill cases.
 Spilling now treats each flags chain as indivisible and saves a final
 flag-producing instruction's results on each conditional outgoing edge.
 Neither validator was relaxed.
@@ -1970,7 +1970,7 @@ subsequently addressed above. All campaign counts are unchanged.
 
 ### Hidden symbols and explicit object sections
 
-Tests-only `11a9c29` records six semantic failures and zero build errors.
+Tests-only `7caa0b2` records six semantic failures and zero build errors.
 Hidden visibility now reaches definitions, declarations, aliases and native
 symbol directives; strong hidden addresses use direct page relocations while
 weak hidden addresses retain nullable GOT access. Explicit object sections
@@ -2002,7 +2002,7 @@ boot. All original campaign counts remain unchanged.
 
 ### Ancestor frame addresses
 
-Tests-only `a852841` records 30 passing guards, four semantic failures and
+Tests-only `7aae332` records 30 passing guards, four semantic failures and
 zero build errors. Frame depths now pass through the unsigned-int operand
 conversion into canonical EvoIR and machine metadata; native lowering follows
 saved frame links, with a bounded-size loop for depths above two. The loop
@@ -2033,7 +2033,7 @@ The broad workspace all-targets check was intentionally interrupted (exit
 
 ### General and memory assembly operands
 
-Tests-only `2e195f8` records three semantic failures, five passing guards and
+Tests-only `1dac750` records three semantic failures, five passing guards and
 zero build errors. The reviewed `m`/`=m`/`+m` forms now use the existing
 address-based Q forms, while input `g` selects the existing register form.
 Parser object checks admit writable arrays without accepting const subobjects
@@ -2056,7 +2056,7 @@ All full-campaign counts are unchanged.
 
 ### Union member values and static initializer dependencies
 
-Tests-only `b589d6f` records three semantic failures and zero build errors.
+Tests-only `597c33c` records three semantic failures and zero build errors.
 Member casts now select an actually compatible member and reuse its checked
 initializer, keeping an outer rvalue cast instead of inventing another IR
 representation. E2942 rejects incompatible types and the measured narrow
@@ -2080,7 +2080,7 @@ campaign values; this is local verification, not campaign closure.
 
 ### Zero-byte storage and empty record arguments
 
-Tests-only `8254d99` records five semantic failures, zero build errors.
+Tests-only `cd2958d` records five semantic failures, zero build errors.
 Object allocation now accepts zero bytes without making zero-sized memory
 accesses valid; empty initializers and copies preserve lifetime checks.
 The text reader accepts the renderer's empty byte payload only for size zero,
@@ -2109,7 +2109,7 @@ The unchanged full-campaign counts remain the benchmark authority.
 
 ### Static absolute addresses without invented provenance
 
-Tests-only `0c9bc5f` records four semantic failures and zero build errors:
+Tests-only `c1bcb60` records four semantic failures and zero build errors:
 two lowering tests report E3026 and two memory tests reject static address
 bytes. The reviewed S12 rule is now implemented using existing global bytes,
 not fake symbols or a new IR instruction. Intermediate integer casts and
@@ -2133,7 +2133,7 @@ tailored results.
 
 ### Wide-field consensus and conflicting precision contexts
 
-Tests-only `36288de` records three parser semantic failures and one lowering
+Tests-only `57f22f4` records three parser semantic failures and one lowering
 failure, with no build error. The consensus fixture covers the signed 52/53-bit
 XOR/OR and unsigned 35-bit sign checks behind `991118-1`, `bf64-1` and
 `bf-sign-2`, plus unsigned stored updates, returned values and neighboring bits.
@@ -2159,7 +2159,7 @@ the last sealed campaign, and the full campaign is deliberately not rerun.
 
 ### Source-width constant arithmetic without weakening runtime checks
 
-Tests-only commit `4675bd6` extends the existing RED with source-width
+Tests-only commit `7eb39ff` extends the existing RED with source-width
 32/64/128-bit boundaries, integer promotions, surrounding assignments and
 an unevaluated conditional arm. The focused CLI result before the repair
 is two passing guards and one semantic failure, E3004 in both interpreters;
@@ -2191,7 +2191,7 @@ remain unchanged. `cargo clippy -p evocc-chir -p evocc-lower --lib --locked
 
 ### Variadic list subobjects use ordinary value copies
 
-Tests-only commit `d9c90e8` pins the integer-only shape exposed by original
+Tests-only commit `86f1815` pins the integer-only shape exposed by original
 `va-arg-13`: the C-HIR interpreter rejects the projected list with
 `function call nested outside scalar expression subset`, with no build error.
 The parser's shared projected-lvalue conversion omitted `__builtin_va_list`.
@@ -2219,7 +2219,7 @@ sealed counts and the pending source-width arithmetic RED remain unchanged.
 
 ### Prior parameters in declaration expressions
 
-Tests-only commit `f4e0430` records four semantic failures and zero build
+Tests-only commit `0e516b5` records four semantic failures and zero build
 errors: missing or incorrectly shadowed prior parameters in array bounds.
 The same defect silently selects the outer enumerator in
 `int matrix(long width, int (*data)[sizeof(width)])`: the old release's two
@@ -2247,16 +2247,16 @@ the original-program campaigns and their existing counts remain unchanged.
 
 ### Unevaluated type queries and constant statement branches
 
-`0d8a757` opens four semantic RED tests for `__builtin_classify_type`, all
-E2001 and no build errors; `ab4b7c1` resolves the agreed expression categories
+`0e41de5` opens four semantic RED tests for `__builtin_classify_type`, all
+E2001 and no build errors; `f293399` resolves the agreed expression categories
 to an integer constant without evaluating the operand or adding an IR node.
 The conflicting `_Bool` category is E2941, not a guessed reference answer.
 Six resolved-form pairs retain byte-identical EvoIR. The selected lexer,
 parser and C-HIR command passed 838 tests, and the three selected lowering
 targets passed 80 tests before the following branch repair.
 
-`fb11cf8` then records two E3101 RED failures in unselected statement arms.
-`2a5b092` skips an arm only when constant selection and the existing
+`38dce68` then records two E3101 RED failures in unselected statement arms.
+`870800c` skips an arm only when constant selection and the existing
 goto/case/addressed-label checks permit it; condition evaluation and runtime
 obligations remain. The new fixture, direct goto entries, switch dispatch,
 addressed labels and resolved forms pass 108 tests. The two original
@@ -2266,10 +2266,10 @@ subject and both references, without replacing either original benchmark.
 
 The affected gate was actually run, not inferred from focused tests:
 `CARGO_TARGET_DIR=target/frontend CARGO_BUILD_JOBS=1 CARGO_NET_OFFLINE=true
-tools/gate-changed.sh fb11cf8 --locked --offline --quiet -j 1` finishes with
+tools/gate-changed.sh 38dce68 --locked --offline --quiet -j 1` finishes with
 677 passed / 1 failed / 3 existing ignored. The sole failure is the pending
 C04 `constant_source_width` RED (E3004 in both interpreters). The first run
-also found two stale text goldens from `e6ab6cf`'s expression-edge selection;
+also found two stale text goldens from `2f891ec`'s expression-edge selection;
 their exact text and negative-mutation anchors were updated, preserving the
 expected values and independent SSA checks, and the complete affected set
 was rerun. No ignored test was added. This is not a green workspace claim.
@@ -2280,11 +2280,11 @@ The gate's same six crates pass a separate all-targets Clippy command with
 pass 128/128 (`20260909T215052Z-43130`) and 22/22
 (`20260909T215214Z-43670`), each with zero mismatch and oracle consensus.
 
-Release subject `5aabf60`, SHA-256
+Release subject `93bed58`, SHA-256
 `f2d9d58cf3556b2c32f17cb13ac1a7ba3bb8e43a4d44f739511ac17a4622d9cd`,
 passes both regression fixtures through both native toolchains; Clang uses
 `-fno-integrated-as` for the emitted assembly syntax. The five source-bound
-FP dispositions in `5aabf60` are evidence-backed classifications, not new
+FP dispositions in `93bed58` are evidence-backed classifications, not new
 subject passes. Probe commands and outcomes are in
 `.evidence/builtin-probes/20260910-type-classification/results.txt` and
 `.evidence/builtin-probes/20260910-floating-execution/results.txt`.
@@ -2302,7 +2302,7 @@ and the other unselected lanes retain their earlier measurements, not new
 results from this binary.
 
 The existing independent `git clone --no-local` was fast-forwarded to
-`5aabf60` and replayed offline with its own `target/replay`, without borrowing
+`93bed58` and replayed offline with its own `target/replay`, without borrowing
 the main build cache or copying evidence. Its 13 selected targets pass
 196 tests / 0 failed / 0 ignored: C-HIR initializer schema; parser attributes,
 pointer attributes, pointer conversions and compile-time builtins; EvoIR
@@ -2320,8 +2320,8 @@ replay does not override the explicit C04 failure in the affected gate.
 
 ### Typed builtin termination and original-program replay
 
-`fe20a3f` records three failing semantic tests, with zero build errors.
-`be5c3f5` implements `__builtin_trap()` as the existing typed-terminator
+`b481480` records three failing semantic tests, with zero build errors.
+`d33709f` implements `__builtin_trap()` as the existing typed-terminator
 family's `trap.builtin_trap`, reporting E3047 when reached and emitting
 `brk #1000` on AArch64. It remains distinct from `__builtin_unreachable`:
 neither grants a dead-edge assumption. Unevaluated and untaken occurrences,
@@ -2330,7 +2330,7 @@ both interpreter paths are covered. No fake return value or external call
 is introduced. The compact oracle/native probe record is
 `.evidence/builtin-probes/20260910-builtin-trap/results.txt`.
 
-Release subject `691b654`, SHA-256
+Release subject `9f6eb9d`, SHA-256
 `6e218a8583dbaf404f032ba03a393575c469ca2c84e48dec25661afeeda4a1fc`,
 was measured by `CARGO_TARGET_DIR=target/frontend python3 -u tools/bench.py
 csmith torture --no-build --jobs 2`, sequential wrapper
@@ -2349,7 +2349,7 @@ reference runs. Raw totals are 1,269 pass / 328 refused / 89 not-applicable /
 failure / 145 not-applicable / 6 FP-deferred / 0 oracle-unusable.
 The third trap original, `pr115033`, reaches the explicitly excluded
 `__builtin_exit`; Clang rejects the unchanged source at both optimization
-levels. `691b654` binds that exclusion to the source and probe rather than
+levels. `9f6eb9d` binds that exclusion to the source and probe rather than
 claiming a third repaired program. The older `pr124358` oracle conflict
 also remains separate from its raw subject success. Other lanes were not
 remeasured by this two-suite invocation, which correctly exits INCOMPLETE.
@@ -2369,7 +2369,7 @@ The subject layout commands pass 128/128 and 22/22, zero mismatches:
 `20260909T192939Z-31199`, omitted the case-set selector and stopped at its
 manifest check before executing any case; it is retained, not counted PASS.
 
-A separate `git clone --no-local` of `691b654`, with its own empty
+A separate `git clone --no-local` of `9f6eb9d`, with its own empty
 `target/replay` and no copied evidence, passes 138 tests across nine targets,
 zero failed or ignored, with the stable toolchain and this offline command:
 
@@ -2386,13 +2386,13 @@ CARGO_TARGET_DIR=target/replay cargo test \
 This replays the changed semantic families, not all workspace tests. The
 separate `constant_source_width` RED remains one PASS / one FAIL in its last
 recorded run; the architecture review explicitly reserves its body revision.
-The refreshed remote remains `33bc3d4`, so no new authority is inferred from
+The refreshed remote remains `2f15059`, so no new authority is inferred from
 network recovery. The broader non-FP completion condition is still unmet.
 
 ### Bracket attributes and original-program replay
 
-`b932d53` adds the tests-only attribute RED (five declared failures, no
-build errors); `790db6d` shares GNU attribute handling while retaining
+`bcadbf7` adds the tests-only attribute RED (five declared failures, no
+build errors); `7bc7795` shares GNU attribute handling while retaining
 bracket namespaces and attachment to declarations or derived types.
 Unknown namespaces cannot silently enable GNU layout, aliases or inlining.
 Sealed layout conflicts remain refused. A further malformed-name regression
@@ -2402,7 +2402,7 @@ last guard; the final seven focused targets pass 134 tests, zero failures.
 Library Clippy, fmt, Ruff and the 14 benchmark-tool tests pass. This is not a
 fresh full workspace gate: the separately recorded constant-width RED remains open.
 
-Release subject `0775488`, SHA-256
+Release subject `8459a66`, SHA-256
 `414bb8358a4bea82b793bdd0bae2aa77774ed651f44094e037ba36d1bc1217c2`,
 passes `tests/fixtures/bracket-attributes.c` through both interpreters and
 both sealed native assembly/link/execution paths. The unchanged full torture
@@ -2420,11 +2420,11 @@ No Csmith, kernel or library result is refreshed by this torture-only run.
 
 ### Variadic inline objects and qualified character pointers
 
-`1ee0d18` records the integer-only inline `va_list` regression: lowering
+`6b48b3b` records the integer-only inline `va_list` regression: lowering
 reports E3101 for the parameter initializer, while both sealed compilers
-at O0/O2 execute the fixture with return zero. `bd084c1` makes substitution
+at O0/O2 execute the fixture with return zero. `b0b73bb` makes substitution
 and initializer validation copy the complete 32-byte list object, as the
-existing ordinary-call path already does. `ae35b6f` extends the fixture
+existing ordinary-call path already does. `6d3781a` extends the fixture
 through an inline list return passed to an ordinary callee; original C-HIR,
 substituted C-HIR and EvoIR all execute it correctly. The initializer schema,
 expression-value-flow and variadic-execution suites pass 59 tests, zero
@@ -2432,9 +2432,9 @@ failures, with `CARGO_TARGET_DIR=target/frontend cargo test -p evocc-chir
 --test g2_initializer_schema -p evocc-lower --test expression_value_flow
 --test variadic_execution --offline --no-fail-fast -j 1`.
 
-`5fad412` records a second tests-only RED: assignment through `char **`
+`f03a6da` records a second tests-only RED: assignment through `char **`
 rejects an immediate qualified character pointer even though other conversion
-sites accept it. `9a69f0e` applies the same character-pointer rule there,
+sites accept it. `cd3994b` applies the same character-pointer rule there,
 without admitting nested qualifier removal or writes through const places.
 The sealed GCC-14/Clang-19 O0/O2 fixture and 36-combination matrix all return
 zero. `CARGO_TARGET_DIR=target/frontend cargo test -p evocc-parser
@@ -2445,7 +2445,7 @@ zero. `CARGO_TARGET_DIR=target/frontend cargo test -p evocc-parser
 Clippy with `-D warnings`, fmt and Ruff pass. These are focused results;
 they do not imply a fresh workspace or isolated-replay total.
 
-Subject `9a69f0e`, release SHA-256
+Subject `cd3994b`, release SHA-256
 `120cce232c35d20256042511b30f0cb8ddf49102cb01ed3481fe77839c166f00`,
 executes both fixtures with return zero through C-HIR, EvoIR, and the emitted
 AArch64 assembly independently linked and run with GCC-14 and Clang-19:
@@ -2486,10 +2486,10 @@ The subsequent three-crate all-targets lint finishes successfully:
 
 ### Constant edge values and original kernel object replay
 
-`9d4d4a7` adds a tests-only wrong-value regression: the focused suite reports
+`2bb9a12` adds a tests-only wrong-value regression: the focused suite reports
 17 passes and one failure, with no build errors. For
 `if ((1 ? -1 : 0U) < 0)`, the C-HIR interpreter and sealed GCC-14/Clang-19
-at O0/O2 return zero, but the previous lowering returns one. `b7afc89`
+at O0/O2 return zero, but the previous lowering returns one. `7eb7b76`
 reuses the existing C-HIR integer type query to apply the conditional common
 type before selecting an edge, including omitted-middle conditionals;
 checked runtime arithmetic is unchanged.
@@ -2499,7 +2499,7 @@ The six focused lower suites pass 115 tests with zero failures:
 --test computed_goto_lowering --test static_storage_and_discard
 --test front_end_resolved_forms --test day6_g3_differential --offline
 --no-fail-fast`. C-HIR/lower library Clippy with `-D warnings`, fmt and Ruff
-pass. The preceding broad `gate-changed.sh 33bc3d4 --offline` cold build was
+pass. The preceding broad `gate-changed.sh 2f15059 --offline` cold build was
 interrupted after the new wrong value was confirmed; it is INCOMPLETE, not
 a passing gate. The separate authority-pending constant-overflow RED remains
 open, and no new workspace or isolated-replay total is claimed.
@@ -2515,7 +2515,7 @@ or boot; these are targeted checks, not an updated K1 milestone count.
 
 ### Original-kernel lowering moves past the assembly-label frontier
 
-The sealed `20260909T112601Z-99781` capture measures `e04fc4c`, executable
+The sealed `20260909T112601Z-99781` capture measures `1005ff1`, executable
 `45c9060ad238d43b49876534818c73461529a26de51a179afd2ce52ea28d9823`:
 2,008 clean and 790 diagnosed out of the same 2,798 units, with no panic,
 timeout or unavailable result. All 5,603 capture files were digest-checked.
@@ -2546,8 +2546,8 @@ hits the zero-byte-object boundary. Neither targeted observation changes the
 sealed numbers above; original benchmark replays remain required. The disputed
 wide-bit-field shift prototype is not merged.
 
-The dependent gate on `a146cdd`, `CARGO_TARGET_DIR=target/frontend
-CARGO_BUILD_JOBS=2 tools/gate-changed.sh e04fc4c --offline --quiet`, finishes
+The dependent gate on `2c41fab`, `CARGO_TARGET_DIR=target/frontend
+CARGO_BUILD_JOBS=2 tools/gate-changed.sh 1005ff1 --offline --quiet`, finishes
 with 1,311 passed, one failed and three existing ignored tests across 196
 test-result groups. The sole failure is the retained
 `constant_arithmetic_preserves_the_source_integer_width` RED (C04); its body
@@ -2555,7 +2555,7 @@ revision is still pending. This is not a green workspace or an isolated replay.
 The separate full-workspace all-targets Clippy run was interrupted to release
 the shared Cargo lock; it is INCOMPLETE, not PASS. Formatting and Ruff passed.
 
-`74c04b5` / `b438861` add and repair block-only extern storage, exclusion of
+`5a3da18` / `ded2979` add and repair block-only extern storage, exclusion of
 same-spelled local symbols from the external table, and expression extension
 prefixes. Their focused execution checks pass 76 Rust tests, including both
 interpreters and native expression evaluation; 118 ladder Python tests and
@@ -2568,7 +2568,7 @@ remains required; the for-declaration oracle conflict remains refused.
 ### Variadic register preservation and internal-body original-program replay
 
 `CARGO_TARGET_DIR=target/frontend python3 -u tools/bench.py musl --no-build
---budget 45 --jobs 2` measured `7f91fd2`, executable
+--budget 45 --jobs 2` measured `3cb52d2`, executable
 `45c9060ad238d43b49876534818c73461529a26de51a179afd2ce52ea28d9823`, in
 wrapper run `20260909T112011.563321Z` and musl capture
 `.evidence/ladder/musl/20260909T112011Z/`. All 1,007 assembled units
@@ -2608,7 +2608,7 @@ or the independent vector-save and incomplete-extern repairs.
 
 ### Target-selected wide character original-program replay
 
-`python3 -u tools/bench.py ctest --jobs 2`, subject `b54ae63`, wrapper
+`python3 -u tools/bench.py ctest --jobs 2`, subject `3dd64de`, wrapper
 `20260909T085125.845803Z`: 209 PASS / 11 refused out of the original 220.
 The five-way counts are 209 / 4 / 7 / 0 / 0; the run is INCOMPLETE.
 Capture: `.evidence/ladder/e0/20260909T085126Z`. Comparing every original
@@ -2616,8 +2616,8 @@ identity with `20260909T074238Z`, only `00220` changes (refused to PASS),
 with no lost passes. Remaining compiler failures are `00140` (aggregate
 varargs), `00144` (update operands), `00207` (VLA), and `00216` (initializer).
 
-`3bbb5d8` shares the target's wide-character type across decoding, typing,
-layout, initialization, and driver options. `tools/gate-changed.sh c461caf
+`0126c41` shares the target's wide-character type across decoding, typing,
+layout, initialization, and driver options. `tools/gate-changed.sh 8e7d7d4
 --offline --quiet` passes 1,704 tests in 254 suites, with zero failures and
 four existing ignored tests; Clippy and fmt pass. The first attempt exposed
 two stale hosted-wide-string fixtures; both now assert the correct complete
@@ -2633,7 +2633,7 @@ targeted checks, not a new full-configuration survey.
 ### Function-name and storage-only original-program replay
 
 `python3 -u tools/bench.py ctest torture zstd tinycc --jobs 2`, subject
-`c461caf`, wrapper `20260909T074238.247563Z`, exits INCOMPLETE. ctest is
+`8e7d7d4`, wrapper `20260909T074238.247563Z`, exits INCOMPLETE. ctest is
 208 PASS / 12 refused (up one); torture is 1,259 PASS / 338 refused /
 5 runtime failures / 1 link failure / 89 original-option exclusions.
 The measured five-way counts are respectively 208 / 5 / 7 / 0 / 0 and
@@ -2642,9 +2642,9 @@ not applicable / oracle-unusable order. No source or identity changed.
 Captures: `.evidence/ladder/e0/20260909T074238Z` and `20260909T074333Z`.
 
 `00178` now passes: an unused `double` object's storage and `sizeof` do not
-require floating-point execution. `288c101` also shares the C function-name
+require floating-point execution. `5c47a51` also shares the C function-name
 resolver and repairs pointer logical negation through the existing truth
-conversion. Its 72 focused tests and changed gate against `bc2916c` pass
+conversion. Its 72 focused tests and changed gate against `60fedd8` pass
 (the successful gate listing was truncated, so no aggregate is inferred).
 Floating-point evaluation still fails closed. zstd rises from 2 to 6 of 44
 units in a passing mixed build (`20260909T075101Z`); TinyCC rises from 7 to
@@ -2664,7 +2664,7 @@ then the remaining memory/ABI and type work. None is hidden as deferred FP.
 
 ### Aligned-function and full-width original-program replay
 
-`python3 tools/bench.py ctest torture --jobs 4`, subject `48f8da4`, wrapper
+`python3 tools/bench.py ctest torture --jobs 4`, subject `8bd99d2`, wrapper
 `20260909T062900.006209Z`: ctest is 207 PASS / 13 refused; torture is 1,265
 PASS / 326 refused / 11 runtime failures / 1 link failure / 89 not-applicable.
 Captures are `.evidence/ladder/e0/20260909T062900Z` and
@@ -2677,10 +2677,10 @@ There are zero unresolved requirements. This run predates both the new
 reviewed-disposition classifier and the typed wide-field/storage-order
 refusals; it cannot serve as their execution evidence.
 
-`9ba7b87` is the compiled semantic RED for wide-field promotions and scalar
-storage order; `bc2916c` implements E2939 and E2940 without changing storage
+`8d8ae36` is the compiled semantic RED for wide-field promotions and scalar
+storage order; `60fedd8` implements E2939 and E2940 without changing storage
 or explicit conversions. Focused tests passed 85/85; the changed gate against
-`d11b20e` passed tests, Clippy and fmt (the aggregate test listing was truncated,
+`0ed20c5` passed tests, Clippy and fmt (the aggregate test listing was truncated,
 so no total is inferred). Replaying the six original preprocessed programs
 with `target/frontend/debug/evocc --parse-only` reports E2939 for `bitfld-3`,
 `bitfld-5`, `pr32244-1`, `pr34971`, and E2940 for `20230630-2` and `20230630-4`.
@@ -2688,7 +2688,7 @@ These are deliberate refusals with separate oracle evidence, never passes.
 
 ### Signed-shift original-program replay
 
-`python3 tools/bench.py ctest torture --jobs 4`, subject `67c4fdd`, wrapper
+`python3 tools/bench.py ctest torture --jobs 4`, subject `b4047be`, wrapper
 `20260909T050443.696884Z`: ctest is 207 PASS / 13 refused; torture is 1,228
 PASS / 296 refused / 12 runtime failures / 1 link failure / 83 not-applicable /
 72 requirement-unresolved. All 220 and 1,692 original identities remain.
@@ -2702,7 +2702,7 @@ five-way closure and no unresolved requirement is called a pass.
 
 ### Qualified prefetch addresses
 
-`35e20cd` is a compiled single-test RED: both interpreter CLI paths report
+`c4eb6fe` is a compiled single-test RED: both interpreter CLI paths report
 E2913 for a volatile-qualified object address. The parser now normalizes
 only the hint's address operand to its existing prototype; ordinary calls
 retain qualifier validation. All 55 focused integration tests pass, including
@@ -2710,10 +2710,10 @@ native execution, exactly two volatile pointer loads and one update store,
 no hint call, and the existing arity/non-pointer refusals. The unused external
 declaration is not an executed call; the initial name-absence assertion was
 corrected to check the operation and observable accesses instead.
-The eight-crate all-targets changed gate against `35e20cd`, Clippy, fmt,
+The eight-crate all-targets changed gate against `c4eb6fe`, Clippy, fmt,
 Ruff and diff-check pass. Part of the test listing exceeded the terminal
 output limit, so no exact aggregate test count is inferred from that run.
-Original replay `20260908T213244.792960Z`, subject `9f6ad28`, preserves
+Original replay `20260908T213244.792960Z`, subject `6402de5`, preserves
 all 220 ctest and 1,692 torture identities and every prior PASS.
 `builtin-prefetch-3` changes from refusal to PASS: torture now has 1,283
 passes, 382 refusals, 26 runtime failures and one link failure; ctest stays
@@ -2723,17 +2723,17 @@ benchmark remains INCOMPLETE and the final all-lane replay has not run.
 
 ### Function-pointer casts and the reached-call boundary
 
-`b5837ce` contains two compiled RED tests: both interpreters/lowering refused
+`3386556` contains two compiled RED tests: both interpreters/lowering refused
 the cast before its call could be reached. Casts now preserve the function
 identity while changing the static interface; lowering uses the existing
 pointer/integer round trip. Argument evaluation still precedes the unchanged
 dynamic E3019 check. The storage/cast-back fixture and argument-side goto
 pass both interpreters and native execution, while an actually reached
 incompatible call still reports E3019 in both interpreters. All 54 focused
-integration tests pass. The changed all-targets gate against `b5837ce`
+integration tests pass. The changed all-targets gate against `3386556`
 passes 1,273 tests, zero failures and three existing ignores; Clippy, fmt,
 Ruff and diff-check pass. Original replay `20260908T210905.121630Z`, subject
-`c7e4e28`, retains all identities and prior passes: `call-trap-1` changes
+`e74b9ae`, retains all identities and prior passes: `call-trap-1` changes
 from refusal to PASS. Torture reaches 1,282 passes, 383 refusals, 26 runtime
 failures and one link failure; ctest remains 206/220. Captures are
 `.evidence/ladder/e0/20260908T210905Z` and `20260908T210929Z`. This closes
@@ -2741,16 +2741,16 @@ the identified cast/evaluation-order refusal, not the other call or ABI work.
 
 ### Deallocation builtin and assembly spelling
 
-`b95f568` is the two-test compiled RED: E2001 for `__builtin_free`, E1001
+`d8fa821` is the two-test compiled RED: E2001 for `__builtin_free`, E1001
 for file-scope `__asm`, with the other 77 integration tests passing. Three
 entries in the shared contextual-spelling/prototype tables implement the
 two forms without a new intrinsic, interpreter library model or assembly
 path. All 79 integration tests now pass, including native execution,
 byte-identical assembly/IR for the alternate spelling and the retained
 external-call and invalid-prototype diagnostics. The changed all-targets
-gate against `b95f568` passes 1,267 tests, zero failures and three existing
+gate against `d8fa821` passes 1,267 tests, zero failures and three existing
 ignores; Clippy, fmt, Ruff and diff-check pass. Original replay
-`20260908T202104.952070Z`, subject `15b9d74`, preserves all 220 ctest and
+`20260908T202104.952070Z`, subject `5c64fa3`, preserves all 220 ctest and
 1,692 torture identities and every previous PASS. `pr84339` and `pr84478`
 change from E2001 to PASS: torture reaches 1,280 passes, 385 refusals,
 26 runtime failures and one link failure; ctest remains 206/220.
@@ -2763,12 +2763,12 @@ The next correctness repair was nested designator continuation: the valid
 `inner.b`. Both interpreters return the same wrong value, while GCC-14 and
 Clang-19 at O0/O2 return zero from the value-checking reduction. Aggregate
 brace elision after a designator (`.m = 0` in `pr33631`) and inferred-array
-bounds need the same subobject cursor. Tests-only `6c38b38` has three
+bounds need the same subobject cursor. Tests-only `52e049c` has three
 compiled failures and 48 passes. The shared full-path cursor now makes all
 three value fixtures pass in both interpreters and natively; the dependency
 gate against that checkpoint passes 1,271 tests, zero failures and three
 existing ignores, with Clippy, fmt, Ruff and diff-check green. Original
-replay `20260908T204756.423848Z`, subject `2bfe5f4`, retains all identities
+replay `20260908T204756.423848Z`, subject `ac26f05`, retains all identities
 and prior passes: `pr33631` changes from refusal to PASS. Torture now has
 1,281 passes, 384 refusals, 26 runtime failures and one link failure;
 ctest remains 206/220. Captures are `.evidence/ladder/e0/20260908T204756Z`
@@ -2777,7 +2777,7 @@ defects are repaired and benched; the other initializer families stay OPEN.
 
 ### Alignment specifiers and non-object queries
 
-`572a823` and `65430a9` are the compiled RED checkpoints: missing C11
+`9896d85` and `497d44d` are the compiled RED checkpoints: missing C11
 alignment syntax, the non-object query refusal, and the incorrectly accepted
 weak alignment on an incomplete array. The implementation uses one target
 alignment query across the parser, C-HIR constant/interpreter paths and
@@ -2785,14 +2785,14 @@ lowering; neither void nor a function type becomes allocatable. `_Alignas`
 reuses object/member attributes while rejecting invalid placements and weak
 requests, preserving ignored zero requests without exposing them as a written
 `aligned` attribute. The 47-test integration target passes both interpreters
-and native fixtures. The 12-crate all-targets changed gate against `572a823`
+and native fixtures. The 12-crate all-targets changed gate against `9896d85`
 passes 1,664 tests, zero failures and four pre-existing ignores; Clippy,
 fmt, Ruff and diff-check pass. Fresh subject layout runs
 `20260908T195100Z-76026` and `20260908T195228Z-76488` pass 128/128 and 22/22,
 both with oracle consensus and zero mismatches. The intervening attributed
 invocation `20260908T195159Z-76384` omitted its case-set selector and failed
 manifest validation before measurement; it is not a passing run.
-Original replay `20260908T195446.660965Z`, subject `0a25483`, executable
+Original replay `20260908T195446.660965Z`, subject `3d2e669`, executable
 SHA-256 `609f5a0cd382a051960b8f2a12b919b8f05907be6402c6c70787ec86d1981fed`,
 retains every identity and prior PASS: torture gains `20000223-1` and
 `pr68532`, reaching 1,278 passes, 387 refusals, 26 runtime failures and one
@@ -2808,17 +2808,17 @@ neither is counted as repaired by the two original-program gains.
 
 ### Obsolete initializer designators
 
-`f6338a5` is the compiled tests-only RED: the field-colon fixture reports
+`0178949` is the compiled tests-only RED: the field-colon fixture reports
 E2001 before implementation. The parser now normalizes the obsolete field,
 single-index and range spellings into the existing designation representation;
 subobject resolution and initializer execution are unchanged. Both
 interpreters and native Darwin pass the fixture, and out-of-object
 designators retain E2906. Both sealed compilers pass all four O0/O2 runs
 and reject the three malformed/multi-component omissions of `=`.
-The all-targets changed gate against `f6338a5` passes 1,261 tests, zero
+The all-targets changed gate against `0178949` passes 1,261 tests, zero
 failures and three pre-existing standing-run ignores across eight crates;
 Clippy, fmt, Ruff and diff-check pass. Original-program replay
-`20260908T191239.871250Z` (subject `e829ba8`, executable SHA-256
+`20260908T191239.871250Z` (subject `dfc8aef`, executable SHA-256
 `d2e1b1d72812e83057331d1b1a0cf2c37eec2acf755580f205efb49b195f74a9`)
 retains every identity and prior PASS. The three original non-FP designator
 programs change from REFUSED to PASS: torture is 1,276 passes, 390 refusals,
@@ -2829,7 +2829,7 @@ Evidence: `.evidence/builtin-probes/20260909-obsolete-designators/results.txt`.
 
 ### Block-local implicit calls, remaining bit counts and source dependencies
 
-`0c6e054` contains compiled RED regressions for the block-only external
+`4ab31aa` contains compiled RED regressions for the block-only external
 declaration failure and the `clrsb`/`parity` families. The block's C-HIR now
 contains its implicit function declarations; symbol visibility and the
 manifest's scope validation are unchanged. Five execution shapes include
@@ -2837,21 +2837,21 @@ nested blocks, a conditional return and an unevaluated `typeof` operand.
 The six integer builtins use the shared integer kernel and existing EvoIR
 bit operations, not new external calls or instructions. The 42-test CLI
 integration target passes, including both interpreters and native execution;
-the eight-crate all-targets changed gate against `0c6e054`, Clippy and fmt
+the eight-crate all-targets changed gate against `4ab31aa`, Clippy and fmt
 pass. The terminal truncated part of the test listing, so no reconstructed
 workspace test count is claimed for that invocation.
 
 The original E0105 family is also a preparation defect: all seven programs
 using `memcpy-ax.h` or `gcc_tmpnam.h` emit when given only their original
 include directory. Five more include C files outside the sparse subtree.
-`266d612` is the two-test RED. Preparation now exposes the pinned original
+`a9c1ec0` is the two-test RED. Preparation now exposes the pinned original
 directory to both emission and diagnosis and retrieves only those five
 referenced blobs from the same commit. Sources are not rewritten and no
 program is removed. The seven preparation tests and thirteen wrapper tests
 pass; the original-source directory and commit are recorded in each suite's
 receipt. Original-program replay remains required for both repairs.
 
-Original replay `20260908T184344.076686Z`, subject `93e8afa`, executable
+Original replay `20260908T184344.076686Z`, subject `f97fb7c`, executable
 SHA-256 `70b3f63ec3963f039162aeb379fcdb2753e26f62cd9a4227c3d105ea5568cfe2`,
 retains all identities and every previous PASS. Torture adds 63 passes:
 1,273 passes, 393 refusals, 25 runtime failures and one link failure out of
@@ -2884,7 +2884,7 @@ Evidence: `.evidence/builtin-probes/20260909-alignment-specifiers/results.txt`.
 
 ### Explicit legacy integer declarations
 
-`46228fa` is the tests-only RED for explicit GNU89 omitted integer types,
+`9157901` is the tests-only RED for explicit GNU89 omitted integer types,
 identifier-list parameters, undeclared calls, mode macros and exact option
 propagation into emission and diagnosis. The default GNU11 behavior remains
 strict. The implementation creates ordinary linked function declarations,
@@ -2894,13 +2894,13 @@ Both sealed compilers agree on the positive and negative probes in
 `.evidence/builtin-probes/20260908-legacy-declarations/results.txt`.
 Both interpreters and native Darwin pass the execution fixtures. The focused
 run passes 44 Rust tests and 18 Python tests. The changed all-targets gate
-against `46228fa` passes 1,257 tests across eight crates, zero failures and
+against `9157901` passes 1,257 tests across eight crates, zero failures and
 three pre-existing standing-run ignores; Clippy, fmt, Ruff and diff-check pass.
 The first gate found two call-target regressions: missing-parenthesis syntax
 must retain its diagnostic priority, and a precedence fixture had incorrectly
 declared a called function as an integer object. Both are corrected and the
 gate rerun is green. Original replay `20260908T181121.039466Z`, subject
-`87ebd71`, executable SHA-256
+`2af2b9a`, executable SHA-256
 `0b500b9f358caf8b7ae3c320fa88e3443e8b215032b203cabfcd96030a2231ff`
 retains all original identities and outcomes: torture 1,210/1,692 and ctest
 206/220 pass. Seventy E1001 first errors move, but 66 programs expose the same
@@ -2911,24 +2911,24 @@ original-program closure nor complete mode conformance is claimed.
 
 ### Flexible character-array initializer storage
 
-`4ca0c26` is the two-test RED for direct file-scope flexible members initialized
+`acc2d46` is the two-test RED for direct file-scope flexible members initialized
 by narrow, wide or empty strings. The declared array type remains incomplete;
 the shared string extent calculation supplies storage, including the terminating
 zero, without changing `sizeof` of the record. Fixed arrays retain their exact
 bound, including omitted terminators and zero-filled padding. Both interpreters
 and native Darwin now execute the fixture successfully.
-The separate RED `0131fa1` prevents accidentally admitting nonempty flexible
+The separate RED `10678c1` prevents accidentally admitting nonempty flexible
 initializers nested in another record or union: GCC and Clang disagree on the
 string form, so it remains E2202. Empty nested lists are accepted by both and
 remain accepted; automatic flexible initialization retains E2919.
 Sealed GCC-14/Clang-19 O0/O2 results and the negative admissions are recorded in
 `.evidence/builtin-probes/20260909-flexible-strings/results.txt`.
 `CARGO_TARGET_DIR=target/frontend CARGO_BUILD_JOBS=4 CARGO_NET_OFFLINE=true
-tools/gate-changed.sh 4ca0c26 --all-targets --locked --offline --quiet`
+tools/gate-changed.sh acc2d46 --all-targets --locked --offline --quiet`
 passes 1,986 tests across all 17 workspace crates, zero failures and four
 pre-existing standing-run ignores; Clippy and fmt pass. The shared merge changed
 Cargo.lock, so this is a full-workspace rather than five-crate gate.
-The repair is `b0da087`; wrapper `20260908T172546.081411Z` replays the exact
+The repair is `bb5b5f7`; wrapper `20260908T172546.081411Z` replays the exact
 original corpus using executable SHA-256
 `1c4c9532fa7d152b134e09a5a9b4e503e8c074a178d5187a2adc6f7927d35b25`.
 All identities are unchanged: torture `20010924-1` changes from REFUSED to
@@ -2941,7 +2941,7 @@ oracle conflict is not counted as a success.
 
 ### Compatible function declarations and actual definition arity
 
-`0f0a6a5` is the tests-only RED for compatible unspecified declarations
+`085fa98` is the tests-only RED for compatible unspecified declarations
 following prototypes, including typedef-based declarations and an empty
 definition following a zero-parameter prototype. Lowering now reuses the
 type interner's parameter-compatibility rule for declarations without
@@ -2953,10 +2953,10 @@ Both interpreters and native Darwin execute the fixture successfully;
 GCC-14 and Clang-19 at O0/O2 agree, and both reject all three negative probes
 (`.evidence/builtin-probes/20260908-function-redeclarations/`).
 `CARGO_TARGET_DIR=target/frontend CARGO_BUILD_JOBS=4 CARGO_NET_OFFLINE=true
-tools/gate-changed.sh 0f0a6a5 --all-targets --locked --offline --quiet`
+tools/gate-changed.sh 085fa98 --all-targets --locked --offline --quiet`
 passes 1,630 tests across 12 affected crates, zero failures and four existing
 standing-run ignores; Clippy, fmt, Ruff and diff-check pass. The repair is
-`4f7bee9`; original replay `20260908T163813.683179Z` uses executable SHA-256
+`ad6e481`; original replay `20260908T163813.683179Z` uses executable SHA-256
 `23f7bd31fb89bfbc21b26589870f3ec155ad8978e2918b9fae9ecba7ec6361bc`.
 All original identities are unchanged: torture `const-addr-expr-1` changes
 from REFUSED to PASS, while `comp-goto-1` remains refused and reaches the
@@ -2968,7 +2968,7 @@ This closes the identified composite-declaration defect, not all of row 13.
 
 ### Variadic record return placement
 
-`f065b94` is the tests-only RED for the original `920726-1` call mismatch.
+`f75e9f5` is the tests-only RED for the original `920726-1` call mismatch.
 The IR return destination is now placed before anonymous arguments, while
 the machine's indirect return address is placed last in its call operand
 list so it goes to x8. Fixing only the first exposed a native write to
@@ -2976,8 +2976,8 @@ address 30, the final anonymous argument, rather than closing the case.
 Both interpreters and native Darwin now pass the direct/indirect small and
 large record regression; both Linux cross-link directions pass with GCC-14
 and Clang-19 at O0/O2 (eight executions). The changed all-targets gate against
-`f065b94` passes 764 tests, zero failures and four pre-existing standing-run
-ignores; Clippy, fmt, Ruff and diff-check pass. The repair is `7f55a01`.
+`f75e9f5` passes 764 tests, zero failures and four pre-existing standing-run
+ignores; Clippy, fmt, Ruff and diff-check pass. The repair is `e4844e4`.
 Evidence: `.evidence/builtin-probes/20260908-variadic-record/results.txt`.
 The subject assembly uses the specified GNU assembler; the initial Clang
 integrated-assembler refusal of `:pg_hi21:` is recorded, not called a pass.
@@ -2991,7 +2991,7 @@ Torture now has 1,208 passes, 461 refusals and 23 failures out of the same
 ### Kernel replay and linked object definitions
 
 `python3 tools/bench.py kernel --jobs 4 --allow-qemu-drift`, wrapper
-`20260908T141252.550489Z`, captures subject `be2349c` and executable
+`20260908T141252.550489Z`, captures subject `3692342` and executable
 SHA-256 `a29b0d83db55706c5e14041b6e4271330e3422ed4103c3d04af8e3dc75b588e8`.
 All 2,799 original identities remain: 85 assemble, 2,714 refuse. Six formerly
 refused units assemble; none moves in the other direction. All 2,712 E3021
@@ -3004,11 +3004,11 @@ mismatches. These exclusions are failures, not successful substitutions.
 Capture: `.evidence/k1/measure-20260908T141252Z`; passing Image digest
 `90ee50eec552e947e3b2cb3dfe93ac5e21f365488b49cecd2092d9bd66983d5e`.
 
-`ce08737` is the tests-only global-storage RED, `3f629ec` the repair:
+`86acb39` is the tests-only global-storage RED, `d1d4570` the repair:
 declarations bound in several scopes share one storage identity, irrespective
 of the first declaration's scope. Both interpreters and native execution now
 pass the int, bool, incomplete-array and static-address cases. The affected
-all-targets gate against `ce08737`, Clippy, fmt, Ruff and diff-check pass.
+all-targets gate against `86acb39`, Clippy, fmt, Ruff and diff-check pass.
 A direct replay of the original kaslr command using that debug subject emits
 one exported `__kaslr_is_enabled` and its `strb`; the kernel measurement above
 predates the repair and is not its mixed-link closure.
@@ -3028,19 +3028,19 @@ optimization levels and with both `p`/`r` inputs. Neither is an FP issue.
 
 ### Integer absolute values and runtime-domain classification
 
-`d598bfd` implements the three explicit integer absolute builtins and the
+`7090a1e` implements the three explicit integer absolute builtins and the
 ordinary standard-name call selection, with options and same-unit assembler
-identities preserved. The original tests-only checkpoint is `a3884e3`.
+identities preserved. The original tests-only checkpoint is `df7ffe7`.
 Both interpreter/native focused tests pass; the affected all-targets gate
 against that checkpoint passes 1,032 tests, zero failures or ignored tests,
 plus Clippy, fmt and Ruff. Original-program replay now closes the three
 identified absolute-value cases, not the remaining native failures.
-`afabd27` separately records the missing benchmark builtin-option projection
-as a tests-only RED; `b01821d` implements it after the frozen kernel run
+`855ec60` separately records the missing benchmark builtin-option projection
+as a tests-only RED; `753d546` implements it after the frozen kernel run
 finishes, with all 42 targeted Python tests passing.
 
 `python3 tools/bench.py ctest torture --jobs 4`, wrapper
-`20260908T151818.777128Z`, measures subject `d160f3f`, executable SHA-256
+`20260908T151818.777128Z`, measures subject `cdc53a9`, executable SHA-256
 `1ad01a326c9969a433b49e3beaf66f6c72afee0d934ce698f8309ffc449744a3`.
 ctest remains 206 passed, 13 refused and one failed out of 220; torture is
 1,207 passed, 462 refused and 23 failed out of the same 1,692 identities.
@@ -3067,13 +3067,13 @@ absent. Every original program and headline outcome remains unchanged.
 
 ### Newly reduced control-flow case
 
-`12f9eb5` and `d80c546` pin abrupt exits in value expressions, including
+`942378c` and `abd6449` pin abrupt exits in value expressions, including
 comma operands and conditionals with no normal continuation. Lowering now
 retains a predecessorless insertion point, not a fabricated value or an edge
 from the abrupt exit. The C-HIR task machine discards the comma's left operand
 without requiring a scalar result. Fifteen focused lowering tests and the
-native CLI regression pass; the affected all-targets gate against `12f9eb5`,
-Clippy, fmt, Ruff and diff-check pass. The repair is `33bd17c`.
+native CLI regression pass; the affected all-targets gate against `942378c`,
+Clippy, fmt, Ruff and diff-check pass. The repair is `dcc7b62`.
 The reduced `int f(void) { int first=({ goto done; 0; }); int k=5;
 done:return k; }` now lowers and both interpreters report E3001 for the
 reached uninitialized read. It must never be folded into a constant return.
@@ -3087,7 +3087,7 @@ it is not an additional original-program pass. Captures:
 ### Latest completed incremental replay
 
 `python3 tools/bench.py ctest torture zstd cjson --jobs 4`, wrapper
-`20260908T135846.118517Z`, captures clean `02d66b1` and executable
+`20260908T135846.118517Z`, captures clean `6071b14` and executable
 SHA-256 `4bc8805812e92f47ef470b9532a57aad85598a750c1c71a1899640514c856f36`.
 The production includes wrapping and target-header types; its assembly RED
 tests are deliberately still red, and no later assembly fix enters this run.
@@ -3106,11 +3106,11 @@ reaches `__builtin_nanf`, and `cJSON_Utils.c` reaches a floating-point
 function type. Its public tests still execute the installed reference
 objects; this is not an EvoCC cJSON pass.
 The header implementation passed the changed all-targets gate against
-`57bc8c2`: 1,889 passed, zero failed, four pre-existing ignored; Clippy,
+`015bffc`: 1,889 passed, zero failed, four pre-existing ignored; Clippy,
 fmt, Ruff lint and diff-check passed. This is not the final offline replay.
 
 `python3 tools/bench.py kernel --jobs 4 --allow-qemu-drift`, wrapper
-`20260908T123730.141577Z`, captures clean subject `bc7cc9b` and executable
+`20260908T123730.141577Z`, captures clean subject `05b1f77` and executable
 SHA-256 `fc07b29798f1bc914a0064a3a7f90c2cb43cd253f6e29f0e830e9a64aa892a69`.
 All 2,799 original unit identities remain: 79 assemble and 2,720 refuse.
 Only `drivers/acpi/apei/ghes_helpers.o` changes assembly outcome (refused to
@@ -3129,7 +3129,7 @@ and target-header-type changes and is not evidence for those changes.
 
 Signed-wrapping options now pass the CLI/native regression and
 `CARGO_TARGET_DIR=target/frontend CARGO_BUILD_JOBS=2 CARGO_NET_OFFLINE=true
-tools/gate-changed.sh dbd89ee --all-targets --quiet -- --test-threads=1`:
+tools/gate-changed.sh 7e9cd64 --all-targets --quiet -- --test-threads=1`:
 1,018 tests, zero failures or ignored tests in the five selected crates,
 Clippy and fmt green. The three option/preparation Python tests and thirteen
 benchmark-entry tests pass, as do Ruff lint and diff-check. The default and
@@ -3140,7 +3140,7 @@ run's binary or results.
 
 The digit-builtin, register-alias and expression-scope static fixes pass
 `CARGO_TARGET_DIR=target/frontend CARGO_BUILD_JOBS=4 CARGO_NET_OFFLINE=true
-tools/gate-changed.sh afc4c63 --all-targets --quiet -- --test-threads=1`:
+tools/gate-changed.sh 69a2f51 --all-targets --quiet -- --test-threads=1`:
 1,015 tests, zero failures or ignored tests in the five selected crates,
 Clippy and fmt green. Ruff lint and diff-check pass. This is an incremental
 all-targets gate, not the final whole-workspace/doctest replay. Their original
@@ -3149,8 +3149,8 @@ kernel replay is recorded above, separately from the preceding measurements.
 `python3 tools/bench.py ctest torture tinycc cjson --jobs 4`, wrapper
 `20260908T120936.530123Z`, measures executable SHA-256
 `ba3d6f93ef7b053ff642c9f98c43a5a9032e2352c482a450d31052e56a839135`.
-The captured subject is `a81c243` with only a new C test fixture pending;
-the measured production includes `5b3c87a`, not the later digit/register fixes.
+The captured subject is `4c195e8` with only a new C test fixture pending;
+the measured production includes `caff8be`, not the later digit/register fixes.
 Every original ctest and torture identity is retained. ctest remains
 206 pass / 13 refused / 1 failed out of 220. Torture becomes
 1,195 pass / 464 refused / 33 failed out of 1,692: `memclr` and `misalign`
@@ -3166,7 +3166,7 @@ declarations. This validates the adapter repair, not an EvoCC cJSON PASS.
 Native runs are `20260908T120936Z`, `20260908T121000Z`,
 `20260908T121237Z` and `20260908T121307Z`, respectively.
 
-Shared symbol addressing and link-time assembly operands `7ac11d3` are
+Shared symbol addressing and link-time assembly operands `3dfe701` are
 measured by `python3 tools/bench.py tinycc kernel --jobs 4 --allow-qemu-drift`,
 wrapper `20260908T102835.690828Z`, frozen executable SHA-256
 `b3b730c0afa50abb5c4821db6c5997966f42a2b08b980ef064c7a00665b7a95b`.
@@ -3177,7 +3177,7 @@ failure remains. Four compilation refusals remain; this is not TinyCC PASS.
 The kernel lane completed with 78/2,799 assembled, of which 76 enter a booting
 mixed link after excluding two EFI units referencing `__efistub_isdigit`.
 The initial proof falsely reports two NOBITS objects as mismatches; the
-wrapper's original ERROR is retained. After `0e44fde`, replay on exactly the
+wrapper's original ERROR is retained. After `175831b`, replay on exactly the
 same linked image gives 13 proven, 48 proven modulo relocations, 3 no-symbol
 and 12 not-linked units, zero mismatches (`proof-zero-fill.json` and
 `reconciled-receipt.json` in `measure-20260908T102907Z`). NOBITS checks exact
@@ -3186,7 +3186,7 @@ or missing extents still fail. This is 64 linked units, not a full kernel.
 The binary was not rebuilt while the lane consumed it; later C-preprocessor
 and test-linkage changes are not attributed to this measurement.
 
-Integer `mode` and packed-subobject execution landed in `5b3c87a`; the
+Integer `mode` and packed-subobject execution landed in `caff8be`; the
 original memory failures are now replayed above, with the enum conflicts
 kept separate from the successful repairs.
 The exact memory fixture passes both sealed compilers at O0/O2 and the two
@@ -3194,7 +3194,7 @@ interpreters plus native execution; the changed gate found an old wide-access
 test that required natural alignment even for packed storage. Its replacement
 pins both reduced power-of-two alignment and invalid alignment refusals.
 The successful serialized rerun is `CARGO_TARGET_DIR=target/frontend
-CARGO_BUILD_JOBS=2 CARGO_NET_OFFLINE=true tools/gate-changed.sh f747dc5
+CARGO_BUILD_JOBS=2 CARGO_NET_OFFLINE=true tools/gate-changed.sh da5eb32
 --quiet -- --test-threads=1`: 1,541 pass, zero fail, four pre-existing ignored,
 Clippy and fmt green; Ruff lint and diff-check also pass. `cargo test` with
 the same ten-package set and `-- --list` lists 1,545 including those four.
@@ -3205,7 +3205,7 @@ the resulting type compatibility. This is not a new PASS or a reason to drop
 the original program; `_Bool`, enum and abstract-type-name mode conflicts
 are explicitly refused under the existing conflict protocol.
 
-The final serialized gate against `c489ffa` passes 1,533 tests, zero
+The final serialized gate against `2cac613` passes 1,533 tests, zero
 failures, four pre-existing ignored tests, plus Clippy, fmt, Ruff lint and
 diff-check. An earlier invocation passed its native tests but failed a
 doctest after a concurrent Cargo rebuild replaced a dependency; that attempt
@@ -3215,35 +3215,35 @@ the undefined-symbol-only-in-a-comment control. The latter exposed and fixed
 spurious runtime address loads; pure asm-literal definitions need no runtime
 reference, while ordinary uses retain their allocation and address materialization.
 
-External-data GOT addressing `9065012` is measured in
+External-data GOT addressing `0cc5d52` is measured in
 `20260908T093536.969536Z` (`python3 tools/bench.py tinycc --jobs 4`), native
 run `20260908T093537Z`: TinyCC rises from 4/11 to 6/11 units in a passing
 mixed build. All eleven identities and all seven assembly outcomes remain;
 `arm64-link.o` and `tcc.o` join the previously passing four. The remaining
 `tccrun.o` link now reports a direct relocation against `longjmp`, a function
 address rather than the earlier `environ` object. It remains OPEN, not hidden
-behind the passing data-address probe. Capture `9065012` is clean, binary
+behind the passing data-address probe. Capture `0cc5d52` is clean, binary
 SHA-256 `5e03b5a43164641ff0ff5107ee2e09c9a35a4b8416668c394e624483801e67fc`.
-The changed gate against `3b0065a` passes 518 tests, zero failures, with four
+The changed gate against `985c601` passes 518 tests, zero failures, with four
 pre-existing ignored tests; Clippy, Rust fmt, Ruff lint and diff-check pass.
 The sealed GCC-14/Clang-19 static/PIE source and subject probe has eight
 build/run successes, and the Darwin native regression passes. Ruff formatting
 of the untouched Python tree was also inspected: 43 existing files do not
 match `ruff format`; no unrelated formatter rewrite was made or claimed green.
 
-The prototype-array repair `858b8c2` is measured in
+The prototype-array repair `bd86b47` is measured in
 `20260908T090630.550681Z` (`python3 tools/bench.py ctest torture --jobs 4`):
 c-testsuite rises to 206/220 and torture remains 1,196/1,692. Original
 `00162` is the only changed outcome, refused to native PASS; both identity
-sets and all earlier passes are unchanged. The source checkout `91158d1`
+sets and all earlier passes are unchanged. The source checkout `6d77fec`
 is clean at capture, with executable SHA-256
 `384941528b53ad45a9c9ff1ae2879476bf01e017db673e28d31ffb02892e5f31`.
 `CARGO_TARGET_DIR=target/frontend CARGO_BUILD_JOBS=2 CARGO_NET_OFFLINE=true
-tools/gate-changed.sh f1c2453 --quiet` passes 990 tests, zero failed or
+tools/gate-changed.sh 50b1c56 --quiet` passes 990 tests, zero failed or
 ignored, plus Clippy, fmt, Ruff and diff-check. This closes prototype `[*]`,
 not real VLA execution or the entire declaration-coverage family.
 
-The attributed-type repair `1cd7701` is measured in
+The attributed-type repair `00f52bb` is measured in
 `20260908T085411.464607Z` (`python3 tools/bench.py ctest torture --jobs 4`):
 c-testsuite rises to 205/220 and torture remains 1,196/1,692. Original
 `00210` is the only changed outcome, refused to native PASS, with all
@@ -3251,7 +3251,7 @@ identities and earlier passes preserved. The five-crate changed gate passes
 985 tests, zero failed/ignored, plus Clippy, fmt, Ruff and diff-check.
 Executable SHA-256 is
 `d9d3077f8221e8679fcf9610f050799d2e9b5c7330fdb5a19f779a0329748e50`;
-the checkout is `5aeea8c`, with only the next tests being written while its
+the checkout is `0c4200c`, with only the next tests being written while its
 release build finished. Prototype-array production changes were made later
 and are not included in this replay.
 
@@ -3264,13 +3264,13 @@ They require FP execution: `lib_args`, `lib_xwrap` and `sort` reach strtod;
 refusals in the 203-unit universe, not invented non-FP passes, and this
 does not waive other outstanding toybox input-adaptation/baseline issues.
 
-The line-control repair `2d063ef` is replayed in
+The line-control repair `77054d4` is replayed in
 `20260908T084118.829770Z` (`python3 tools/bench.py ctest torture --jobs 4`):
 c-testsuite rises to 204/220 and torture remains 1,196/1,692. The only
 changed program is original `00152`, refused to native PASS; no identities
 or earlier passes are lost. Its changed gate runs 1,090 tests with no
 failures or ignored tests, Clippy, fmt, Ruff and diff-check green.
-The source identity is `0a914b7`, executable SHA-256
+The source identity is `320f82a`, executable SHA-256
 `213abc7bd72465d157a2346d1bdff87f76b39b4043fb635028ce119dd26f4a92`;
 the dirty flag records pending test/receipt work, not the subsequent
 type-name implementation. Earlier attempt `20260908T084012.993329Z`
@@ -3286,19 +3286,19 @@ only changed outcomes, refused to assembled, and join the 195-unit
 no-regression mixed build. Its one reference-baseline failure remains visible.
 Csmith still has 68 oracle-unusable results and zero mismatches.
 
-The run correctly records dirty checkout `82e2cff`: the already-staged
-production patch was committed as `2f268ab` after the wrapper captured its
+The run correctly records dirty checkout `0afc448`: the already-staged
+production patch was committed as `dc53745` after the wrapper captured its
 checkout identity. The measured executable SHA-256 is
 `040927dddb910127976bff07817b36faaeb9c2d95d381688273bd57ccd3a8884`;
 it was not rebuilt during the campaign. This is not a clean-commit replay.
 The goto repair passed 981 tests, zero failed/ignored, through
 `CARGO_TARGET_DIR=target/frontend CARGO_BUILD_JOBS=1 CARGO_NET_OFFLINE=true
-tools/gate-changed.sh 82e2cff --quiet`, plus Clippy, fmt, Ruff and diff-check.
+tools/gate-changed.sh 0afc448 --quiet`, plus Clippy, fmt, Ruff and diff-check.
 The following line-control change is not attributed to this executable.
 
 `python3 tools/bench.py ctest torture csmith tinycc toybox --campaign all
 --programs 500 --jobs 4 --budget 40` completed run
-`20260908T061410.809670Z`, measuring the frozen `a1393e9` executable
+`20260908T061410.809670Z`, measuring the frozen `7a4e373` executable
 (`2d6241716a6f42339c5a38a3903d20f3ce572f5706fc9637c3368de7688d661b`).
 The wrapper returns INCOMPLETE, not PASS: c-testsuite 203/220, torture
 1,195/1,692, Csmith 932/1,000 agreeing, TinyCC 4/11 units in a passing
@@ -3309,7 +3309,7 @@ passing four-unit combination; `arm64-link.o`, `tcc.o`, and `tccrun.o`
 remain isolated relink failures. No earlier PASS was lost in these lanes.
 The subsequent enum repair is not attributed to this older executable.
 
-`python3 tools/bench.py ctest torture --jobs 4` then measures `7b436bc`
+`python3 tools/bench.py ctest torture --jobs 4` then measures `5197974`
 in run `20260908T070638.695281Z`: 203/220 c-testsuite passes and
 1,196/1,692 torture passes. Both original identity sets are unchanged;
 the only outcome change is torture `enum-3`, refused to native PASS,
@@ -3342,7 +3342,7 @@ on applying `mode(QI)` in an abstract type name (sizeof 1 versus 4), so that
 placement must not silently choose a width. This shared type repair remains
 OPEN and precedes less consequential coverage work.
 
-The frozen `8a9f19d` executable was measured through
+The frozen `a8271fd` executable was measured through
 `python3 tools/bench.py torture musl --jobs 4 --budget 40`.
 Torture `20260908T034747Z` retains the identical 1,692 program identities:
 1,189 pass, 469 refused, 34 runtime failures, zero emission timeouts or link
@@ -3355,7 +3355,7 @@ parallel recorder merged `sysconf.lo` and `crypt.lo`, silently reducing
 the substituted test report includes failed floating-point formatting;
 Section 6's GPR-only varargs ABI does not preserve FP arguments. The run
 was interrupted after 25 probes, not reported as a passing mixed build.
-`a86454c` holds one lock across the complete command record; 95 Python
+`b3b2a10` holds one lock across the complete command record; 95 Python
 tests and a 16-writer sealed stress test preserving 512/512 identities pass.
 The fix requires a fresh original-unit replay, not relabeling this run.
 
@@ -3363,7 +3363,7 @@ The earlier musl run `20260908T015031Z` also lacks `substituted-REPORT`:
 the adapter treated an absent report as an empty failure set. Its claimed
 987-unit passing build is withdrawn in the derived receipt, with the
 historical number retained under `invalidatedUnitsInPassingBuild`; it is
-not replaced by a made-up zero. `6cdc159` removes that fallback, with a
+not replaced by a made-up zero. `61a28c6` removes that fallback, with a
 missing-versus-empty regression and 96/96 Python tests. Fresh FP failures
 therefore cannot yet be called regressions from a proven old passing build.
 
@@ -3377,19 +3377,19 @@ their native FAIL outcomes into PASS.
 
 ### Positional parameters without source names
 
-Tests-only `a316754` fails semantically with C-HIR E3007 and lowering
-E3101, with no build errors. `a26bb02` retains all ABI slots and argument
+Tests-only `9ee1907` fails semantically with C-HIR E3007 and lowering
+E3101, with no build errors. `15ccfc6` retains all ABI slots and argument
 effects while making only the C identifier binding optional. Both
 interpreters and native execution pass the fixture, including an unnamed
 aggregate parameter; the original `pr103209` now returns zero in both
-interpreters. The changed-crate gate against `a316754` passes 950 tests
+interpreters. The changed-crate gate against `9ee1907` passes 950 tests
 with zero failures or ignored tests, plus Clippy/fmt. Original native
 torture run `20260908T042040Z` passes `pr103209`: 1,190/1,692 pass,
 468 refused, 34 runtime failures, zero emission timeouts or link failures.
 Against `20260908T034747Z`, the identity set is unchanged and this is the
 only changed outcome; all 1,189 previous passes are retained.
 
-The same frozen executable (source `2a50ced`, SHA-256
+The same frozen executable (source `9233308`, SHA-256
 `70b313d9ff4b1c5798b43ba6ec36775c7f0c8e4f7d1498ac52090a84a4728710`)
 completed musl run `20260908T042300Z`. Capture now contains all 1,339
 units; 987 assemble with zero symbol-parity exclusions. The 40-probe
@@ -3403,10 +3403,10 @@ restoration of the withdrawn 987-unit passing claim.
 
 ### Pointer interfaces and switch entries
 
-`274ede9` compares compatible function/void pointers through their existing
-address representation. `631f03e` routes switch segments through the same
+`5ab503e` compares compatible function/void pointers through their existing
+address representation. `2d604e6` routes switch segments through the same
 label-aware sequence lowering as ordinary compounds, retaining goto targets
-after a terminated path. `d32f676` preserves unprototyped function addresses
+after a terminated path. `d38e35c` preserves unprototyped function addresses
 in storage, promotes indirect-call arguments, and constructs the actual call
 interface without weakening dynamic signature checks. A long argument or
 missing argument to an integer-parameter target remains E3019 in both
@@ -3414,11 +3414,11 @@ interpreters. This does not claim support for nested case labels or jumps
 past unallocated automatic objects.
 
 `CARGO_TARGET_DIR=target/frontend CARGO_BUILD_JOBS=1 CARGO_NET_OFFLINE=true
-tools/gate-changed.sh abfa496 --quiet` passed 956 tests, zero failures and
+tools/gate-changed.sh 27393b9 --quiet` passed 956 tests, zero failures and
 zero ignored, plus Clippy and fmt. The focused tests include native execution;
 original c-testsuite and torture replay remains the benchmark acceptance.
 
-Replay `20260908T050555.942587Z` (compiler source `5a8d94b`) now measures
+Replay `20260908T050555.942587Z` (compiler source `e16ee90`) now measures
 200/220 c-testsuite passes and 1,194/1,692 torture passes. The original
 identity sets are unchanged, and no prior pass is lost. c-testsuite
 `00087`, `00088`, `00089`, `00209`, and torture `20041212-1`, `20111208-1`,
@@ -3429,8 +3429,8 @@ therefore never run. It remains a recorded failure, not a compiler PASS.
 
 ### Nested switch dispatch
 
-Tests-only `3fabe4b` exposes non-compound switch refusal and wrong C-HIR
-values for cases inside conditionals and loops. `fa6f895` additionally pins
+Tests-only `38a90cf` exposes non-compound switch refusal and wrong C-HIR
+values for cases inside conditionals and loops. `ec159ef` additionally pins
 integer promotion of a narrow selector and ownership of nested cases and
 continue targets. The sealed GCC-14/Clang-19 O0/O2 probe executes all shapes
 with exit zero (`.evidence/builtin-probes/20260908-nested-switch/results.txt`).
@@ -3443,13 +3443,13 @@ loop continuations. Lowering retains the compact flat-switch representation,
 while nested labels use the existing label/edge machinery and case matcher,
 not flattened loop bodies. A narrow selector's promoted value must be carried
 instead of being replaced by its original narrow local on later comparisons.
-`19aa801` passes the changed gate against `3fabe4b`: 965 tests, zero
+`8b78775` passes the changed gate against `38a90cf`: 965 tests, zero
 failures or ignored, Clippy and fmt clean. The test inventory was also
 recounted with the same five crates' `cargo test -- --list` (965).
 Entry past automatic memory-object
 declarations remains a separate open storage/lifetime issue, not waived here.
 
-Original replay `20260908T054623.296899Z` measures source `19aa801`:
+Original replay `20260908T054623.296899Z` measures source `8b78775`:
 c-testsuite `00051` and `00143` change from refusal to PASS, giving 202/220.
 Torture retains all 1,194 prior passes; `medce-1` changes from refusal to
 link failure at its deliberately unresolved `link_error` symbol, while
@@ -3462,7 +3462,7 @@ has 5 assembled, 2/11 in a passing build, with three isolated link failures
 
 ### Discarded expressions with abrupt control flow
 
-Tests-only `c6a4138` records three semantic failures, all `statement
+Tests-only `a1e7d8b` records three semantic failures, all `statement
 expression has no normal path to its value`, with no build errors. A
 discarded expression can return, break, continue, or jump rather than
 produce a normal continuation. The tracked fixture
@@ -3470,8 +3470,8 @@ produce a normal continuation. The tracked fixture
 both pinned compilers at O0 and O2 in the sealed network-disabled image.
 The repair reuses statement `Flow` for discarded expressions and merges
 only actual fallthrough states; value-required contexts remain explicitly
-checked. `aa08860` passes all 329 tests selected by the changed gate against
-`c6a4138`, plus Clippy/fmt. Original run `20260908T055627.176403Z` moves
+checked. `958f4dd` passes all 329 tests selected by the changed gate against
+`a1e7d8b`, plus Clippy/fmt. Original run `20260908T055627.176403Z` moves
 only c-testsuite `00213` from refusal to PASS (203/220); torture's original
 1,692 identities and every outcome remain unchanged (1,194 PASS).
 
@@ -3481,15 +3481,15 @@ Two TinyCC parser failures have one preprocessing cause: `#define field
 p->field` inside a prescanned argument becomes `p->p->field` on a later
 rescan. In the originals this is `s1->s1->eh_frame_section` at
 `tccdbg.c:815` and `s1->s1->symtab_section` at `tccelf.c:1978`, not a new
-kind of projected lvalue. Tests-only `e9abc66` records two wrong-token
+kind of projected lvalue. Tests-only `75e5480` records two wrong-token
 failures plus a passing function-name boundary control, with no build errors.
 Both pinned preprocessors give the same nine lines for tracked fixture
 `tests/fixtures/macro-rescan-inhibition.c` under `-std=gnu11 -E -P` in the
 network-disabled sealed image. Preserve inhibition on the token occurrence,
 not on its spelling globally: later source occurrences and newly pasted
-tokens must remain eligible. All 105 C-preprocessor tests pass. `a1393e9`
-and the constant-branch repair `b6cf13f` pass the combined changed gate
-against `d22b5fc`: 1,243 tests, zero failed or ignored, Clippy `-D warnings`
+tokens must remain eligible. All 105 C-preprocessor tests pass. `7a4e373`
+and the constant-branch repair `13098e1` pass the combined changed gate
+against `e6a1b5b`: 1,243 tests, zero failed or ignored, Clippy `-D warnings`
 and fmt clean. Original-program replay remains the closure requirement.
 
 TinyCC's `tccrun.o` link failure independently names
@@ -3501,7 +3501,7 @@ not all external symbols. Keep this address-recipe boundary open; disabling
 PIE in the benchmark is not an implementation fix.
 The tracked reduction `tests/fixtures/external-object-pie.c` compiles and
 exits zero with GCC-14 and Clang-19 using explicit `-fPIE -pie`; the
-subject's `a1393e9` assembly fails GCC linking with the same relocation
+subject's `7a4e373` assembly fails GCC linking with the same relocation
 error. Clang's default integrated assembler rejects the prescribed
 `:pg_hi21:` spelling before linking, so that attempt is not reported as
 the same linker diagnosis; use of GNU `as` must be explicit when isolating
@@ -3514,7 +3514,7 @@ the linkage failure. Explicitly rerunning Clang-19 with
 The original torture `enum-3` combines pointers to a negative enumeration
 and its compatible `int` representation. The producer and place consumer
 did not share the same compatibility check, and the interner itself did
-not recognize an enum's existing underlying rank. Tests-only `71949c6`
+not recognize an enum's existing underlying rank. Tests-only `54f0a92`
 records three semantic failures with zero build errors: false rank
 compatibility, refused pointer-expression execution, and E2911 on the
 positive compile-time query. The Appendix D entry records the pinned
@@ -3524,9 +3524,9 @@ The extended fixture also exposed E2002 at a compatible redeclaration,
 then allocation-manifest and interpreter-return-type identity checks;
 these consumers now use the same target rank and type compatibility,
 without changing the independent SSA validator or nominal tag identity.
-Implementation `7b436bc` passes
+Implementation `5197974` passes
 `CARGO_TARGET_DIR=target/frontend CARGO_BUILD_JOBS=1 CARGO_NET_OFFLINE=true
-tools/gate-changed.sh 71949c6 --quiet`: 1,560 passed, zero failed, four
+tools/gate-changed.sh 54f0a92 --quiet`: 1,560 passed, zero failed, four
 pre-existing standing-campaign tests ignored, Clippy `-D warnings` and fmt
 clean for the twelve affected/reverse-dependent crates. Ruff, diff-check,
 and the 12 benchmark-entry Python tests pass. This is a changed-crate gate,
@@ -3539,14 +3539,14 @@ retains all 1,000 identities and every prior outcome: base 469 agree/31
 oracle-unusable, bitfields 463 agree/37 oracle-unusable, zero mismatch and
 zero subject refusal. Every unusable case times out in both GCC O0 and O2;
 this does not establish that every such source is nonterminating. The native
-campaign measured source `3fabe4b`, before the nested-switch repair, and is
+campaign measured source `38a90cf`, before the nested-switch repair, and is
 not relabeled as verification of a later commit.
 
 ### Explicit local-register operand binding
 
 `.evidence/builtin-probes/20260908-local-register-operands/{probe.c,results.txt}`
 pins a local `register long wanted asm("x8")` passed as an `r` input.
-GCC-14/Clang-19 at O0/O2 each exit zero; subject `25ab85d` emits assembly
+GCC-14/Clang-19 at O0/O2 each exit zero; subject `1a165e5` emits assembly
 that links successfully but exits one: it reads the old x8 value rather
 than the argument. No original program or seed was replaced by this reduction.
 
@@ -3558,14 +3558,14 @@ and asm.goto operands; inserting moves outside that boundary is not an adequate
 substitute. This is separate from the immediate/register alternatives already
 authorized by revision 1.9.78. The user authorized carrying the binding through
 the IR and allocation boundary on 2026-09-08.
-Tests-only checkpoint `ce22a80` records both semantic failures without a build
+Tests-only checkpoint `6112065` records both semantic failures without a build
 error. Binding now survives both textual IR forms, uses short-lived pinned
 operands, and transfers outputs over every asm.goto edge. The independent
 allocation verifier rejects a mutated binding; native tests cover both goto
 edges under spilling and a callee-saved x19 binding. A new negative test also
 ensures the source cannot directly admit the lowered `@xN` spelling.
 
-`CARGO_TARGET_DIR=target/frontend CARGO_BUILD_JOBS=1 CARGO_NET_OFFLINE=true tools/gate-changed.sh ce22a80 --quiet`:
+`CARGO_TARGET_DIR=target/frontend CARGO_BUILD_JOBS=1 CARGO_NET_OFFLINE=true tools/gate-changed.sh 6112065 --quiet`:
 843 passed, zero failed, four existing ignored; Clippy/fmt PASS. The earlier
 842-test gate was superseded by the additional source-vocabulary negative.
 K1 Python tests: 88/88; bench tests: 12/12; Ruff/diff-check PASS; the grammar
@@ -3574,7 +3574,7 @@ proof). Original musl and torture replay is still required for family closure.
 
 ### Immediate-register input alternatives
 
-Tests-only checkpoint `9c46be8` has three E3021 semantic failures (`Jr`/`Kr`)
+Tests-only checkpoint `fbcc66c` has three E3021 semantic failures (`Jr`/`Kr`)
 and zero build errors. Lowering now selects the existing `r` alternative for
 exactly `I`, `J`, `K`, `L`, `i`, `n` paired with `r` in either order, after
 evaluating the operand once. No backend constraint or instruction is added.
@@ -3585,13 +3585,13 @@ The eleven focused tests pass, including native assembly/link/execution of
 all twelve spellings, 32/64-bit values, single evaluation and both asm.goto
 output edges. The six logical/add/sub values match the sealed `kr.c` probe.
 Outputs and 128-bit register inputs retain E3021.
-`CARGO_TARGET_DIR=target/frontend CARGO_BUILD_JOBS=2 CARGO_NET_OFFLINE=true tools/gate-changed.sh 9c46be8 --quiet`:
+`CARGO_TARGET_DIR=target/frontend CARGO_BUILD_JOBS=2 CARGO_NET_OFFLINE=true tools/gate-changed.sh fbcc66c --quiet`:
 303 passed, zero failed or ignored, Clippy and fmt PASS; Ruff and diff-check
 PASS. Original kernel replay is still required before this family closes.
 
 ### Symbol linkage
 
-The immutable-linkage reuse fix (`eecdb45`, RED `4069f80`) passes the
+The immutable-linkage reuse fix (`c2dfc0f`, RED `6a25e6d`) passes the
 reverse-dependency changed gate, Clippy and fmt. The original torture
 `memclr.c`, previously exceeding the unchanged 60-second emission limit,
 now emits assembly in **1.397 seconds**, exit 0, empty stderr, using release
@@ -3603,7 +3603,7 @@ needs the full execution lane. Profile samples had identified repeated
 whole-unit `SymbolLinkage::derive` inside each scalar initializer.
 
 Kernel replay `measure-20260908T030624Z` reused the valid 2,799-unit survey
-`measure-20260908T022219Z/survey`; every reduction retained release `25ab85d`
+`measure-20260908T022219Z/survey`; every reduction retained release `1a165e5`
 SHA-256 `d59b26ba3656f811592b782e36a2ad0a1cf0a8fb61a1c9bf5efad783b3b71d09`.
 78 assembled, 2,721 refused; `efi/libstub/string.o` and `vsprintf.o` were
 individually reduced link failures (`__efistub_isdigit`). The other 76 objects
@@ -3613,7 +3613,7 @@ remains ERROR, not a validated kernel pass: inspect the zero-filled object
 slices (`xen_features`, `guid_null`, `uuid_null`) and the missing extents for
 `ctype`/`fdt` objects before claiming substitution closure.
 
-Tests-only checkpoint `0f2a71d` has nine semantic failures and zero build
+Tests-only checkpoint `e9dec02` has nine semantic failures and zero build
 errors. Module records now preserve weak marks and flattened object/function
 aliases; aliases share allocation, call identity, effects and relocation
 targets in both interpreters, without forwarding bodies or copied storage.
@@ -3621,7 +3621,7 @@ Alias references keep internal targets, including otherwise removable
 always-inline definitions. Invalid weak/internal combinations and alias
 targets report E3060/E3061; the shared-type constructor changes are mechanical.
 
-`CARGO_TARGET_DIR=target/frontend CARGO_BUILD_JOBS=2 CARGO_NET_OFFLINE=true tools/gate-changed.sh 0f2a71d --quiet`:
+`CARGO_TARGET_DIR=target/frontend CARGO_BUILD_JOBS=2 CARGO_NET_OFFLINE=true tools/gate-changed.sh e9dec02 --quiet`:
 1,471 passed, zero failed, four pre-existing ignored tests; Clippy and fmt
 PASS. `ruff check tools tests/acceptance`, `python3 tools/check-textual-grammar.py`
 (42/42 instruction shapes, not a full syntax claim) and diff-check PASS.
@@ -3652,7 +3652,7 @@ Darwin's default linker rejects unresolved weak references for both system
 Clang and the subject. With the same explicit `-U` symbol list, both execute
 the counterexample with exit zero; the native regression asserts both sides.
 This is a measured linker-policy requirement, not a lowered-language change.
-`CARGO_TARGET_DIR=target/frontend CARGO_BUILD_JOBS=1 CARGO_NET_OFFLINE=true tools/gate-changed.sh d2d8295 --quiet`:
+`CARGO_TARGET_DIR=target/frontend CARGO_BUILD_JOBS=1 CARGO_NET_OFFLINE=true tools/gate-changed.sh 5b20e07 --quiet`:
 501 passed, zero failed, four pre-existing ignored; Clippy and fmt PASS.
 Ruff and diff-check PASS. Alias/weak remains OPEN for the static-initializer
 performance regression below, not for an unimplemented GOT exception.
@@ -3674,13 +3674,13 @@ reductions used a different executable because `bisect.py` ignored `K1_EVOCC`:
 survey digest `d59b26ba...71d09`, reduction digest `4c39a20f...5f01`. Those
 reduction PASS outcomes are invalid and the owned subprocesses were terminated;
 the wrapper records ERROR, not completion. The valid per-unit survey is retained.
-Tests-only `f7fe61b` and fix `e5f71eb` pin the override through reduction and
+Tests-only `173f40d` and fix `98a14df` pin the override through reduction and
 expose exact-binary survey reuse through `tools/bench.py`. K1 tests 87/87,
 benchmark tests 12/12, Ruff and diff-check PASS. A correct mixed-link replay
 is still required; no kernel closure is inferred from the broken reduction.
 
 `python3 tools/bench.py torture musl --no-build --jobs 4 --budget 40` finishes
-INCOMPLETE in wrapper `20260908T014701.174683Z`, subject `b504ee9`, compiler
+INCOMPLETE in wrapper `20260908T014701.174683Z`, subject `3f41db2`, compiler
 `eea68d679e70193687b8ecd61b6e92e2fff1aeae4fd7dbe92f3088d9fc24fff8`.
 The release executable was unchanged throughout both lanes.
 
@@ -3699,10 +3699,10 @@ The release executable was unchanged throughout both lanes.
   establishes a 494-unit passing combination, not 987, and does not establish
   complete musl coverage.
 
-An additional RED checkpoint `f1ee3cf` pins an alias whose target definition
-was first declared by a block-scope extern. Fix `66a1f03` identifies actual
+An additional RED checkpoint `1d748f5` pins an alias whose target definition
+was first declared by a block-scope extern. Fix `9c642d8` identifies actual
 top-level definition nodes rather than the first symbol scope. Its changed
-gate (`tools/gate-changed.sh f1ee3cf --quiet`, same offline/build settings)
+gate (`tools/gate-changed.sh 1d748f5 --quiet`, same offline/build settings)
 passes 939 tests, zero failures or ignored tests, Clippy and fmt PASS.
 This follow-up is not included in the benchmark compiler identified above.
 
@@ -3710,7 +3710,7 @@ This follow-up is not included in the benchmark compiler identified above.
 
 Revision 1.9.77 is implemented through per-name stacks that preserve the whole
 definition and its feature-query implementation, or its undefined state.
-The tests-only checkpoint `a6c302d` has five semantic failures, zero build
+The tests-only checkpoint `9285d12` has five semantic failures, zero build
 errors; restoring `_Pragma` effects during rescanning also fixes their ordering
 relative to subsequent macro uses. Header spelling, pack independence, invalid
 argument classification and fresh-translation-unit stacks are pinned.
@@ -3718,9 +3718,9 @@ The measured probe has one empty pop; malformed push/pop arguments are counted
 separately as ignored pragmas by name, and successful stack operations are not
 reported as ignored-safe.
 
-`CARGO_TARGET_DIR=target/frontend CARGO_BUILD_JOBS=2 CARGO_NET_OFFLINE=true tools/gate-changed.sh a6c302d --quiet`:
+`CARGO_TARGET_DIR=target/frontend CARGO_BUILD_JOBS=2 CARGO_NET_OFFLINE=true tools/gate-changed.sh 9285d12 --quiet`:
 1,037 passed, zero failed or ignored; Clippy and fmt PASS. Ruff and diff-check
-PASS. Implementation `dba5385` is measured by
+PASS. Implementation `12e87f0` is measured by
 `python3 tools/bench.py ctest torture --jobs 4`, wrapper run
 `20260908T005741.383578Z`, compiler
 `0154d28e92cf57b72cbcd16bd542b8780e3d8e3586a08152ce1a44f0a317876b`.
@@ -3732,7 +3732,7 @@ the benchmark suites remain INCOMPLETE, with 1/34 runtime failures respectively.
 
 ### Void return effects
 
-Tests-only checkpoint `427951e` produced three declared semantic failures and
+Tests-only checkpoint `a73a893` produced three declared semantic failures and
 zero build errors. The shared void-type query, interpreter task dispatch and
 effect-only lowering preserve direct/indirect calls, casts, comma expressions,
 conditional arms and the final statement-expression value without inventing a
@@ -3740,7 +3740,7 @@ scalar result. Negative return-type checks remain refused.
 
 - `cargo test -p evocc-lower --test static_storage_and_discard --offline -j 4`
   with `CARGO_TARGET_DIR=target/frontend`: 11 passed, zero failed.
-- `CARGO_TARGET_DIR=target/frontend CARGO_BUILD_JOBS=4 CARGO_NET_OFFLINE=true tools/gate-changed.sh e6c7938`:
+- `CARGO_TARGET_DIR=target/frontend CARGO_BUILD_JOBS=4 CARGO_NET_OFFLINE=true tools/gate-changed.sh 3e23300`:
   tests, Clippy and fmt green for evocc/chir/lower/parser/proofcheck.
 - `ruff check tools tests/acceptance` and `git diff --check`: PASS.
 - `python3 tools/bench.py toybox --jobs 4 --budget 20`:
@@ -3797,13 +3797,13 @@ cannot justify removing default signed-overflow obligations.
 
 Two additional actual defects have tests-only checkpoints and focused fixes:
 
-- `9e4f3a2`: function addresses were routed through object storage, and
+- `5dd18bc`: function addresses were routed through object storage, and
   `&*get()` through an object-pointer operation. The lowerer now uses the
   resolved function call interface, while both consumers retain a function
   designator's pointer without loading memory. Fifteen address/relocation
   regressions pass, including exactly-once calls and `&*null` cancellation.
   Original c-testsuite `00095` and torture `941014-1` now pass natively.
-- `4b50b19`: torture `20071220-2` emits `.xword bar^b1`, which the assembler
+- `e6bf598`: torture `20071220-2` emits `.xword bar^b1`, which the assembler
   reads as an invalid expression. Static relocations must name the same
   platform-local labels as `block_addr`, including blocks not named by an
   `adr`. Four relocation tests and eight block-address tests now pass;
@@ -3826,7 +3826,7 @@ Native runs `20260907T174641Z` and `20260907T174705Z` preserve the original
   static-label fixes, so they are not attributed entirely to the last patch.
 
 The final working-tree gate is
-`CARGO_TARGET_DIR=target/frontend CARGO_BUILD_JOBS=2 CARGO_NET_OFFLINE=true tools/gate-changed.sh 4b50b19 --quiet`:
+`CARGO_TARGET_DIR=target/frontend CARGO_BUILD_JOBS=2 CARGO_NET_OFFLINE=true tools/gate-changed.sh e6bf598 --quiet`:
 1,314 passed, zero failed, 4 previously ignored tests remain ignored, Clippy
 and fmt pass. This is the selected reverse-dependency crate set, not a new
 whole-workspace or isolated-clone claim. Python discovery in `tools/k1/tests`
@@ -3838,7 +3838,7 @@ return zero and C-HIR agrees, while lowering requests an unavailable edge
 address. The missing value is a real allocation, not a scalar phi: substituting
 zero or cloning an ordinary allocation origin would violate the object model.
 This was an implementation issue, not a permission to weaken validation;
-`2f268ab` and replay `20260908T080325.213428Z` close it as recorded above.
+`dc53745` and replay `20260908T080325.213428Z` close it as recorded above.
 
 The first unavailable Csmith input, base seed 11, has a concrete nonterminating
 induction cycle, not an EvoCC checksum disagreement. `func_25` returns `&g_37`,
@@ -3895,7 +3895,7 @@ the focused run (81 passing tests across six targets, including static
 initializers). The existing 320-source scalar corpus remains byte-identical:
 the new rule changes four expected observations from E3006 to integer
 results, yielding 260 returns and 60 typed diagnostics, with zero mismatches.
-The changed-crate gate against `ce81980` passed 858 tests with zero failures
+The changed-crate gate against `8ad4ea3` passed 858 tests with zero failures
 and three pre-existing ignored tests. Original torture and boot replay is
 still pending; focused checks do not close those rows.
 
@@ -3909,27 +3909,27 @@ assembler rejects the pre-existing `:pg_hi21:` global-address spelling; that
 is a separate recorded toolchain incompatibility, not a successful lane or
 a reason to alter this fixture. Evidence: `.evidence/builtin-probes/20260909-stack-realignment/`.
 The command `CARGO_TARGET_DIR=target/frontend CARGO_BUILD_JOBS=2
-tools/gate-changed.sh a53b3c0 --offline` completed with exit 0 (tests, Clippy
+tools/gate-changed.sh 4709a45 --offline` completed with exit 0 (tests, Clippy
 and fmt) for evocc, evocc-mir, evocc-policy, evocc-proofcheck and evocc-randgate;
 the worktree run used the same target directory by its absolute path.
 
 ### 2026-09-09: aligned functions and full-width predicates
 
-`5438c94` implements canonical function `align=N`, maximum alignment across
+`293e69b` implements canonical function `align=N`, maximum alignment across
 redeclarations, emitted `.p2align`, and alignment-aware function addresses
 in both interpreters. Original `align-3` returns zero through both
 interpreters and through GCC-14 / Clang-19 with GNU `as` on Linux.
-The changed gate against `4dc50da` passed 3,348 tests, zero failed and eight
+The changed gate against `457011e` passed 3,348 tests, zero failed and eight
 pre-existing ignored; Clippy and fmt passed. The focused set passed 66 tests.
 Evidence: `.evidence/builtin-probes/20260909-function-alignment/`.
 
-`e71ad8d` records the semantic RED for full-width predicates;
-`d11b20e` implements the carry chains, four-limb magnitude product and
+`434cf0d` records the semantic RED for full-width predicates;
+`0ed20c5` implements the carry chains, four-limb magnitude product and
 full-width divisor/count checks without relaxing the validator or admitting
 128-bit division. The focused command `cargo test -p evocc-mir --test
 wide_predicates --test section5_wide_integers --offline --no-fail-fast`
 passed 27 tests; native execution also checked 21,074 independent bounds.
-`tools/gate-changed.sh ed38a72 --offline` passed 599 tests, zero failed,
+`tools/gate-changed.sh 4f3686a --offline` passed 599 tests, zero failed,
 four pre-existing ignored, Clippy and fmt (same shared frontend target).
 The five original programs `pr122943`, `pr54471`, `pr61375`, `pr63302`,
 and `pr85582-2` emitted and executed successfully through both Linux
@@ -3939,7 +3939,7 @@ the ten passing subject executions. Evidence:
 `.evidence/builtin-probes/20260909-wide-predicates/results.txt`.
 Neither focused measurement is a new full-benchmark result.
 
-`f9e4696` resolves the original target/board requirements for all 1,692
+`003a74c` resolves the original target/board requirements for all 1,692
 torture identities: zero unresolved, 89 inapplicable by original options or
 selectors. These are preparation counts, not executed passes. The 114
 ladder tests and Ruff pass; expected-failure annotations never change a
@@ -3951,7 +3951,7 @@ program's default limits. Target evidence is
 
 `python3 tools/bench.py kernel --jobs 4 --allow-qemu-drift` finished run
 `20260909T053908.023962Z`, capture
-`.evidence/k1/measure-20260909T053908Z/`, measuring `ed38a72` and executable
+`.evidence/k1/measure-20260909T053908Z/`, measuring `4f3686a` and executable
 `49f4833501b006b2dcbea979c2cfd2e361466264bfd3d3ce0f6c675a703ecefd`.
 The executable was not rebuilt during the run. All 90 assembled objects
 were substituted; relink returned zero and the first boot passed, without

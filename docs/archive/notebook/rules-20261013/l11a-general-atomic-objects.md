@@ -12,7 +12,7 @@ and 16-byte objects.
 | Item | Identity |
 | --- | --- |
 | Compiler | `.build/frozen/366fd796/evocc-darwin`, `evocc 0.1.0 (366fd796613e 2026-10-13)`, SHA-256 `93eacee4e6e917049d041346c9ecbeff1266f8b17dd26bc684eeeed1a53c4c04` |
-| Specifications | `spec/evoir.md` Revision 2.1.0 and `spec/evomir.md` Revision 1.0.1 at HEAD `366fd796` |
+| Specifications | `spec/evoir.md` Revision 2.1.0 and `spec/evomir.md` Revision 1.0.1 at HEAD `546fe46a` |
 | Linux references | GCC 14.2.0-19 (`gcc-14`), Clang 19.1.7 (`clang-19`), libatomic1 14.2.0-19, glibc 2.41 in `evo-nexlab:sealed`, image `sha256:e8d52bdced1fa49a5a56cde7e1173c54bd81832cc111441f6a31148ec03ead93`, linux/arm64, no network |
 | Darwin reference | Host Apple clang 21.0.0 (clang-2100.1.1.101), arm64-apple-darwin25.6.0 |
 | Headers | Linux: the sysroot's GCC 14 `stdatomic.h`. Darwin: Xcode's `clang/21/include/stdatomic.h` |
