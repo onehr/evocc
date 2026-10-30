@@ -17,14 +17,13 @@ _description_spec = importlib.util.spec_from_file_location(
 _description_module = importlib.util.module_from_spec(_description_spec)
 sys.modules[_description_spec.name] = _description_module
 _description_spec.loader.exec_module(_description_module)
-globals().update({name: getattr(_description_module, name) for name in (
-    "TargetDescriptionError", "Bank", "View", "Role", "Description", "number", "identifier",
-    "insert", "parse_description", "resolve_sets", "validate", "constant", "array", "header",
-    "render_mir", "render_evoir_primitives", "parse_envelope", "quantity", "ABI_SINGLE",
-    "ABI_PER_BANK", "VA_LIST_FIELDS", "PROFILE_FEATURES", "AbiDescription", "parse_abi",
-    "single", "register_set", "abi_register", "abi_values", "validate_abi",
-    "ProfileDescription", "parse_profile", "validate_profile", "render_abi",
-)})
+# The import resolves through sys.modules, so tools/ need not be on sys.path.
+from evocc_target_description import (  # noqa: E402
+    TargetDescriptionError, constant, identifier, insert, parse_abi, parse_description,
+    parse_envelope, parse_profile, quantity, render_abi, render_evoir_primitives, render_mir,
+    validate, validate_abi,
+)
+from evocc_target_description import abi_values, validate_profile  # noqa: E402,F401  for the tests
 
 
 # The structural shapes below mirror only the fields present in the current
