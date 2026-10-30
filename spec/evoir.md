@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 2.39.0** | **Pinned ground truth** | Calls to old-style definitions on 2026-10-27
+**Revision 2.39.1** | **Pinned ground truth** | Editorial corrections on 2026-10-30
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract of the parser, the C lowering, equality saturation,
@@ -32,9 +32,9 @@ must keep their shape:
 | Part | Reader |
 |---|---|
 | Rule registries `p0.scalar.v1` to `p0.scalar.v4` and `g0.ub.v1` (Section 11.6) | Byte-pinned by the SHA-256 digest printed beside each block; `crates/evocc-eqopt/tests/registry_digests.rs`, `tools/lean/registry_to_lean.py`, `tools/lean/audit.py` |
-| Diagnostic table (Section 6.3) | `crates/evocc/build.rs`, `crates/evocc/tests/check_product.rs` |
+| Diagnostic table (Section 6.3) | `crates/evocc/build.rs`, `crates/evocc/tests/explain_pages.rs`, `crates/evocc/tests/check_product.rs` |
 | Grammar productions and shape blocks (Sections 9.3, 9.3.1, 9.3.2) | `crates/evocc-evoir/tests/spec_grammar_contract.rs`, `tools/check-textual-grammar.py` |
-| Revision line of this header | `tools/render-status.py`, `tools/lean/audit.py` |
+| Revision line of this header | `tools/check-spec-pins.py`, `tools/render-status.py`, `tools/lean/audit.py` |
 
 **Related specifications.** `spec/verification.md` is the contract of the
 checkers. `spec/evomir.md` specifies EvoMIR, the IR that follows EvoIR.
@@ -119,8 +119,7 @@ Region ::=
 
 ### 1.2 Integer Types and Signedness
 
-The central architectural decision: **signedness lives in operations, not in integer
-storage types.**
+**Signedness lives in operations, not in integer storage types.**
 
 A `bits<32>` value is neither signed nor unsigned. It is a bit-vector of width 32.
 The operation determines interpretation:
@@ -134,9 +133,8 @@ sext             -- sign-extend
 zext             -- zero-extend
 ```
 
-This is fundamental to bit-vector equality reasoning. Without this separation,
-every rewrite rule must branch on the signedness of its operands, which doubles
-or triples the rule surface.
+Rationale: without this separation, every rewrite rule would branch on the
+signedness of its operands.
 
 ### 1.3 Pointer Types
 
@@ -588,11 +586,11 @@ never traps while computing the predicate.
 `shl`: shift left. `%b` is decoded at its own `M`-bit width. C
 lowering must first assert `shift_count_defined`. When lowering knows a
 compile-time amount in `[0, N)`, it may give that predicate the canonical
-`const.bits<1> 1` result; checked MIR then omits the branch under 8.12/9.4.
+`const.bits<1> 1` result; checked MIR then omits the branch under 8.12 and EvoMIR 5.2.
 A compile-time amount outside the range and a nonconstant amount keep the
 ordinary guard. The GNU profile asserts nothing else for a signed left shift
 (Section 6.1). `signed_shl_defined`
-remains in the grammar, and a module can use it.
+is in the grammar, and a module can use it.
 
 `lshr`: logical shift right. Zeros fill the vacated high bits.
 C lowering must first assert `shift_count_defined`.
@@ -619,7 +617,7 @@ instruction with the typed invalid-count assumption.
 `ctpop` the set bits; each is total, answers `N` (or `0` for `ctpop`) for
 `%a = 0`, and yields `bits<N>`. `bswap` reverses the byte order of `%a`;
 `N` is 16, 32 or 64. None is in the Section 8.5 allowlist. They are the
-lowering of the bit builtins of 10.1.14: `__builtin_clz(x)` is
+lowering of the bit builtins of 10.1.17: `__builtin_clz(x)` is
 `trunc.bits<32>` of `ctlz` after the front end asserts
 `ub.assume.bit_builtin_zero_operand` on `icmp.ne %x, 0` (the C builtin is
 undefined at zero, `E3022`); `__builtin_ffs(x)` is `0` when `%x` is zero
@@ -970,7 +968,7 @@ The order is required; `volatile` is optional and independent. `Type` is
 current memory/world tokens, and produces fresh memory/world tokens. Loads
 permit `relaxed`, `consume`, `acquire`, `seq_cst`; stores permit `relaxed`,
 `release`, `seq_cst`. Invalid type/order/guard layout is `E3062`
-`invalid-atomic-access`; existing local-SSA/effect-token checks also apply.
+`invalid-atomic-access`; the local-SSA and effect-token checks also apply.
 Memory faults and pointer initializedness/provenance use the ordinary access
 rules: an atomic operation does not create provenance from untracked bytes.
 
@@ -1072,11 +1070,11 @@ initializedness. `vec.bitcast` changes equal-sized integer, floating and vector
 representations without initializing bytes or numerically converting lanes.
 A pack, an extract and a bitcast move bits: they never quiet a signaling NaN
 or change a payload. These have one result and no effects; extract may trap.
-Vector arithmetic is expanded lane by lane through the existing checked
-scalar rules, the floating ones of 3.13 included. No vector operation is added
-to the P0 allowlist; proof reconstruction retains all fields. Vector
+Vector arithmetic is expanded lane by lane through the checked
+scalar rules, the floating ones of 3.13 included. No vector operation is in
+the P0 allowlist; proof reconstruction retains all fields. Vector
 loads/stores preserve lane representation, rather than zero-filling
-uninitialized lanes. A scalar lane use still observes existing poison rules.
+uninitialized lanes. A scalar lane use observes the poison rules.
 
 **AES rounds.** `vec.aese` and `vec.aesd` take a data operand and a key
 operand; `vec.aesmc` and `vec.aesimc` take one operand. Every operand and the
@@ -1135,7 +1133,7 @@ Module validation requires exactly all retained address-taken blocks of the
 function, including `block_addr` and static `@function^block` relocations.
 Function-only validation checks its locally observable required subset;
 it is not a substitute for module validation. Every argument obeys the
-unchanged local use-def rule and matches the destination position's type.
+local use-def rule and matches the destination position's type.
 Each edge passes each current memory/world token exactly once. Repeating
 that token on another mutually exclusive edge is allowed; stale, duplicate,
 missing or incorrectly positioned tokens are not. Direct edges, including
@@ -1164,7 +1162,7 @@ The backend must preserve label/relocation identity and implement the complete
 positional parallel copy, including copy cycles, spills and the target's
 liveness (EvoMIR Section 7). No implicit frame-address or effect channel is
 introduced. All successors participate in Sections 8/11 taint, exclusion,
-known-bits and proof reconstruction; the terminator is not added to the
+known-bits and proof reconstruction; the terminator is not in the
 EqSat allowlist. Cloning/inlining must preserve the owner/label correspondence
 or retain the original function.
 
@@ -1178,9 +1176,7 @@ For an effect-participant function, `ret` consumes the current `mem<all>` and
 world tokens. Before crossing the function boundary it ends every still-live
 automatic object owned by the current frame, yielding a finalized immutable
 memory snapshot; the world snapshot is unchanged. The caller's `call` defines
-fresh output token identities for those returned snapshots. Thus frame cleanup
-is an explicit part of return-boundary semantics rather than a mutation hidden
-behind a forwarded memory token.
+fresh output token identities for those returned snapshots.
 
 ### 3.10 Function Calls
 
@@ -1245,7 +1241,7 @@ returns twice (4.4). A call that returns twice is outside `core-v1`.
 variadic, the arguments between the last listed parameter and `%m0` are
 anonymous. Each has one of the types `bits<32>`, `bits<64>`, `bits<128>`,
 `f64`, `f128`, `ptr<AS>` or `fnptr<Sig>`: these are the C types that survive the
-default argument promotions (10.1.3), and the front end performs the
+default argument promotions (10.1.7), and the front end performs the
 promotions, so `bits<8>` and `bits<16>` never appear here. There may be any
 number of them, including none. Their types are not part of the signature and
 are not checked against a declaration; they are recorded at the call and read
@@ -1300,8 +1296,7 @@ the callee is not known statically.
 An `asm` instruction carries a template the assembler will read and the
 operands it substitutes into it. It is **opaque**: no rule reads the
 template, no analysis interprets it, and the equality database never merges
-it with anything. It lets assembly pass through the compiler without any part
-of the compiler interpreting it.
+it with anything.
 
 ```text
 (%o1, ..., %ok, %m1, %w1) = asm[ volatile] "template" %m0, %w0 outputs [...] inputs [...] clobbers [...]
@@ -1351,7 +1346,7 @@ because their defining instruction is not allowlisted. This includes results
 defined by the terminator, not only results in a block's instruction list.
 Poison and exclusion propagation traverse every assembly successor edge;
 passing a value through such an edge cannot make it an eligible scalar seed.
-The producer and independent checker each enforce this existing fixed-point
+The producer and independent checker each enforce this fixed-point
 rule. Neither may infer a successor choice by reading the opaque template.
 
 Lowering evaluates output places and inputs once before the assembly.
@@ -1379,7 +1374,7 @@ run of the EvoMIR specification's Section 9 and by nothing else.
 | Constraint | Meaning |
 |---|---|
 | `r`, `=r`, `+r` | a general register, read, written, or both |
-| `rm`, `mr`, `=rm`, `=mr`, `+rm`, `+mr`, `=&rm`, `=&mr`, `+&rm`, `+&mr` (source only) | a register or memory alternative; lowering selects the existing register form, preserving read/write and early-clobber markers |
+| `rm`, `mr`, `=rm`, `=mr`, `+rm`, `+mr`, `=&rm`, `=&mr`, `+&rm`, `+&mr` (source only) | a register or memory alternative; lowering selects the corresponding `r` form, preserving read/write and early-clobber markers |
 | `=&r`, `+&r` | written, and not sharing a register with any input (early clobber) |
 | `rZ` | a general register, or the zero register when the operand is the constant zero; the template must spell it with a width modifier, since the zero prints as `xzr`/`wzr` only under `%x`/`%w` |
 | `Q`, `=Q`, `+Q`, `Qo` | a memory operand whose address is a register with no offset |
@@ -1398,13 +1393,13 @@ run of the EvoMIR specification's Section 9 and by nothing else.
 exact `f32`/`f64` representation; it does not perform a floating conversion or
 quiet a NaN during operand transport. Matching inputs have the output's exact
 type and physical location. Input/place evaluation, read-write inputs,
-early-clobber exclusion and selected-edge output binding use the existing
+early-clobber exclusion and selected-edge output binding use the
 assembly rules. Unmodified SIMD references print `vN`, including scalar
 operands; `%b/%h/%s/%d/%q` select a view of that same register, not another bank
 or an implicit conversion. A template is responsible for using an instruction
 and view appropriate to its data; selecting a wider view does not define the
 unprovided high bits of a scalar input. General-register modifiers on `w`
-operands remain invalid. Existing `vN/dN/sN` clobber aliases and local `@vN`
+operands are invalid. The `vN/dN/sN` clobber aliases and local `@vN`
 bindings keep their scope. `f128`, floating vectors, integer vectors other than
 64 or 128 bits, half formats and SVE are not admitted under `w` (`E3021`), and
 `r` binds no floating or vector operand. An early-clobber `w` output shares no
@@ -1417,11 +1412,10 @@ reads and writes `all`, and `volatile`, `io`, `fenv` and `may_trap` are true;
 `atomic` and `may_unwind` are false. It can change FP controls/status; native
 admission knowledge must be invalidated across it before subsequent baseline
 or strict arithmetic.
-The compiler never resets FPCR/FPSR to accommodate it. Both interpreters still
-report E3021 upon reaching opaque assembly. Native execution, allocation
-verification and proof reconstruction are required; type admission alone is
-not implementation acceptance. `-mgeneral-regs-only` still rejects the generated
-SIMD accesses needed to bind these operands.
+The compiler never resets FPCR/FPSR to accommodate it. Native execution,
+allocation verification and proof reconstruction are required.
+`-mgeneral-regs-only` rejects the generated SIMD accesses needed to bind these
+operands.
 
 For a source input whose constraint is exactly one of the admitted immediate
 letters `I`, `J`, `K`, `L`, `i`, `n` together with `r`, in either order,
@@ -1432,14 +1426,14 @@ register alternative is legal for every value the immediate alternative
 admits, so selecting it never changes what the template means, and it applies
 to constants and dynamic values alike with the same operand types and template
 modifiers as `r`. None of these is admitted as an output constraint or as an
-unresolved EvoIR constraint, and no new backend constraint is required.
+unresolved EvoIR constraint.
 
 **Symbolic immediates.** An `i` input may name a static
 object, external object, function or function-local label, with a signed
-64-bit constant byte addend. It is represented by the existing
+64-bit constant byte addend. It is represented by the
 `global_addr`/`func_addr`/`block_addr`, pointer casts, and constant
-`add.bits<64>`/`sub.bits<64>` forms, not a new instruction or an invented
-address. C lowering resolves the source address constant without evaluating
+`add.bits<64>`/`sub.bits<64>` forms, not by an invented address. C lowering
+resolves the source address constant without evaluating
 an operand with effects and materializes it in the assembly's own block after
 the ordinary operands have been evaluated; numeric immediates follow the same
 local-definition rule. A dynamic address or an address under `n` remains
@@ -1451,8 +1445,8 @@ spelling and signed addend, preserving linkage and block identity. A symbolic
 
 For the exact source `rm`/`mr` forms in the table, lowering
 evaluates each input or output place once, selects `r`, and preserves `=`,
-`+` and `&`; register type, binding, clobber and all outgoing-edge rules are
-unchanged. C-HIR retains the written constraint, while EvoIR contains only
+`+` and `&`; the register type, binding, clobber and all outgoing-edge rules
+of `r` apply. C-HIR retains the written constraint, while EvoIR contains only
 the selected constraint. This does not admit arbitrary memory constraints or
 wider register values.
 
@@ -1516,7 +1510,7 @@ register in brackets, `[x<n>]`; on any other operand class or type it is
 **Effects.** An `asm` reads and writes `mem<all>` and `world`, may trap, and
 may not be reordered against any other effectful instruction, duplicated,
 or removed, whether or not it is `volatile`; `volatile` is preserved for the
-assembler and changes nothing in EvoIR. Section 8.5's allowlist already makes
+assembler and changes nothing in EvoIR. Section 8.5's allowlist makes
 it ineligible as a region root or witness, so no rewrite can reach it.
 
 ### 3.12 Variadic Argument Access
@@ -1529,7 +1523,7 @@ it ineligible as a region root or witness, so no rewrite can reach it.
 
 | Field | Description |
 |---|---|
-| `%ap` | A `ptr<AS>` to a **list object**, the lowering of one `__builtin_va_list` (10.1.5): 32 bytes on Linux, 8 on Darwin, alignment 8 on both targets (10.5). |
+| `%ap` | A `ptr<AS>` to a **list object**, the lowering of one `__builtin_va_list` (10.1.18): 32 bytes on Linux, 8 on Darwin, alignment 8 on both targets (10.5). |
 | `Type` | For `va_arg`: one of `bits<32>`, `bits<64>`, `bits<128>`, `f16`, `bf16`, `f64`, `f128`, `ptr<AS>`, `fnptr<Sig>` or a vector `vec<L, bits<N>>`, `vec<L, f32>` or `vec<L, f64>`, the promoted types of Section 3.10. A half format has no default argument promotion (C23 6.5.2.2), so it is one of them (3.13.6). |
 
 **Semantics.** A variadic function receives, besides its listed parameters,
@@ -1555,7 +1549,7 @@ scalar pointer argument, and report `E3038` on a mismatch or an invalid list.
 **The list object's bytes.** Between `va_start` and `va_end` the object
 representation of the list is unspecified. A `copy` (Section 3.8) of the
 whole target-sized representation produces a second list denoting the same sequence at the same
-position, which is how `__builtin_va_copy` lowers (10.1.3); any narrower
+position, which is how `__builtin_va_copy` lowers (10.1.17); any narrower
 `load`, `store` or partial `copy` of those bytes is undefined, and the
 interpreters may keep their own representation inside them.
 The module's selected target fixes this size; the allocation's remaining
@@ -1574,10 +1568,9 @@ order, exactly as for `copy`.
 
 **Target convention (informative; AArch64 Linux, general registers).** A
 call site cannot tell a variadic prototype from a fixed one. An anonymous
-`char` is promoted by the caller and occupies one 8-byte slot. After
-`va_start` with `k` named integer parameters, the list object holds
-`gr_offs = -8 * (8 - k)` and `vr_offs = 0`. The `va_arg` procedure is
-EvoMIR's to state (EvoMIR Section 6); EvoIR only promises the sequence.
+`char` is promoted by the caller and occupies one 8-byte slot. EvoMIR
+Section 6.12 states the list object after `va_start` and the `va_arg`
+procedure.
 
 ### 3.13 Scalar Floating Operations
 
@@ -1617,28 +1610,26 @@ numerical casts. The half formats admit only constants, conversions and these
 representation moves (3.13.6).
 
 These baseline operations are pure and excluded from P0 roots/witnesses; all
-operands still obey local SSA, initializedness, text/proof reconstruction and
-existing call/edge rules. Native **E3064** denotes an incompatible FP environment,
+operands obey local SSA, initializedness, text/proof reconstruction and the
+call/edge rules. Native **E3064** denotes an incompatible FP environment,
 not C UB; no hidden FPCR reset is permitted. Section 3.13.3 admits the bounded
 non-trapping `STDC FENV_ACCESS` profile. Unsupported or malformed requests
 retain **E3065**; unsupported strict/fast/contraction options are not ignored.
 Section 3.13.5 admits the parts of a complex product and quotient, and
 Section 10.1.14 applies these operations to each lane of a floating vector.
-Section 3.13.1 specifies the strict IR.
 
 The driver advertises source-format evaluation (`__FLT_EVAL_METHOD__=0`) but
 does not advertise Annex F/IEC-60559 conformance, complex FP or fast FMA:
 the corresponding `__STDC_IEC_*` and `__FP_FAST_FMA*` macros are absent and
 `__GCC_IEC_559{,_COMPLEX}` is zero; this overrides the GCC predefined-macro
 list of Section 10.5.
-`-fexcess-precision=standard` explicitly selects this existing source-format
+`-fexcess-precision=standard` selects the source-format
 evaluation contract: each operation, assignment and cast rounds to its semantic
 format, with no hidden excess-precision carrier; an operation on half operands
 evaluates in binary32, as `FLT_EVAL_METHOD` 0 requires (3.13.6). It changes
 neither the selected rounding/environment policy nor contraction, and
 repetition is idempotent. It does not authorize `-ffast-math`,
-`-fexcess-precision=fast/16` or any other unsupported profile. This is
-equivalent option admission under `FLT_EVAL_METHOD=0`, not a new numerical rule.
+`-fexcess-precision=fast/16` or any other unsupported profile.
 For f32/f64/f128, `__builtin_isnan/isinf/isinf_sign/isfinite/isnormal/signbit` inspect
 the exact representation; truth results are 0/1 except `isinf_sign`, which
 returns -1/0/1. `fabs/fabsf/fabsl` clear the sign bit, and `copysign/copysignf/copysignl` copy it
@@ -1766,7 +1757,7 @@ nonrepresentable C conversions retain E3063 and the distinct pure guard. An
 invalid raw conversion returns zero plus invalid status, never a defined C value.
 Translation-time literal/static initialization remains RNE. Strict executed
 operations, including discarded numeric results, cannot be deleted, cloned or
-reordered in ways that change world state. All FP remains outside P0.
+reordered in ways that change world state. All FP is outside P0.
 
 Native strict admission permits all four rounding directions but refuses other
 unsupported FPCR controls with E3064, never resetting FPCR/FPSR. External/runtime
@@ -1780,7 +1771,6 @@ scalar arithmetic, numeric conversions, truth tests and comparisons; the last
 `-frounding-math`/`-fno-rounding-math` option wins. Runtime expressions are not
 folded under translation-time RNE merely because their operands are constant.
 This includes automatic initializers and selected conditional-arm conversions.
-Literal parsing and static object initialization remain translation-time RNE.
 Exact representation operations remain pure. Both C-HIR and EvoIR execution
 use the same explicit FP environment contract. The option and the separately
 specified `STDC FENV_ACCESS` pragma do not enable unsupported formats, traps or
@@ -1799,7 +1789,7 @@ target encodings and otherwise returns nonzero without changing state.
 The concrete runtime binding owns the 8-byte/alignment-4 `fenv_t` (FPCR then
 FPSR, two little-endian 32-bit words), 4-byte `fexcept_t`, rounding encodings
 0/0x400000/0x800000/0xc00000 and five low exception bits. FE_DFL_ENV's -1 address
-is a runtime sentinel, not a memory access. Ordinary pointers still undergo
+is a runtime sentinel, not a memory access. Ordinary pointers undergo
 initializedness, alignment, bounds and lifetime checks. Restoring unsupported
 controls or status fails closed with E3064, not C UB or a silent control reset.
 
@@ -1809,8 +1799,7 @@ The selected GNU/glibc resolver reproduces the glibc `feraiseexcept` and
 runtime adapter uses its direct requested-bit raise policy; sharing the object
 encoding does not make these library behaviors identical. The source/EvoIR
 GNU interpreter entry uses the GNU/glibc binding, not a runtime-name guess.
-Native calls use the actual linked runtime. This is not a pthread/loader
-interpreter or an Annex F claim.
+Native calls use the actual linked runtime.
 
 After a modeled library changes rounding, executing baseline pure numeric FP
 under a non-RNE world fails E3064 in the interpreters as it does natively.
@@ -1843,7 +1832,7 @@ Executed rounding/exception-sensitive operations in ON regions lower to strict
 world operations, even with constant operands or discarded numeric results.
 The independent `-frounding-math` option likewise selects strict execution in
 OFF regions; OFF does not cancel that option. Without either request, baseline
-pure operations retain their existing fixed-environment contract. Literal
+pure operations keep their fixed-environment contract. Literal
 conversion and static initialization remain translation-time RNE. Source
 constant-result substitution must not erase executed FP effects or substitute
 RNE values into these runtime regions. Derived unit summaries conservatively
@@ -1864,20 +1853,19 @@ the smaller formats. Literal/static evaluation is RNE directly to binary128;
 numeric casts never narrow through binary64. Representation constants, memory,
 negation and sign-only builtins preserve all 128 bits, including signaling NaNs.
 
-The qualified hosted AArch64 libgcc profile uses positive all-one-fraction NaN
+The hosted AArch64 libgcc profile uses positive all-one-fraction NaN
 (`0x7fffffffffffffffffffffffffffffff`) for invalid non-NaN arithmetic. Binary
-arithmetic still selects signaling operands before quiet operands, left first.
+arithmetic selects signaling operands before quiet operands, left first.
 Quad fused arithmetic selects signaling NaNs in addend/a/b order, then quiet
-NaNs in a/b/addend order. Its zero-times-infinity condition still raises invalid.
+NaNs in a/b/addend order. Its zero-times-infinity condition raises invalid.
 This is distinct from scalar hardware FMADD quiet-NaN selection. Four rounding
 modes, before-rounding tininess and five sticky flags use the shared adapter.
 
-Quad HFA members use the existing homogeneous classifier and require ABI
-alignment 16. Native quad operations may use audited hosted runtime helpers
+Quad HFA members use the homogeneous classifier and require ABI
+alignment 16. Native quad operations may use hosted runtime helpers
 behind EvoMIR; helper names are not EvoIR semantics. Other targets and
 freestanding helper availability fail closed. No `_Float128` value, binary128
-vector lane, traps, contraction or Annex F claim is implied; 3.13.5 gives the
-binary128 complex parts and 3.13.6 the half formats. All FP is excluded from P0.
+vector lane, traps, contraction or Annex F claim is implied.
 
 #### 3.13.5 Complex multiplication and division
 
@@ -1935,14 +1923,14 @@ model of them. An interpreter that reaches a part stops with `E3067`
 or quotient is `E2960` (`unmodeled-complex-constant`). Native code uses the
 platform helpers as EvoMIR specifies.
 
-The pure parts are baseline operations: they are pure and excluded from P0,
-as 3.13 states. The strict forms have the `fp.strict.*` row of Section 4.
+The pure parts are baseline operations (3.13). The strict forms have the
+`fp.strict.*` row of Section 4.
 Validation rejects a part with another operand count, with formats that
 differ, or with a format other than f32, f64 or f128.
 
 #### 3.13.6 Half formats
 
-The 2026-10-13 decision on L03 admits two storage formats on both targets:
+EvoIR admits two storage formats on both targets:
 `f16`, IEEE binary16, and `bf16`, bfloat16, which has the binary32 exponent
 and eight significand bits. `_Float16` and `__fp16` values are `f16` values,
 and `__bf16` values are `bf16` values. The three C types stay distinct types
@@ -2010,7 +1998,7 @@ AAPCS64, but GCC 14 passes it in general registers (GCC PR 120007), so it is
 `E3049` at every call boundary, in both interpreters and in native code.
 AAPCS64 gives binary16 and bfloat16 two fundamental types, so a record that
 mixes them is no HFA. On Linux it passes as an ordinary composite, as GCC 14
-passes it; Clang 19 passes it in vector registers, a recorded
+passes it; Clang 19 passes it in vector registers, an
 incompatibility. Apple clang passes it in vector registers too, so on Darwin
 such a record is `E3049` at every call boundary. An anonymous `_Float16` or
 `__bf16` argument stays unpromoted and `va_arg` reads it as written, as GCC
@@ -2019,7 +2007,7 @@ for an anonymous `_Float16` or `__bf16` argument or an anonymous binary16
 HFA, so these arguments and their `va_arg` are `E3049`. A binary16 HFA on the
 stack, and a half argument on the Darwin stack, are `E4010` (EvoMIR 6.3).
 
-Retained refusals: a `vector_size` attribute on a half format (`E2903`), the
+Refusals: a `vector_size` attribute on a half format (`E2903`), the
 nominal `arm_neon.h` half vector types (`E3050`, 10.1.14), half complex
 values (`E2202` or `E2102` for `_Float16 _Complex`, `E1007` for the other two,
 10.1.14), half `asm` operands (`E3021`), the classification and comparison
@@ -2097,7 +2085,7 @@ reports its reason's diagnostic and ends execution. Three reasons exist:
 
 | Reason | Diagnostic | Emitted for |
 |---|---|---|
-| `scalar_function_fell_off_end` | `E3007` | a hand-written EvoIR module can trap with it; source fall-through returns poison (10.1.3) |
+| `scalar_function_fell_off_end` | `E3007` | a hand-written EvoIR module can trap with it; source fall-through returns poison (10.1.5) |
 | `unreachable_reached` | `E3024` | `__builtin_unreachable()` (10.1.17) |
 | `builtin_trap` | `E3047` | `__builtin_trap()` (10.1.17): an explicit termination, not a UB report |
 
@@ -2108,7 +2096,7 @@ elsewhere; the only optimistic transition this profile permits is one a proof
 certificate justifies. Its `may_trap` effect keeps it from being reordered or
 removed, exactly as for the other reasons.
 
-Every memory effect uses region `All`. Region refinement is not active.
+Every memory effect uses region `All`.
 The pointer guards inspect object metadata in the current snapshot and return
 an unchanged snapshot under a fresh SSA identity.
 
@@ -2183,10 +2171,6 @@ poison-dependent value.
 
 ### 4.6 Function Effect Summaries
 
-Section 4.1 gives the shape of an effect summary. This section says where a
-function's summary lives, how it is derived, and how a reader knows it is the
-summary the module actually implies rather than one an earlier pass left behind.
-
 **Storage.** A summary is a property of a function and is carried in the
 function header, not recomputed at each call site. Call sites read it; they do
 not own it.
@@ -2210,15 +2194,14 @@ and never reads a missing field as `fenv=false`. Only the explicit legacy
 reader `parse_pre_fenv_module` (`evo-proofcheck --legacy-pre-fenv`) reads text
 written without the field. That reader rejects strict FP and FMA, derives the
 `fenv` component and validates every recorded field. It is never a fallback
-for current text, and a migration regenerates the canonical subject and its
+for canonical text; a migration regenerates the canonical subject and its
 proof. Canonical subject hashes bind the `fenv` field and strict world edges.
 
 **Derivation.** A summary is the least fixed point over the call graph:
 
 0. Every external function (2.1) has the **top** summary: `reads={all},
    writes={all}` and every boolean `true`. Nothing this module holds can
-   bound what another unit's code does, so no smaller summary is sound. A
-   later revision can let a declared attribute (`const`, `pure`) lower it.
+   bound what another unit's code does, so no smaller summary is sound.
 1. Every function starts at the empty summary.
 2. Each function's summary is the join of its own instructions' effects, per
    Section 4.2, with the summaries of every function it calls directly.
@@ -2234,8 +2217,8 @@ participates in. A volatile access anywhere in a function's callee closure makes
 every transitive caller volatile, which is what keeps a caller from being
 reordered across a volatile access it cannot see.
 
-An indirect call contributes the **top** summary, which reads and writes `all`
-and sets every boolean, because the callee is not known statically. A function
+An indirect call contributes the **top** summary, because the callee is not
+known statically. A function
 containing an indirect call therefore has at least the top summary, and so does
 everything that calls it. A call that returns twice (3.10) contributes the top
 summary too, whatever its callee is.
@@ -2327,7 +2310,7 @@ symbol := "__evocc.static." decimal(site_ordinal)
 `site_ordinal` is the object's allocation-site ordinal from the shared manifest.
 It must equal the global's `origin` field. A local name alone is insufficient:
 two blocks in one function may each declare a static `count`, and both are
-distinct objects. The unique source-site ordinal already is the cross-IR
+distinct objects. The unique source-site ordinal is the cross-IR
 observation identity, so using it alone makes the symbol reproducible and lets a
 module validator verify the spelling without hidden source names or counters.
 
@@ -2423,7 +2406,7 @@ the same alignment when assigning virtual function addresses: `ptr.to_int`
 makes their low bits observable. Distinct functions retain distinct identities
 and addresses, aliases retain their target's identity, and exposing and
 reconstructing a function pointer must round-trip. This does not prescribe
-the numeric address beyond its alignment and the existing pointer rules. The
+the numeric address beyond its alignment and the pointer rules. The
 machine emits `.p2align log2(N)` before the label. C-HIR
 writes the field for `__attribute__((aligned(N)))` on a function: the value
 is the maximum over every declaration and the definition of the symbol in
@@ -2514,7 +2497,7 @@ to effective `hidden`, retaining the written attribute in C-HIR and leaving
 C linkage and strength unchanged. This deliberately follows Clang's ELF
 encoding, not GCC's `STV_INTERNAL` or its additional optimization assumptions.
 Redeclarations compare effective visibility, so internal/hidden agree;
-conflicting effective values or malformed attributes remain E2943.
+conflicting effective values or malformed attributes are E2943.
 Conformance tests (informative): `tests/fixtures/symbol-component-*.c`.
 
 `ObjectId` is an interpreter-local provenance identity and is not compared
@@ -2615,7 +2598,7 @@ Alias analysis, region splitting, store forwarding, store bypass, redundant
 load elimination, and every rewrite that depends on `MustAlias` or `NoAlias`
 are outside this revision. The only e-graph input is a pure, total scalar
 region that carries neither `mem<all>` nor `world`; memory and pointer nodes are
-never inserted. These future optimizations require separately scheduled facts
+never inserted. These optimizations require their own facts
 and proof rules and do not become valid merely because the functional memory
 model can describe them.
 
@@ -2641,9 +2624,7 @@ selected by `<reason>`, and the compiler may assume the condition is true for
 all reachable executions. The reason is semantic metadata, not an inference
 from the condition's `bits<1>` type.
 
-Each reason suffix selects one diagnostic. The messages are in Section 6.3,
-which is the single authority for them; this table maps reasons to codes and
-deliberately does not repeat the text.
+Each reason suffix selects one diagnostic. Section 6.3 gives the messages.
 
 | Reason suffix | Diagnostic |
 |---|---|
@@ -2674,20 +2655,18 @@ this arithmetic mode; `-fno-wrapv` and `-fstrict-overflow` disable it, in
 command-line order. The selected mode belongs to the C-HIR translation unit
 and survives substitution. In this mode lowering omits only the signed
 add/subtract/multiply overflow obligations; EvoIR's bit-vector operations
-already have the required semantics. Division, remainder, shifts, pointer
-provenance, object bounds and all other diagnostics remain unchanged. In
-particular this profile does not use either option to waive pointer safety
-or admit out-of-object accesses; it does not claim GCC's full pointer-wrap
-option compatibility.
+have the required semantics. Division, remainder, shifts, pointer
+provenance, object bounds and all other diagnostics remain unchanged. This
+profile does not claim GCC's full pointer-wrap option compatibility.
 
 **Signed left shift in the GNU profile.** For a signed left
-operand and a valid count (`shift_count_defined` still asserted, so the
+operand and a valid count (`shift_count_defined` asserted, so the
 count is in `[0, N)`), `x << y` is the low `N` bits of the mathematical
 product `x * 2^y` in two's complement, whatever the sign of `x` and whether
 or not the result is representable. C11 6.5.7 leaves both cases undefined;
 this profile follows the documented GNU semantics. Lowering emits
 `shift_count_defined` and `ub.assume.invalid_shift_count` before every shift
-and no `signed_shl_defined` obligation; an invalid count remains `E3005`.
+and no `signed_shl_defined` obligation; an invalid count is `E3005`.
 Signed addition, subtraction and multiplication keep their obligations unless
 the wrapping mode above is selected.
 
@@ -2697,9 +2676,6 @@ null, dangling, out of bounds, misaligned, or an invalid pointer
 representation. The state-aware `pointer_valid` and `access_in_bounds` guards
 in Section 3.7 instead inspect the named immutable snapshot, preserve it under
 a fresh `mem<all>` identity, and report the exact fault below.
-
-Messages are in Section 6.3, which is their single authority; this table gives
-each code's meaning and deliberately does not repeat the text.
 
 | Diagnostic | Meaning |
 |---|---|
@@ -2735,7 +2711,7 @@ it reports the input file without a position.
 | Division by zero | `y == 0` | `divisor_nonzero(y)` → `ub.assume.division_by_zero` → `sdiv`/`udiv` |
 | Remainder by zero | `y == 0` | `divisor_nonzero(y)` → `ub.assume.remainder_by_zero` → `srem`/`urem` |
 | Shift amount invalid for width | mathematical `shift_amt` is outside `[0, N)` | `shift_count_defined.<signedness>(x, amt)` → `ub.assume.invalid_shift_count` → shift |
-| Invalid signed left shift | signed `x << y` is not representable (C11 6.5.7) | not asserted: the GNU profile defines the result as the truncated two's-complement bit pattern (6.1); `signed_shl_defined` and `E3006` remain readable |
+| Invalid signed left shift | signed `x << y` is not representable (C11 6.5.7) | not asserted: the GNU profile defines the result as the truncated two's-complement bit pattern (6.1); `signed_shl_defined` and `E3006` are readable |
 | Call of an old-style definition without a prototype | the argument count differs from the parameter count, or a promoted argument type does not agree with the promoted parameter type (10.1.7) | `const.bits<1> 0`, or `icmp.sle` of zero and the argument for a signed/unsigned pair → `ub.assume.old_style_call` → the call |
 | Pointer arithmetic validity | result must name a live object at an offset in `[0,size]` | `ptr.offset.*.*` → `pointer_valid` |
 | Memory access validity | complete positive-width range and alignment must be valid in the current snapshot | `access_in_bounds` → matching `load`/`store` |
@@ -2747,16 +2723,15 @@ it reports the input file without a position.
 | Use of uninitialized scalar SSA value | consume a value defined by `uninitialized.bits<N>` | the interpreter reports `E3001` at the consuming instruction or terminator |
 | Read from uninitialized memory storage | any requested initializedness bit is false | `load` reports `E3001` at the load, never allocation or token transport |
 | Invalid pointer representation/provenance | pointer bytes or provenance are not valid | pointer load/guard/access reports `E3013` |
-| Strict aliasing/effective type | access through incompatible effective type | not checked; deferred with alias analysis (5.5) |
+| Strict aliasing/effective type | access through incompatible effective type | not checked; outside this revision (5.5) |
 
 `-fno-strict-aliasing` explicitly selects the conservative access
 contract: no analysis or optimization derives disjointness
 solely from differing C access types. This option neither removes object
 identity/provenance, lifetime, initializedness, bounds, alignment or read-only
 checks nor licenses incompatible pointer representations. Source and IR
-execution and emission already have this behavior; the option does not change
-them. The effective-type/TBAA extension is outside this revision, and
-`-fstrict-aliasing` is not silently accepted.
+execution and emission have this behavior; the option does not change
+them. `-fstrict-aliasing` is not silently accepted.
 
 `uninitialized.bits<N>` defines an ordinary poison value with a real SSA
 identity. Branch operands and block arguments may copy that poison without
@@ -2775,7 +2750,7 @@ message. A code introduced in one section and never listed here has no
 authoritative message, so two implementations could print different text for
 one condition; a code listed twice would let a reader think two conditions are
 the same finding. The following codes are named in this document but have no
-row yet, because the implementation uses several messages for each or none is
+row, because the implementation uses several messages for each or none is
 fixed: `E0002`, `E1001`, `E1006`, `E1303`, `E2102`, `E3051`, `E3052`,
 `E3063`, `E3064` and `E3065`. `evocc --explain` reports a missing explanation
 for them. Codes `E4xxx` belong to EvoMIR (`spec/evomir.md`).
@@ -2955,7 +2930,7 @@ to warn; `-Wcpp`, `-Wno-cpp` and `-Werror=cpp` set its level, and
 for an ignored x86 calling convention (10.1.9) defaults to warn, and its
 options act in the same way. The driver keeps implicit
 declaration evidence
-before lowering. An allowed or warned implicit declaration uses the existing
+before lowering. An allowed or warned implicit declaration uses the
 implicit `int` and unprototyped-function rules. This does not enable old-style
 definitions in a modern language mode.
 
@@ -2993,14 +2968,14 @@ not change executable IR.
 
 `-pedantic-errors`, `--pedantic-errors` and `-Werror=pedantic` are `E2968` at
 the command line; EvoCC has no ISO pedantic diagnostic mode. `-pedantic` and
-`-Wpedantic` remain accepted.
+`-Wpedantic` are accepted.
 
 `E3017` compares a call site to its pointer type; `E3019` compares the runtime
 symbol selected by that value to the same type. The separation is deliberate:
 a malformed call site and a program-selected incompatible target are different
 findings and are acted on differently.
 
-A withdrawn code keeps its row, so `evocc --explain` still answers it, and no
+A withdrawn code keeps its row, so `evocc --explain` answers it, and no
 new condition may reuse it. The codes `E2207`, `E2921`, `E3028`, `E3044` and `E3046` are
 retired without a row: no rule of this revision raises them, and no new
 condition may reuse them.
@@ -3057,8 +3032,7 @@ produce the same value but trap under different conditions are **not** equal.
 operands of a node and from the edges into its block, never from a branch
 condition, an assumption, a range or provenance.
 
-Informative. The design adds these fact kinds in later revisions; no
-transformation of this revision uses them as facts of `Γ`:
+Informative. The design adds these fact kinds in later revisions:
 
 | Fact kind | Example | Source |
 |---|---|---|
@@ -3069,7 +3043,7 @@ transformation of this revision uses them as facts of `Γ`:
 | Provenance facts | `%p` has one automatic object's `ObjectId` | `alloca` |
 | Obligations | `signed_add_defined(%x, %y)` | `ub.assume.signed_overflow` |
 | No-overflow facts | `add_defined(%x, %y)` | Obligation propagation |
-| Alias facts (not in this revision) | `NoAlias(%p, %q)` | Alias analysis (5.5) |
+| Alias facts | `NoAlias(%p, %q)` | Alias analysis (5.5) |
 
 ### 7.3 Equality and E-Classes
 
@@ -3134,8 +3108,7 @@ original on ties. "Original" for a final class means its smallest `source=before
 smallest `NodeId`.
 
 In the P0 profile, cost is the number of instructions that a choice newly
-emits into the rewritten module, with the existing semantic convention that a
-`const` node costs zero. The rules are region-relative and ordered by the first
+emits into the rewritten module. The rules are region-relative and ordered by the first
 matching case:
 
 - a seed costs zero;
@@ -3152,7 +3125,7 @@ matching case:
 **Cost is a policy.** The cost function above is the default policy of this
 profile, not a property the checker verifies: a certificate proves that every
 replacement is equivalent, never that it was the cheapest, and Section 8.7
-already lets a producer decline any eligible region. A producer may therefore
+lets a producer decline any eligible region. A producer may therefore
 extract under any other cost function provided it is deterministic for a
 given module, budget and policy, applies the same strict-improvement
 rule relative to its own costs, and is identified in the producer's report
@@ -3173,10 +3146,10 @@ makes the extraction of that region fail, and the root keeps its original
 instruction; extraction never recurses or inserts a placeholder. This is
 deliberately an instruction-count-only P0 model: it does
 not estimate register pressure, and a later multi-objective model must revise
-the cost authority rather than reinterpret these zero-cost cases. Cross-block
-reuse remains excluded by Section 8.5. Explicit node and epoch budgets bound
+the cost authority rather than reinterpret these zero-cost cases. Section 8.5
+excludes cross-block reuse. Explicit node and epoch budgets bound
 every transaction (Section 8.11). A region whose extraction fails is
-declined, and its root keeps its original instruction. A proof failure, a
+declined. A proof failure, a
 reassembly or validation failure of the output module, or a disagreement
 with the equality state fails the whole transaction: it returns the
 byte-identical original EvoIR, a certificate with no region, and the equality
@@ -3219,9 +3192,8 @@ Nodes retained only from an earlier transaction remain queryable in persistent
 classes and their proof events remain in persistent history, but they are not P0
 match, proof, or extraction candidates for a later certificate. Admitting such a
 history-only node without serializing its earlier derivation would make the
-second certificate impossible for an independent checker to replay. A future
-certificate revision can carry cumulative history; no current EVP version
-does.
+second certificate impossible for an independent checker to replay. No EVP
+version carries cumulative history.
 
 The exact driver capability is `-Oeq-scalar`, and `-Oeq-scalar --probe` is
 implemented. The broader `-Oeq --probe` exits 69 `NOT_IMPLEMENTED`.
@@ -3245,9 +3217,7 @@ EqSat optimization    adds alternative EvoIR representations
 Target lowering       adds machine-specific representations
 ```
 
-EvoIR value IDs map to EClassIds. Lowering from C-HIR to EvoIR creates new
-EvoIR representations and adds them to existing EClasses. Target instruction
-selection adds machine-specific representations to the same classes.
+EvoIR value IDs map to EClassIds.
 
 ### 8.2 Core Data Structures
 
@@ -3328,9 +3298,7 @@ the entire e-graph from scratch.
 
 ### 8.5 Eligible Regions
 
-Section 8's P0 profile says which rules may fire. This section says what they
-may fire on, in enough detail that two implementations reach the same answer.
-That matters because the checker derives eligibility for itself: a producer and
+The checker derives eligibility for itself: a producer and
 a checker sharing this judgment would agree on an ineligible region and accept
 the rewrite built on it, whereas disagreeing about a *parse* only costs a
 rejection. Independence is spent here and nowhere else.
@@ -3381,15 +3349,14 @@ Every root and witness result in this profile has type `bits<N>` with
 as the 64-bit masks of the 8.10 lattice require (a shift whose amount is wider
 is an ineligible region, never a refusal, and the interpreter still executes
 it under 3.4); a width change consumes one sort and produces another, both
-within the bound. Wider scalar equality needs a later registry revision;
-silently truncating a wider constant to the host's integer width is invalid.
+within the bound. Silently truncating a wider constant to the host's integer width is invalid.
 
 **Poison and effect exclusion.** A value is *tainted* when it is the result of
 `uninitialized`, when any operand it names is tainted, or when it is a block
 argument and any terminator edge entering that block passes a tainted value in
 its position.
 
-That last clause is not an elaboration. Taint that propagated only along operands
+Taint that propagated only along operands
 would be laundered by a branch: a tainted value passed as a block argument would
 arrive untainted, and the P0 profile would then admit an expression built on
 poison. Every edge, on every path into the block, contributes.
@@ -3444,8 +3411,8 @@ A **seed** is a leaf of the witness closure: a value a witness instruction names
 but no instruction in that closure defines. In this profile every seed has origin
 `input`: a value defined earlier in the same block by an instruction the
 closure does not follow is, by the exclusion rule of 8.5, excluded, and its
-region ineligible. The `definition` origin remains in the manifest format for
-a later profile, and the checker recomputes it like any field.
+region ineligible. The manifest format also has a `definition` origin, and the
+checker recomputes it like any field.
 
 ```text
 Seed {
@@ -3464,8 +3431,8 @@ both independently recomputed from `before.evo`.
 
 The **witness manifest** is the closure's instruction identities in original
 instruction order. Each identity uses the same
-`function/block/instruction-index` spelling as a region identity. A checker
-recomputes the exact witness and seed manifests; the certificate cannot add an
+`function/block/instruction-index` spelling as a region identity. The
+certificate cannot add an
 instruction, hide one, or reinterpret a seed as a constant node.
 
 A **region identity** is the tuple
@@ -3505,8 +3472,6 @@ mechanically rather than described by the producer:
    omitted, or unattempted region contributes nothing.
 3. Renumber values in Section 8.6 order, then render under Section 9.4.
 
-Replacement is defined for the cases a reassembler actually meets:
-
 | Case | Rule |
 |---|---|
 | A root whose replacement is a single instruction | The replacement occupies the root's position. |
@@ -3538,7 +3503,7 @@ region would satisfy either while shipping a different program.
 
 ### 8.9 Equality State
 
-Equality becomes compiler state rather than a per-pass structure. The state owns
+Equality is compiler state, not a per-pass structure. The state owns
 the e-graph, the map from `(function, value)` to `EClassId`, and the proof
 history.
 
@@ -3804,16 +3769,16 @@ telemetry (informative).
 allowlist. Its only roots are the seven total predicate forms in Sections
 3.3.1 and 6.1: divisor nonzero, signed div/rem overflow, signed add/sub/mul
 definedness and signed/unsigned shift-count definedness. `signed_shl_defined`
-remains excluded. Arithmetic operand width N and independent count width M
+is excluded. Arithmetic operand width N and independent count width M
 are each 1..64. The predicate result is `bits<1>`.
 
 Only the root itself is exempt from P0's opcode exclusion. All operands,
-witnesses and seeds obey the existing exclusion and all-edge poison fixed
+witnesses and seeds obey that exclusion and all-edge poison fixed
 points. Witness closure consists of this one root and P0 operand cones,
 including their earlier structural duplicates. Another predicate, load,
 effect or excluded cone is not an opaque seed. In particular, a poison
 shifted operand forbids folding even when the count alone proves valid.
-Facts are solely existing normalized known bits and Section 8.10's all-edge
+Facts are solely normalized known bits and Section 8.10's all-edge
 seed facts; no edge conditions, assumptions or execution results are premises.
 
 For normalized fact `(m,v)` at width N, let `u=((2^N-1) xor m)` and
@@ -3837,10 +3802,10 @@ Endpoint calculations are mathematical integers. N is never truncated to M
 bits or masked as a machine shift count. Each transfer has a width-parametric,
 kernel-only `TransferSound` theorem via `BitVec.toInt`/integer order reasoning;
 the seven rows do not use `bv_decide`, finite-width enumeration or Mathlib.
-The checker independently recomputes the seven rows and existing seed facts.
+The checker independently recomputes the seven rows and the seed facts.
 
 The only extraction is `const.bits<1> 1` at the predicate's original result
-identity. Section 8.8 whole-module reassembly remains unchanged: obligations,
+identity. Section 8.8 whole-module reassembly applies: obligations,
 their reasons, other users and conservative effect summaries remain in EvoIR.
 Checked MIR may omit an obligation's branch only when its operand directly
 names canonical `const.bits<1> 1`. Publication uses the independently
@@ -3856,7 +3821,7 @@ fixtures, by `evo-run`, by `--emit=evoir`, and by the checker, which reads
 a producer's rendering rather than sharing the producer's in-memory module.
 
 That last use makes the format load-bearing rather than a debugging
-convenience. Two obligations follow, and Sections 9.4 and 9.5 discharge them:
+convenience. Sections 9.4 and 9.5 discharge two obligations:
 
 - **Canonical.** One module has exactly one rendering, byte for byte. A
   renderer that emits a semantically equal but textually different form is
@@ -3870,7 +3835,7 @@ convenience. Two obligations follow, and Sections 9.4 and 9.5 discharge them:
 **Target identity.** Text with no target line describes the implicit target
 `aarch64-unknown-linux-gnu` with its AArch64 LP64 `TargetDataLayout`. The text
 of any other target starts with the line `target TRIPLE`, then a blank line
-before a nonempty module (Section 9.3). Today that target is
+before a nonempty module (Section 9.3). That target is
 `aarch64-apple-darwin`, whose data layout Section 10.5 states; `--emit=evoir`
 writes its line. A reader serves one target: `parse_section9_module` refuses
 text that names a target, and `parse_target_module` refuses text that does not
@@ -3882,7 +3847,7 @@ certificate digests, chain identity and canonical reassembly. The persistent
 state is bound to the selected target and cannot change it during a chain.
 Unknown or mixed text profiles are malformed input (exit 2); changing the
 profile of both files without a matching certificate gives exit 3. The explicit
-legacy reader remains Linux-only. No host default or environment variable
+legacy reader is Linux-only. No host default or environment variable
 selects the meaning of these bytes.
 
 All five registries (`p0.scalar.v1` through `p0.scalar.v4` and `g0.ub.v1`) are
@@ -3890,8 +3855,8 @@ admitted for both profiles. Each rule uses total `bits<1..64>` operations or
 the seven total integer guard forms. Widths and signed comparison/shift
 choices are explicit in the terms. Their denotations and known-bits transfers
 do not read a C type layout, ABI, pointer representation or floating-point
-format. Eligibility still excludes pointer, memory and floating-point
-rewrites; those instructions and their metadata remain subject to exact
+format. Eligibility excludes pointer, memory and floating-point
+rewrites; those instructions and their metadata are subject to exact
 whole-module reassembly. This adds no rule and does not extend the separate
 `core-v1` proof-required target profile.
 
@@ -4354,9 +4319,8 @@ of one module disagree on their digest.
 | Integer literals | Unsigned decimal, no leading zeros other than `0` itself, no sign, no underscores. |
 | Hex bytes | Lowercase, exactly two digits per byte, no separators. |
 
-Canonical output contains no comments and no blank lines other than the
-separators named above, so a digest over these bytes is a digest over the
-module and nothing else.
+A digest over these bytes is therefore a digest over the module and nothing
+else.
 
 ### 9.5 Parser Rejection Rules
 
@@ -4391,8 +4355,8 @@ Rejected as **malformed**, meaning the bytes are not a module at all:
 - Any byte after the final newline.
 
 Rejected as **well-formed but invalid**, meaning the bytes parse and the module
-they describe is not a legal module. These are the checks Section 2.4, Section
-10.4 and the effect model already require, applied to a parsed module:
+they describe is not a legal module. These are the checks of Section 2.4, Section
+10.4 and the effect model, applied to a parsed module:
 
 - A value used without a definition, or defined twice.
 - A block argument arity or type mismatch on any edge.
@@ -4449,10 +4413,6 @@ func @sum(%arg0: ptr<generic>, %arg1: bits<64>, %arg2: mem<all>, %arg3: world) -
 }
 ```
 
-Formal parameters use the `%arg` namespace and are positional call-interface
-binders. The entry block's arguments are the SSA values those binders are bound
-to, and are numbered in the `%v` namespace like every other value.
-
 ### 9.7 UB-Assume Example
 
 ```text
@@ -4500,7 +4460,7 @@ defined in this fragment; a real module derives it from the callee's body.
 - Function names (`@name`) are global symbols.
 - A `ub.assume` without a reason suffix is malformed. The accepted suffixes
   are those of the `ub_reason` production of Section 9.3.
-- The entry block must be named `^entry` (convention) and must be the first
+- The entry block must be named `^entry` and must be the first
   block in the function body.
 - Terminators must appear as the last instruction in a block.
 
@@ -4516,7 +4476,7 @@ the semantics of that transformation and are binding on the lowering agent.
 #### 10.1.1 Value Correspondence
 
 Every C-HIR expression lowers to an EvoIR value of the corresponding
-`EvoIRType`. The mapping is:
+`EvoIRType`:
 
 | C Type | EvoIR Type |
 |---|---|
@@ -4526,7 +4486,7 @@ Every C-HIR expression lowers to an EvoIR value of the corresponding
 | `float` | `f32` |
 | `double` | `f64` |
 | `long double` | `f128` (3.13.4) |
-| pointer to object `T*` | `ptr<generic>`; storage duration remains object metadata |
+| pointer to object `T*` | `ptr<generic>`; storage duration is object metadata |
 | pointer to function | `fnptr<Sig>`, where `Sig` is the complete lowered parameter/result interface including trailing tokens |
 | `void` (in return position) | `void` (empty return type) |
 
@@ -4652,8 +4612,7 @@ a `load` or `store` through it is `E3040` (`external-object-not-executable`)
 when reached. Neither code is a front-end refusal: the unit lowers, the
 e-graph treats the call by its top summary (Section 4), and the machine lane
 calls or addresses the symbol and lets the linker resolve it (EvoMIR
-Section 8). A call of `memset` after `__builtin_memset` with no declaration
-in scope is still an implicit declaration, so the synthesized prototype below is the only
+Section 8). The synthesized prototype below is the only
 source of the `declare` for a builtin.
 
 **Library builtins introduce no identifier.** A use of
@@ -4681,9 +4640,9 @@ declaration. A function that is only declared and
 never defined, called or address-taken produces nothing in EvoIR, because
 EvoIR carries definitions and the calls that name them, not declarations
 (Section 3.10). A call or `func_addr` whose function type
-still names an incomplete enumeration at that point is `E2002`'s neighbour
+still names an incomplete enumeration at that point is
 `E2930` (`use-with-incomplete-enumeration`) at the use. An enumeration completed
-before the use has its completed type there, as usual.
+before the use has its completed type there.
 
 **Arithmetic on `void *`.** `void *` participates in pointer arithmetic with
 scale 1 (`sizeof(void)` is 1, 10.1.19), in every form: `p + n`, `p += n`,
@@ -4718,7 +4677,7 @@ array and function decay and ignoring top-level qualifiers, is compatible with
 a member type; a narrow bit-field member does not match, a full-width one does.
 In a static initializer the member value must be constant. In both forms the
 operand is evaluated once and the result is not an lvalue; lowering uses the
-existing aggregate allocation and copy forms and keeps volatile source
+aggregate allocation and copy forms and keeps volatile source
 accesses. A cast to a struct type from an incompatible type, including a
 different struct tag, is `E2953` (`incompatible-record-cast`). A union cast
 with no compatible member, or one that would need an assignment conversion, a
@@ -4726,7 +4685,7 @@ different tag or the loss of nested pointer qualifiers, is `E2942`
 (`incompatible-union-cast`).
 
 **Pointer difference.** `a - b` on two pointers to `T` has type `long`
-(`ptrdiff_t`); on two `void *` the scale is 1. Lowering: `ptr.to_int` of each operand,
+(`ptrdiff_t`). Lowering: `ptr.to_int` of each operand,
 `sub.bits<64>`, then `sdiv.bits<64>` by `sizeof(T)` (1 for `void`), which
 is exact whenever the program is defined. A `divisor_nonzero` predicate and
 `ub.assume.division_by_zero` precede the division. If `T` is zero-sized,
@@ -4757,11 +4716,11 @@ and anonymous arguments. Both interpreters extend their scalar value model to
 128 bits for these forms. `sdiv`, `udiv`, `srem` and `urem` on `bits<128>`
 execute in both interpreters, and hosted native lowering calls the ordinary
 pair-ABI runtime helpers `__divti3`, `__udivti3`, `__modti3` and `__umodti3`.
-Division by zero remains E3002, remainder by zero E3003, and signed MIN/-1
+Division by zero is E3002, remainder by zero E3003, and signed MIN/-1
 E3004 for either operator. The native runtime dependency is explicit, not a
 freestanding-library guarantee. The machine interpreter models only these four
 helpers, with the same register-pair interface; when the module defines a
-function of that name it executes the definition instead, and it still refuses
+function of that name it executes the definition instead, and it refuses
 every other unresolved callee. The register-pair convention for passing and
 returning one is EvoMIR's (EvoMIR Section 6). Example values:
 `((u128)0xffffffffffffffff * 0xfffffffffffffffe) >> 64` is
@@ -4785,11 +4744,11 @@ members is copied member by member with `volatile` scalar accesses in
 declaration order. A complete, naturally aligned 1/2/4/8-byte `volatile`
 union is read or written as one representation access through Section 3.8,
 without selecting a member; unsupported sizes/alignment and volatile record
-copies containing bit-fields retain `E2922` (`volatile-aggregate-copy-unsupported`).
+copies containing bit-fields are `E2922` (`volatile-aggregate-copy-unsupported`).
 An `_Atomic` object is read and written through atomic accesses (10.1.21).
 A read of an atomic object that 10.1.21 does not admit is `E2702` at the
 read, as an assignment or an update is at its target; `sizeof`, `&` and the
-other operands that read nothing stay admitted. The padding bytes of an initialized
+other operands that read nothing are admitted. The padding bytes of an initialized
 aggregate are uninitialized, and after a copy so are the destination's. The
 reference compilers differ on padding bytes after `b = a`; both behaviors
 are consistent with "unspecified", so the profile transfers initializedness
@@ -4903,9 +4862,9 @@ before a total operation:
 | `x % y` (signed) | `divisor_nonzero(y)` → `ub.assume.remainder_by_zero`; `signed_div_rem_no_overflow(x, y)` → `ub.assume.signed_overflow`; then `srem.bits<N> x, y` |
 | `x % y` (unsigned) | `divisor_nonzero(y)` → `ub.assume.remainder_by_zero` → `urem.bits<N> x, y` |
 | any shift | `shift_count_defined.<signedness>(x, y)` → `ub.assume.invalid_shift_count` → shift operation |
-| signed `x << y` | count obligation only; then `shl.bits<N> x, y`, the low N bits under the GNU profile in 6.1; no new signed-left-shift obligation |
+| signed `x << y` | count obligation only; then `shl.bits<N> x, y`, the low N bits under the GNU profile in 6.1 |
 | read of an uninitialized scalar local | `uninitialized.bits<N>` is threaded through SSA until a semantic consumer reports `E3001` |
-| reachable end of a non-`main`, non-void function | `ret` of `uninitialized.T` for the return type `T`: C makes the fall-off undefined only when the caller uses the value, so the value is poison and its use is the ordinary poison report; the reference compilers return whatever the register holds. A non-void `main` still returns 0 at its end |
+| reachable end of a non-`main`, non-void function | `ret` of `uninitialized.T` for the return type `T`: C makes the fall-off undefined only when the caller uses the value, so the value is poison and its use is the ordinary poison report; the reference compilers return whatever the register holds. A non-void `main` returns 0 at its end |
 | `__builtin_unreachable()` | `trap.unreachable_reached` reports `E3024` |
 | pointer arithmetic | `ptr.offset.<direction>.<signedness>` with target scale → `pointer_valid` on current `mem<all>` |
 | `*p` (read) | `access_in_bounds` with target size/alignment → `load` |
@@ -4964,7 +4923,7 @@ A later read of a member that was never stored is `E3001`; a read of a stored
 member is not. A record copy moves the state of each bit. The C-HIR
 interpreter applies the same rule to the same bytes. Native code is the same
 sequence without masks. A volatile bit-field access keeps the unit accesses
-below, and masks state the same rule for them (D25): the load of each unit
+below, and masks state the same rule for them: the load of each unit
 for a read selects the field's bits of that unit, and for a store the load of
 each unit has `[mask=0]` and the store mask selects the field's bits.
 
@@ -4977,7 +4936,7 @@ finding. Each underlying load and store is one volatile event that advances
 `world`; none is atomic. In a packed record the accesses use power-of-two units of at most 16
 bytes, in increasing byte order and never past the record, and a field that
 crosses units keeps its full value. C-HIR and EvoIR must produce identical
-value-and-access traces. Volatile record copies with bit-field members remain
+value-and-access traces. Volatile record copies with bit-field members are
 `E2922` (10.1.3).
 
 **Anonymous members.** A member of an anonymous structure or union is a member
@@ -5012,7 +4971,7 @@ semantics; reserving storage or transporting its address never runs the zeroing.
 #### 10.1.7 Function Call Lowering
 
 C function calls lower to EvoIR `call` instructions. Attributes (10.1.9) never
-refine a call summary in this revision, and a call that returns twice takes
+refine a call summary, and a call that returns twice takes
 the top summary (3.10); `typeof` (10.1.10) and statement expressions (10.1.11)
 are resolved before this lowering sees a call.
 
@@ -5021,10 +4980,9 @@ summary, and a function's summary is the least fixed point over its call graph;
 an indirect call contributes the top summary because its callee is not known
 statically.
 
-A direct same-TU call uses the exact fixed point from Section 4.6; an indirect
-call and a call of an external function contribute top. The volatile bit is
+A call of an external function contributes top. The volatile bit is
 true when the callee or any transitive callee contains a volatile access;
-recursive SCCs are solved together. Every call still consumes and produces
+recursive SCCs are solved together. Every call consumes and produces
 `world`, even when that bit is false.
 
 **Floating and arity lowering classes.** A floating scalar, floating complex
@@ -5066,7 +5024,7 @@ unspecified parameter list keeps its address and provenance in storage; it is
 not a pointer to an empty prototype. A call through it applies the default
 argument promotions. Lowering carries the value as `ptr<generic>` and converts
 it at the call with `ptr.to_int` and `ptr.from_int.fnptr<Sig>`, where `Sig` is
-the promoted call's signature; the dynamic `E3019` check applies unchanged.
+the promoted call's signature; the dynamic `E3019` check applies.
 
 **Calls of old-style definitions.** A call is a call without a prototype when
 the called expression names a function, no prototype of it is in scope, and the
@@ -5081,7 +5039,7 @@ agree when they are compatible, or when both are pointers to character types or
 unsigned type agree when the value is representable in both. The call is
 undefined (C11 6.5.2.2p6) when the counts differ or a pair does not agree. An
 agreeing call is a direct `call` that converts each argument to the
-definition's parameter type, as before. A signed/unsigned pair adds `icmp.sle`
+definition's parameter type. A signed/unsigned pair adds `icmp.sle`
 of zero and the argument and `ub.assume.old_style_call` after the argument
 evaluation; a constant argument whose top bit is clear agrees without them. An
 undefined call gets `const.bits<1> 0` and `ub.assume.old_style_call` there, and
@@ -5124,13 +5082,10 @@ for the first operand of `?:`, and for the operands of `!`, `&&` and `||`
 (C11 6.5.3.3, 6.5.13, 6.5.14, 6.5.15, 6.8.4.1, 6.8.5). Pointers and complex
 values are scalar. A record, union or void operand is `E2103`
 (`controlling-expression-not-scalar`) at the operand. A vector controlling
-expression is also `E2103`, except that the existing vector operand
-diagnostics remain for `!`, `&&` and `||` (`E2102`) and for `?:` (`E2202`).
+expression is also `E2103`, except that the vector operand
+diagnostics apply for `!`, `&&` and `||` (`E2102`) and for `?:` (`E2202`).
 
 #### 10.1.9 GNU Attributes
-
-This section fixes how GNU attributes are read, where they attach, which are given a meaning, and how
-the rest are carried without one.
 
 **Syntax.** An attribute specifier is `__attribute__` `((` attribute-list `))`,
 where each attribute is a name, optionally followed by a parenthesised argument
@@ -5185,7 +5140,7 @@ declarator, the position is the type-name position.
 attaches to: name as written, arguments as written, source span, and the
 attachment position from the table above. Preservation does not depend on
 whether the attribute is understood. A C-HIR dump shows every attribute present
-in the source, so a reviewer can confirm nothing was dropped on the way in.
+in the source.
 
 **Darwin Clang attributes.** On `aarch64-apple-darwin`, Clang attributes
 that change a type, a value, the layout, the linkage or the ABI are `E2967`
@@ -5209,10 +5164,9 @@ nullability keyword is refused, as GCC 14 refuses it. `__has_attribute(name)`
 on Darwin answers 0 for every name in the `E2967` group.
 
 **Applied semantics.** `aligned` and `packed` act on layout; integer `mode`
-selects the canonical integer type as specified below. The separately stated
-inlining and linkage attributes also have their explicitly defined effects.
+selects the canonical integer type as specified below.
 The profile also applies `constructor`/`destructor` through the load-instance
-registrations of Section 2.1, `vector_size` through the real integer type of
+registrations of Section 2.1, `vector_size` through the vector types of
 Section 10.1.14, and `tls_model` through the thread-object model below; these
 are not included in the preserve-only catch-all.
 
@@ -5248,7 +5202,7 @@ and `word` means `DI`, and enclosing the mode name in `__` is equivalent.
 The original integer's signedness and top-level qualifiers are preserved;
 layout, promotions and every consumer use the selected canonical type, not
 the original spelling. An unknown mode, wrong arity or non-integer target is
-`E2903`; pointer-declarator attributes keep the existing never-applied rule.
+`E2903`; pointer-declarator attributes keep the never-applied rule.
 An integer `mode` written in an abstract type name is also `E2903`, because
 the reference compilers give it two layouts. `_Bool` and enumeration bases are
 refused with `E2903`.
@@ -5286,7 +5240,7 @@ preserved without effect, as GCC 14 has none of them.
   merged one, by a different version where both have one or by a different
   `unavailable`, removes both; an agreeing one fills in the missing versions;
   and a merge whose versions are out of order, such as `deprecated` before
-  `introduced`, removes the attribute. The tests list the measured cases.
+  `introduced`, removes the attribute.
 - For the deployment target `D`, `unavailable` makes the entity unavailable,
   "not available on macOS". Otherwise an `introduced` version above `D` makes
   it not yet introduced, or unavailable, "introduced in macOS V", with
@@ -5333,7 +5287,7 @@ GCC 14's dialect, which has none of them.
   at its name, in every position. Clang lets declarations of one name differ
   in type and gives each a mangled symbol name, so no ordinary function can
   stand in for one.
-- A list attribute of the convention rule above after the `*` of a function
+- A list attribute of the convention rule below after the `*` of a function
   declarator's result type belongs to the function, as Apple clang moves it
   there, and its declaration settles it; an object or a type name with one
   keeps `E2952`. Clang's `<arm_acle.h>` writes
@@ -5354,7 +5308,7 @@ GCC 14's dialect, which has none of them.
   operation or builtin in the function body. Under `-mgeneral-regs-only` the
   attribute keeps `E2952`:
   EvoCC cannot re-enable SIMD registers for one function, whereas Apple clang
-  accepts `target("neon")` in that mode. Linux keeps the original refusal.
+  accepts `target("neon")` in that mode. Linux keeps `E2952`.
 
 **Scalar storage order.** `scalar_storage_order`, with or without surrounding
 underscores, is `E2940` (`unsupported-scalar-storage-order`); it is never
@@ -5385,7 +5339,7 @@ call and argument effects still execute exactly once.
 `swiftcall`, `swiftasynccall`, `regparm` on Darwin,
 `callee_pop_aggregate_return`, `returns_twice`, `target`, `target_clones`,
 `target_version` and `optimize` are `E2952` (`unsupported-function-attribute`)
-where this paragraph does not accept them. The other x86 calling conventions
+where this section does not accept them. The other x86 calling conventions
 are a warning (below). This also applies to names enclosed in `__` and to
 the `gnu` and
 `__gnu__` bracket namespaces, on both targets. A warning option cannot
@@ -5406,7 +5360,7 @@ when the unit is complete, in any declaration order:
 - Each definition is `E2952`, at the attribute when the definition carries
   it and at the defined name otherwise. `returns_twice` is the exception, and
   on Darwin an internal definition that the unit drops is not refused (Clang
-  extensions, below).
+  extensions, above).
 - Each use of the function's designator is `E2952`: a call, an address or
   any other operand, evaluated or not. A call through a pointer cannot be
   checked, so a call is not the only use that counts. A use outside a
@@ -5492,8 +5446,8 @@ of its arguments is one of these:
 This applies to `optimize` and `__optimize__`, in the GNU form and in the
 `gnu` and `__gnu__` bracket namespaces. String concatenation and escapes
 have their ordinary C meaning. An empty argument list, an empty
-option and every other option remain `E2952`, also in a mixture with
-accepted options. A semantic option such as `wrapv` or `fast-math` stays
+option and every other option are `E2952`, also in a mixture with
+accepted options. A semantic option such as `wrapv` or `fast-math` is
 refused, because EvoCC has no per-function semantics. A level promises no
 transform. EvoCC makes none of the transforms that the listed options
 forbid: no analysis derives disjointness from C access types (6.2), and the
@@ -5537,7 +5491,7 @@ definition.
 Default GNU11 ISO inline and `static inline` retain their separate rules.
 Remaining calls, addresses and relocations name the actual external symbol,
 never a fabricated local, weak or COMDAT copy. Interpreters may execute a
-substituted body, but an unexpanded external call uses the existing external
+substituted body, but an unexpanded external call uses the external
 execution boundary and top effect summary, not the saved inline body.
 
 **`always_inline`.** A call whose callee is a function
@@ -5560,7 +5514,7 @@ substituted: the former is lowered as an ordinary call, the cycle is
 body forwards its anonymous arguments only through the GNU argument pack
 and uses no `va_start`, `va_arg`, `va_end` or `va_copy`; it is substituted
 like a fixed callee. A callee that makes a call that returns twice is not
-substituted; it is `E2957` (`returns_twice` below). Each anonymous argument of the call, after the default
+substituted; it is `E2957` (`returns_twice` above). Each anonymous argument of the call, after the default
 argument promotions, becomes a fresh automatic object of its promoted type,
 initialized after the named parameters in argument order. Each
 `__builtin_va_arg_pack ()` in the body becomes those objects, in order, and
@@ -5591,8 +5545,7 @@ storage at 256 bytes, and excludes variadics, activation-sensitive builtins,
 dynamic allocation, static locals, assembly and address-taken labels. These
 are optimization admission limits, not new C-language refusals or permission
 to change an object's identity or read uninitialized bytes. A nonmatching
-optional call remains a call; mandatory `always_inline` cycle handling is
-unchanged. No EvoIR instruction, EqSat rule or implicit cross-block state is
+optional call remains a call. No EvoIR instruction, EqSat rule or implicit cross-block state is
 introduced by this selection. Under `-fno-inline`, no optional selection is
 made: as in GCC 14, only `always_inline` callees are substituted, and each
 other call stays a call.
@@ -5616,9 +5569,8 @@ pointer of equal size and alignment, passed as the first member's
 representation. An incompatible argument is `E2202`; any other member
 representation is `E2903`.
 
-**Diagnostics introduced.** Messages live in Section 6.3, the single authority;
-this table gives conditions only. `E2902` is withdrawn: Section 10.1.13 covers
-compound literals, and a front end must not emit it.
+**Diagnostics.** Section 6.3 gives the messages. A front end must not emit
+`E2902`; Section 10.1.13 covers compound literals.
 
 | Code | Condition |
 |---|---|
@@ -5675,7 +5627,7 @@ compound literals, and a front end must not emit it.
 | `E2957` | an `always_inline` function that makes a call that returns twice (10.1.9) |
 | `E2958` | `_Bool`, `__int128`, an atomic type or an aligned typedef as the fixed underlying type of an enumeration (10.1.14) |
 | `E2959` | a `__builtin_tgmath` call that selects a complex function, or has a complex argument, of a type without admitted values: `_Float16 _Complex` and the other `_FloatN _Complex` and `_FloatNx _Complex` types (10.1.14) |
-| `E2960` | a translation-time product or quotient of floating complex values on a target whose complex helpers have no model, Darwin in this revision (3.13.5, 10.1.14) |
+| `E2960` | a translation-time product or quotient of floating complex values on a target whose complex helpers have no model, Darwin (3.13.5, 10.1.14) |
 | `E2961` | an arithmetic, relational, equality or conditional operator, or a compound assignment, with a `_Float16` operand and a `__bf16` operand (3.13.6) |
 | `E2962` | a use of a declaration that is unavailable for the macOS deployment target, outside an unavailable context (10.1.9) |
 | `E2963` | on Darwin, a `^` that begins a declarator or a unary operand: Clang's Blocks (10.1.9) |
@@ -5762,7 +5714,7 @@ jumping into one is `E2918` (`jump-into-statement-expression`) at the `goto`.
 
 A statement expression is permitted **anywhere inside a function definition**
 and nowhere outside one; outside, it is `E2905`
-(`statement-expression-outside-function`). That is the whole rule. In
+(`statement-expression-outside-function`). In
 particular it is permitted inside `typeof`, `sizeof` and `_Alignof`, where the
 operand is unevaluated (unless it has variable-length array type, 10.1.19) and
 only its type is taken, even when that operand sits
@@ -5772,23 +5724,21 @@ This profile does not fold a statement expression with a constant result where
 a constant is required (`_Static_assert(({ 1; }), "")`, `int a[({ 4; })]`):
 where the *value* is required as an integer constant expression the context
 reports its own diagnostic (`E2912` in a static assertion, `E2923` or `E2203`
-in an array bound). A later revision can fold it.
+in an array bound).
 
 Lowering places the compound statement's blocks into the enclosing function's
 control-flow graph as ordinary blocks. When the statement expression contains no
 control flow, its value is simply the last instruction's result. When it does,
 lowering creates a join block with one block argument for the value, in
-addition to whatever block arguments the enclosing lowering already threads
+addition to whatever block arguments the enclosing lowering threads
 across that edge (the current `mem<all>` and `world` tokens and any live
 local carried by value); the value argument is the last one. Every path
 that reaches the closing brace passes its value on that edge. On every exit
 from the statement expression, including `break`, `continue`, `goto` and
 `return`, the objects it declared end with the same `lifetime.end` sequence
 the enclosing block lowering emits for any block exit (Section 3, `lifetime.end`;
-no new edge form exists: the exits are ordinary block exits). Nothing
-new is added to EvoIR: the construct is entirely a lowering pattern over
-Section 2.3 block arguments, which is why it belongs in this contract rather
-than in the instruction set.
+the exits are ordinary block exits). The construct is a lowering pattern over
+Section 2.3 block arguments, not an instruction.
 
 #### 10.1.12 Designated Initializers
 
@@ -5823,7 +5773,7 @@ nonconstant array value of a range is `E2969`
 (`range-designator-value-not-constant`) at that value, as GCC 14 refuses
 that form.
 
-On Darwin, each value in a range must remain a static initializer constant:
+On Darwin, each value in a range must be a static initializer constant:
 an arithmetic constant expression, an address constant or a label
 difference, and each element of a braced list likewise. A nonconstant value
 is `E2969` (`range-designator-value-not-constant`) at that expression.
@@ -5859,7 +5809,7 @@ static storage. Each occurrence is its own allocation site in the shared
 manifest of Section 10.1.3, in source order with every other site, so both
 interpreters and the lowering agree on its `ObjectOrigin`.
 
-Lowering is the existing object path: an `alloca` plus the initializer plan for
+Lowering is the ordinary object path: an `alloca` plus the initializer plan for
 a block-scope literal, a module global with initial bytes for a file-scope one.
 A file-scope literal is a global of kind `compound_literal` (Section 2.1); its
 symbol is generated from its allocation-site ordinal, `__evocc.compound.<origin>`,
@@ -6026,7 +5976,7 @@ Pointer-declarator attributes (10.1.9, position after `*`) are preserved and
 not applied: the reference compilers disagree on `aligned` in that position,
 so this profile applies nothing there.
 
-Errors: a builtin used with the wrong arity is `E2909`
+A builtin used with the wrong arity is `E2909`
 (`builtin-arity`); a builtin name used other than as a call is `E2910`
 (`builtin-not-called`); an `__builtin_expect` operand that is not of
 arithmetic type is `E2913` (`builtin-operand-not-convertible`); a floating
@@ -6047,8 +5997,7 @@ volatile pointers preserve their ordinary meaning. Unsupported types report
 `E2913`, wrong arity `E2909`, and a builtin not called `E2910`. These accesses
 are never ICEs. An `_Atomic`-qualified pointee means its non-atomic type for
 every `__atomic` builtin; Section 10.1.21 admits the C operators on `_Atomic`
-objects. The admission does not include 128-bit accesses or MMIO; the
-generic forms on memory follow below.
+objects. The admission does not include 128-bit accesses or MMIO.
 
 Source constant order values map 0/1/2/3/4/5 to
 relaxed/consume/acquire/release/acq_rel/seq_cst. Loads admit 0/1/2/5 and stores
@@ -6145,7 +6094,7 @@ must be a null pointer constant (`E2913`). `__atomic_is_lock_free(size, p)`
 evaluates `p` and is 1 when that query is 1 and `p` is a null pointer
 constant or points to a type whose alignment is at least `size`. Any other
 answer needs the run-time library and is `E2935`. 16-byte atomic operations
-stay `E2913` on both targets. `__has_builtin` answers 1 for every builtin of
+are `E2913` on both targets. `__has_builtin` answers 1 for every builtin of
 this section.
 
 **Interpreter scope.** Both interpreters run one thread. They show values,
@@ -6182,7 +6131,7 @@ namespace of 10.1.3, with the prototypes of the functions they name:
 (`char *strcpy(char *, const char *)`), `__builtin_strncpy` and
 `__builtin_strchr`. Anonymous formatting arguments take the default argument
 promotions, and each argument is evaluated once. No intrinsic or interpreter
-model is added: wrong arity is `E2909`, an incompatible argument `E2913`, an
+model exists: wrong arity is `E2909`, an incompatible argument `E2913`, an
 incompatible visible declaration `E2927`, and a reached external call `E3039`.
 `__builtin_puts` is `E2935` (`unsupported-library-builtin`); an ordinary
 declared `puts` is unaffected. The address argument of `__builtin_prefetch`
@@ -6233,8 +6182,8 @@ pairs are respectively 2/2, 4/4, 8/8, 16/16, 8/8, 16/16, 2/2, 16/16 and
 16/16; the last three are sizeless and never receive a fabricated object
 layout. Values of `_Float16` and `__fp16`, and of `__bf16`, execute as 3.13.6
 states. For the other types only the declaration/type-query capability is
-added: an unused prototype needs no EvoIR declaration, while a required value
-or call with these types remains at the existing unsupported-type
+admitted: an unused prototype needs no EvoIR declaration, while a required value
+or call with these types stops at the unsupported-type
 execution/lowering boundary. This does not admit other floating-point or
 vector execution. Seven of these spellings exist only in GCC; the profile
 follows the GCC target headers.
@@ -6248,7 +6197,7 @@ GCC's nominal `__Int8x8_t`/`__Uint32x4_t` family are distinct source types
 even when their representations match; the latter admits all 64/128-bit
 integer combinations of 8/16/32/64-bit lanes, with long/unsigned long for
 64-bit lanes. Floating, polynomial and architecture-intrinsic types/builtins
-remain separate capabilities, not implied by these integer names.
+are separate capabilities, not implied by these integer names.
 
 Arithmetic has no scalar integer promotion of lanes. Integer-vector assignment
 can preserve equal-width lane representations across signedness; this does
@@ -6266,7 +6215,7 @@ Integer vectors participate in fixed/variadic calls and homogeneous vector
 aggregates through EvoMIR's real ABI, not scalar-parameter substitution. A
 homogeneous vector aggregate is the AAPCS64 one of the floating-vector
 profile below: its members have one vector size, whatever their lane types.
-General-register-only mode still forbids executed SIMD values.
+General-register-only mode forbids executed SIMD values.
 
 **Tiny vectors at a call boundary.** A tiny vector is an integer vector of
 1, 2 or 4 bytes. Its call convention is fixed by the target triple; no option
@@ -6279,7 +6228,7 @@ unspecified.
   next general register or an 8-byte stack slot, and a result in `w0`. No
   SIMD register is involved, so `-mgeneral-regs-only` admits them. Clang 19
   returns tiny vectors in `v0`, so a call that returns a tiny vector between
-  EvoCC and Clang code is a recorded incompatibility. Arguments, anonymous
+  EvoCC and Clang code is an incompatibility. Arguments, anonymous
   arguments and records agree with Clang.
 - `aarch64-apple-darwin` follows Apple clang. A parameter is the 4-byte
   integer image: the next general register, or a 4-byte slot of the named
@@ -6292,13 +6241,12 @@ unspecified.
 A record that contains a tiny vector follows the ordinary composite rules; a
 tiny vector is never an HVA member (EvoMIR 6.2 and 6.6).
 
-**Floating-vector profile.** The 2026-10-13 decision on L05 admits GNU
+**Floating-vector profile.** The profile admits GNU
 `vector_size` vectors of `float` and `double` lanes on both targets, with the
 layout of the integer profile. A vector of 8 or 16 bytes is a `vec<L, f32>` or
 `vec<L, f64>` value (3.8); a wider vector is an object, as an integer vector
-is. Lanes of `long double` stay `E3050`. So do the nominal
-`arm_neon.h` floating types, such as `__Float32x4_t`, whose intrinsics belong
-to L05b. A `vector_size` attribute on a half format is `E2903` (3.13.6).
+is. Lanes of `long double` are `E3050`. So are the nominal
+`arm_neon.h` floating types, such as `__Float32x4_t`. A `vector_size` attribute on a half format is `E2903` (3.13.6).
 
 - `+`, `-`, `*`, `/`, unary `-` and unary `+` are the scalar operations of 3.13
   on each lane: rounding, NaN selection, signed zeros and subnormals follow the
@@ -6352,7 +6300,7 @@ op-and-fetch forms of `add`, `sub`, `and`, `or`, `xor` and `nand`, the
 compare-and-swap forms and `__sync_lock_test_and_set` evaluate each operand once
 and lower to Section 3.8's `atomic.rmw`; `__sync_lock_release` is a `release`
 atomic store of zero. All use `seq_cst` except `acquire` for lock-test-and-set.
-Wrong arity is `E2909`; the existing type and alignment diagnostics apply.
+Wrong arity is `E2909`; the type and alignment diagnostics apply.
 
 **More library builtins.** `__builtin_strcat` (`char *(char *, const char *)`),
 `__builtin_strncat` (`char *(char *, const char *, size_t)`) and
@@ -6416,7 +6364,7 @@ entry point and the flag, including flag zero. The stream type uses the
 file-scope `FILE` typedef if it is present, otherwise an opaque `void *`.
 No library runtime is added by these builtins: the selected target library must
 provide any checked entry point that remains. Unsupported external calls in
-the interpreters remain refusals; native success does not extend that model.
+the interpreters are refusals; native success does not extend that model.
 
 **Instruction cache refresh.** `__builtin___clear_cache` has the prototype
 `void (void *begin, void *end)`. It evaluates each argument once and calls the
@@ -6488,7 +6436,7 @@ else:          ratio = d / c;  div = d * ratio + c
                r = (b * ratio + a) / div;  i = (b - a * ratio) / div
 ```
 
-Each step is the C operation on `U`, in the written order, with its existing
+Each step is the C operation on `U`, in the written order, with its
 obligation. Signed overflow, `|v|` of the minimum value included, is `E3004`.
 Division by zero is `E3002`; a zero divisor reaches `d / c` with `c == 0`.
 Unsigned steps wrap. Only the selected branch executes, so the lowering
@@ -6512,7 +6460,7 @@ below. A pointer target is `E2102`.
 `++` and `--` add or subtract one in the real part and leave the imaginary
 part unchanged. A component narrower than `int` is promoted before the
 operation and converted back afterwards; an `int` or wider signed component
-keeps the existing `E3004` overflow obligation. The prefix form yields the
+keeps the `E3004` overflow obligation. The prefix form yields the
 updated complex value, and the postfix form yields the old value.
 
 **Imaginary integer constants.** A GNU imaginary integer constant is an
@@ -6629,14 +6577,14 @@ integer and floating element types, including the declarable half and opaque
 types. The polynomial form accepts unsigned 8-, 16- and 64-bit elements.
 Integer and `float`/`double` vectors with the same element type and lane count
 are compatible with the corresponding GNU `vector_size` type. Lanes follow
-the target's little-endian order; the existing short-vector and HVA ABI applies.
+the target's little-endian order; the short-vector and HVA ABI applies.
 Both attributes report `__has_attribute == 1` on Darwin. The nominal half
-and opaque vector value restrictions remain in force.
+and opaque vector value restrictions apply.
 
 Darwin's `__mfp8` is a nominal opaque type with size and alignment 1. It
 admits typedefs, pointers, size/alignment queries and one-byte storage copies,
 loads and stores. It is not an integer or arithmetic type. Numeric casts are
-`E2102`; arithmetic and comparison keep the existing `E2202` refusal, and a
+`E2102`; arithmetic and comparison are `E2202`, and a
 truth operand is `E2103`. Its by-value call interface, including a vector or
 composite that contains it, is `E3049`; a pointer to it is admitted. Linux
 does not admit this spelling (`E1007`).
@@ -6645,7 +6593,7 @@ The measured Apple clang builtin declaration table is
 `crates/evocc-types/src/neon-apple-signatures.tsv`. Its prototypes let unused
 header bodies type-check. A prototype does not admit execution: a retained
 call without an implemented operation is `E2949`, and a builtin absent from
-the declaration table remains a named unknown-builtin refusal (`E2949`).
+the declaration table is a named unknown-builtin refusal (`E2949`).
 Darwin defines `__ARM_FEATURE_DIRECTED_ROUNDING=1` so that Apple's header
 declares its rounding functions with their vector return types. This does not
 admit their builtin execution.
@@ -6655,8 +6603,8 @@ The same declaration-only rule applies to `__builtin_roundeven` and
 Darwin's `__builtin_bit_cast(T, value)` preserves the complete image when the
 source and destination have the same size. This subset accepts scalar
 integer, floating and target-storage types and short vectors. Pointer,
-record and union operands are refused (`E2102`), and the existing restrictions
-on executable formats still apply. It adds no initialization or provenance.
+record and union operands are refused (`E2102`), and the restrictions
+on executable formats apply. It adds no initialization or provenance.
 
 The generic forms `__builtin_neon_vld1q_v`, `__builtin_neon_vst1q_v`,
 `__builtin_neon_vzipq_v` and `__builtin_neon_vuzpq_v` admit the source-constant
@@ -6666,11 +6614,11 @@ bounds and initializedness checks. Zip stores the lower and upper interleaved
 halves of the two vectors; unzip stores their even and odd lanes, respectively.
 The two results occupy byte offsets 0 and 16 of the destination object. Each
 value operand is evaluated once in source order. These forms lower through
-existing vector and memory instructions and never become external calls.
+vector and memory instructions and never become external calls.
 
 **Target intrinsics.** A registered integer or polynomial intrinsic evaluates
 each operand once after its declared-parameter conversion and lowers to
-existing vector, integer and memory instructions, never to an external call:
+vector, integer and memory instructions, never to an external call:
 
 - `ld1`/`st1` access element-aligned memory; `ld2`/`ld3`/`ld4` fill the
   canonical tuple with `result.val[j][i] = source[i*count+j]`, with ordinary
@@ -6735,7 +6683,7 @@ When the required width exceeds 128, the exact result is an exact sign, a
 128-bit magnitude and a magnitude-overflow flag. It is tested against the range
 of `R` and stored modulo the width of `R`, and a zero result is nonnegative.
 For `mul` the magnitude overflows exactly when `a > UMAX / b`, with `b` taken
-as 1 when it is zero, so existing unsigned operations and the 128-bit division
+as 1 when it is zero, so unsigned operations and the 128-bit division
 of 10.1.3 suffice. Neither path needs a predicate or an obligation: the
 arithmetic cannot overflow by construction, and no division by zero occurs.
 
@@ -6799,9 +6747,7 @@ representation drops.
 
 **Wide bit-fields in arithmetic.** For a bit-field whose declared type is
 wider than `int`, the reference compilers disagree: GCC computes arithmetic in
-the field's own precision and Clang in the declared type. `E2939` marks the
-uses where the two give different values, as **Bit-field promotions** below
-states.
+the field's own precision and Clang in the declared type.
 
 **Bit-field promotions.** Integer promotions use a bit-field's width, whatever
 its declared base, including `long` and `long long`: below 32 bits, or signed
@@ -6952,7 +6898,7 @@ it.
 - **Variable arguments at the front end.** `__builtin_va_start(ap, param)`,
   `__builtin_va_end(ap)` and `__builtin_va_copy(dst, src)` are accepted with
   type `void`: `ap`, `dst` and `src` must have type `__builtin_va_list`
-  (10.1.5), `va_start` may appear only in a function whose parameter list ends
+  (10.1.18), `va_start` may appear only in a function whose parameter list ends
   in `...` (`E2926`, `va-start-outside-variadic-function`), and `param` must
   name the last named parameter (the standard makes another parameter
   undefined, so this profile refuses it, `E2926` at `param`).
@@ -6974,7 +6920,7 @@ it.
   `__builtin_va_copy(dst, src)` to a target-sized `copy` (Section 3.12). A
   `va_arg` of a record or union type lowers to `va_arg.byval`, and such an
   anonymous argument carries the call-site `byval` mark (3.10, 3.12); a shape
-  that 3.10 does not admit stays `E3030` (`not-lowered: varargs`). `E3030` is no longer reported for a variadic declaration or call.
+  that 3.10 does not admit is `E3030` (`not-lowered: varargs`). `E3030` is not reported for a variadic declaration or call.
 - **Empty records.** A struct or union whose member list declares no member
   (for instance one containing only a `_Static_assert`) is a GNU extension with
   `sizeof` 0 and alignment 1.
@@ -7065,9 +7011,8 @@ it.
 `_Generic` sees `const char *` after decay, `&__func__` is
 `const char (*)[N]`, and its address is an address constant (`static const
 char *p = __func__;` is accepted). `__builtin_constant_p(__func__[0])`
-follows the constant rule of this section and answers 0. `__PRETTY_FUNCTION__`
-holds the bare function name, as GCC spells it for C. `E2921`
-(`pretty-function-unsupported`) is withdrawn.
+follows the constant rule of 10.1.14 and answers 0. `__PRETTY_FUNCTION__`
+holds the bare function name, as GCC spells it for C.
 
 **Labeled last statement.** The value and type of a statement expression whose
 last statement is a labeled statement are those of the statement the label
@@ -7077,8 +7022,8 @@ is valid).
 
 #### 10.1.18 C11 declaration forms
 
-The front end accepts the complete C11 declaration grammar. The following
-forms are named so that their acceptance is checkable:
+The front end accepts the complete C11 declaration grammar, including these
+forms:
 
 - **Specifier order is free.** Type qualifiers, storage-class specifiers and
   function specifiers may appear before or after a type specifier, including
@@ -7176,8 +7121,8 @@ a conversion is at the converted value, and at the operator for `=`. When
 `W0012` is a warning or allowed, the front end converts the value as an explicit
 cast to the target type does, and each operand of such a conditional to
 `void *`; a later access keeps every check that follows the cast. Without the
-driver's lint policy, the front end keeps `E2202` (`E2102` in assignment).
-`void *` from a pointer to an atomic type stays `E2202`, although GCC 14
+driver's lint policy, the front end reports `E2202` (`E2102` in assignment).
+`void *` from a pointer to an atomic type is `E2202`, although GCC 14
 accepts it, and so does every conversion that 6.3 does not name for `W0012`: an
 integer for a pointer, a pointer for an integer, records, and a
 transparent-union argument without a matching member.
@@ -7230,7 +7175,7 @@ is opaque to the equality database, ordered by the effect tokens, and
 executed only by the machine; both interpreters report `E3021` when they
 reach it, as for any assembly. A block-scope
 `register T name asm("reg")` is an ordinary automatic object whose register
-binding matters only when it is an `asm` operand, where `E3021` already
+binding matters only when it is an `asm` operand, where `E3021`
 applies; its value behaves as any automatic object's.
 
 **Lowering diagnostics name their class.** A lowering failure carries a code
@@ -7350,8 +7295,7 @@ runtime operation. Object reads do not become integer constants; the bounded
 string-initializer rule above is an explicit exception for that builtin. Signed
 add/subtract/multiply of runtime values, division by zero and executed signed
 `MIN / -1` retain their obligations; signed shifts follow the GNU truncation
-rule of 6.1, so executed `1 << 31` needs only a valid count. IR modules that
-use `signed_shl_defined` and explicit E3006 obligations keep their meaning.
+rule of 6.1, so executed `1 << 31` needs only a valid count.
 
 `__int128_t` and `__uint128_t` are compiler-provided spellings of `__int128`
 and `unsigned __int128`, not distinct types: they have size 16, and
@@ -7466,7 +7410,6 @@ number of entries, never by the object's size: a range designator `[lo ... hi]` 
 of the plan (its expansion to elements in 10.1.12 is a description of
 meaning, not of representation), and no diagnostic refuses an
 object for being large (`infos[4096]` with two designated entries).
-`E2207` (`initializer-plan-too-large`) is withdrawn.
 
 **Numeric address constants.** In a static address initializer, `&*p` with
 `p` a numeric pointer constant is that numeric value, and `&p->m[i]` on such a
@@ -7483,7 +7426,7 @@ source integer constant expression.
 initializer, a preceding explicitly initialized non-volatile, non-atomic
 `const` integer object, automatic or thread-local included, supplies its
 initializer's value converted to its declared type. An unknown value or a
-declaration without a written initializer remains `E2208`. Object reads do not
+declaration without a written initializer is `E2208`. Object reads do not
 become source integer constant expressions, and scope exit or a failed
 declaration removes the binding.
 
@@ -7499,7 +7442,7 @@ Latin-1 transcoding or replacement characters. Character constants retain
 the target's single-byte interpretation; this rule does not select signed char.
 Invalid encoding in identifiers, other tokens, prefixed literals, include
 names, stringization/prefix-changing paste, narrow/wide concatenation or
-UTF-8-only assembly/attribute consumers remains E0002. Legal UTF-8 and existing
+UTF-8-only assembly/attribute consumers is E0002. Legal UTF-8 and existing
 escapes are unchanged; arbitrary charset conversion is not admitted.
 Lossless C escape serialization of narrow literal data is permitted, while
 the original token spelling and physical locations remain available.
@@ -7547,7 +7490,7 @@ record or union is `E2956` (`atomic-member-access`), because C11 6.5.2.3p5
 makes the access undefined. The operand of `sizeof` is not evaluated, so a
 member access there is allowed. A pointer conversion that adds or removes
 `_Atomic` without a cast is `W0012` (10.1.18), except that `void *` from a pointer
-to an atomic type stays `E2202`.
+to an atomic type is `E2202`.
 
 **Layout.** On `aarch64-unknown-linux-gnu` an atomic type keeps the size of
 its non-atomic type. A size of 1, 2, 4, 8 or 16 bytes raises the alignment
@@ -7564,8 +7507,8 @@ enumerations, pointers and binary32 or binary64 floating objects of 1, 2, 4
 or 8 bytes. Lvalue conversion of one is a `seq_cst` `atomic.load` (3.8). A
 simple assignment converts the right operand to the type of the object and
 stores it with a `seq_cst` `atomic.store`; its value is the converted value.
-A floating object moves as `bits<32>` or `bits<64>` through `float.to_bits`
-and `float.from_bits`, without a numeric conversion. A compound assignment
+A floating object moves as `bits<32>` or `bits<64>` through `fp.to_bits`
+and `fp.from_bits`, without a numeric conversion. A compound assignment
 or a prefix or postfix `++` or `--` is one `seq_cst` read-modify-write. The
 place and the right operand are evaluated first. Then a `seq_cst` atomic load
 reads the old value, and a retry block computes the new value with the
@@ -7586,7 +7529,7 @@ rule for the floating flags of a discarded iteration (C11 footnote 113) is
 not part of this revision. A read, assignment or update of an atomic record,
 union, complex or vector object, or of a 16-byte atomic object (Linux `long
 double`, `__int128`), is `E2702` at the read or the target. Declarations,
-initializers, `&` and `sizeof` of these objects stay admitted.
+initializers, `&` and `sizeof` of these objects are admitted.
 
 **Values.** The value of an atomic lvalue has the non-atomic type (C11
 6.3.2.1p2). `typeof` of an expression that is not an lvalue, `__auto_type`
@@ -7676,14 +7619,14 @@ of type `T`; and a value that does not convert to `T`. Apple clang admits the
 `fetch_nand`, `fetch_max` and `fetch_min`, are `E2949` on Darwin (10.1.14).
 The crossed native tests of `crates/evocc/tests/darwin_stdatomic.rs` update
 one object from units built by EvoCC and Apple clang through the header's
-generic functions. A passing run of them is not a memory-model proof.
+generic functions.
 
 ### 10.2 EvoIR to EvoMIR Extraction Contract
 
 Informative. After EqSat optimization and extraction, the chosen EvoIR
 representations are lowered to EvoMIR. `spec/evomir.md` holds the contract
 of that phase. EvoMIR representations do not enter e-classes in this revision
-(EvoMIR Section 1), so the invariant below binds no current code. A revision
+(EvoMIR Section 1), so the invariant below binds no code. A revision
 that lets them enter must first make it normative and checked:
 
 > **Every EvoMIR representation added to an EClass shares the EvoIR-level
@@ -7693,8 +7636,7 @@ that lets them enter must first make it normative and checked:
 
 ### 10.3 Agent Contract Summary
 
-Informative. This table summarizes rules that other sections state; it adds
-none.
+Informative.
 
 | Agent | Must | Must Not |
 |---|---|---|
@@ -7707,7 +7649,7 @@ none.
 ### 10.4 Verification
 
 Every transformation that claims to produce a valid EvoIR program must pass
-the SSA validator (see `crates/evocc-evoir/src/lib.rs:validate_ssa`). The
+the SSA validator (see `crates/evocc-evoir/src/validation.rs:validate_ssa`). The
 function-local validator must enforce:
 
 1. Every block argument and instruction result owns one function-unique
@@ -7744,7 +7686,7 @@ return types against the callee declaration; each indirect call against its
 definition; every stored function effect summary against the Section 4.6 fixed
 point; symbol uniqueness across functions and globals, kind-specific generated spelling and
 visibility; and every global and `alloca` site's pairwise-distinct origin
-ordinal. The function-local validator still
+ordinal. The function-local validator
 checks local use-def, ordinary-value versus effect-token positions, and exact
 `mem<R>`/`world` threading without guessing a callee signature. Lowering uses
 the conservative `mem<all>` region.
@@ -7762,12 +7704,12 @@ load/store through the shared object model. It returns immutable memory/world
 snapshots and the exact volatile trace; every invalid access reports the typed
 diagnostic in Section 6.1. Every other instruction family, including scalar
 FP in 3.13, uses that same object/state model; forms outside their
-specified boundaries remain typed unsupported and never produce placeholders.
+specified boundaries are typed unsupported and never produce placeholders.
 
 **Hosted `main`.** The C-HIR and EvoIR command-line interpreter entry points
 accept `main(void)`, `main(int, char **)` and `main(int, char *[])`. With no
 program arguments, `argc` is 1, `argv[0]` is the source path as `evo run`
-passes it, and `argv[1]` is a null pointer. Other `main` signatures keep
+passes it, and `argv[1]` is a null pointer. Other `main` signatures are
 `E3007` (`unsupported-interpreter-input`, with the
 `unsupported-interpreter-function-signature` message).
 
@@ -7802,7 +7744,7 @@ signed-char mode removes `__CHAR_UNSIGNED__` before the user's `-D`/`-U` actions
 
 **The Darwin target.** With `--target=aarch64-apple-darwin` the predefined set
 is the list above, then the definitions of
-`crates/evocc/src/aarch64-apple-darwin.h`, which follow Apple clang. The C data
+`crates/evocc-cpp/predefined/aarch64-apple-darwin.h`, which follow Apple clang. The C data
 layout of this target differs from the Linux one in these facts, which follow
 Apple clang:
 
@@ -7904,19 +7846,19 @@ actions, whatever their position:
 **Options that select a contract.** Both command lines accept these options
 on both targets, in any position:
 
-- `-fno-common` names the existing contract: a tentative definition is a
+- `-fno-common` names the default contract: a tentative definition is a
   zero-filled definition (EvoMIR 8.2), never a common symbol. `-fcommon`
-  stays unsupported.
+  is unsupported.
 - `-finput-charset=CHARSET`, with `utf-8` or `utf8` in any letter case,
-  names the existing contract: the source is UTF-8. Every other charset
-  stays unsupported.
+  names the default contract: the source is UTF-8. Every other charset
+  is unsupported.
 - `-fno-builtin-NAME`, with a nonempty `NAME`, disables the ordinary-name
   builtin substitution of `NAME` only, as `-fno-builtin` does for every name.
   A later `-fbuiltin` does not restore `NAME`, as in GCC 14. A `NAME` that
   EvoCC does not substitute has no effect, and `__builtin_NAME` stays
   available.
 - `-fno-inline` limits the substitution of 10.1.9 to `always_inline`
-  callees. `-finline` stays unsupported.
+  callees. `-finline` is unsupported.
 - `-fexpensive-optimizations`, `-ftree-vectorize`, `-fno-vect-cost-model` and
   `-fno-trapping-math` only permit transforms that EvoCC never makes, and
   `-ftrapping-math` names the default contract, so none of them changes code.
@@ -8088,7 +8030,7 @@ includes and `_Pragma` expansion. The current visibility supplies a default
 for externally linked object/function declarations, not for types or automatic
 objects; an explicit attribute on that declaration, or an earlier bound
 visibility of the same symbol, takes precedence. The default is preserved as
-pragma-origin metadata and uses the existing hidden-symbol linkage path:
+pragma-origin metadata and uses the hidden-symbol linkage path:
 strong hidden addresses are direct, weak hidden addresses retain the GOT.
 Malformed/unsupported values and unmatched `pop` are E2943; so is a conflicting
 later explicit visibility. The effective visibility follows the same
@@ -8205,9 +8147,9 @@ hexadecimal escape above the type's range is the unsigned value; under
 `-fshort-wchar` GCC 14 truncates it to the low 16 bits. On Darwin a value above
 `INT_MAX` sign-extends through the `int` result, and under `-fshort-wchar`
 Apple clang refuses every value above `0xffff` with `E1006`. A universal
-character name above the short range stays `E1006` on both targets. In `#if`
+character name above the short range is `E1006` on both targets. In `#if`
 the constant has the same value, width and signedness as in an ordinary
-expression. Plain, `u`, `U` and `u8` character constants keep their existing
+expression. Plain, `u`, `U` and `u8` character constants follow their own
 rules.
 
 **Multi-character constants.** An unprefixed character constant with two or
@@ -8220,7 +8162,7 @@ apply. `'ab'` is 24930, `'\xff\xff'` is 65535, `'\xff\xff\xff\xff'` is -1 and
 `'abcde'` is 1650680933, as GCC 14 and Apple clang 21 compute them. In `#if`
 the constant has the same value. A multi-character constant with a prefix, an
 element outside ASCII, a universal character name or an escape above 255
-stays `E1006`, because the two compilers read it differently or refuse it.
+is `E1006`, because the two compilers read it differently or refuse it.
 Fixture: `tests/fixtures/multicharacter-constants/`.
 
 **UTF-8 plain character constants.** A plain character constant whose text is
@@ -8297,7 +8239,7 @@ own. A driver probe would suggest the driver can discharge the check, and the
 value of the check is that it runs somewhere the driver's code cannot reach.
 `evo-proofcheck --probe` exits zero with empty stdout and stderr, matching the
 repository's exact-capability convention. The driver's broad `proof --probe`,
-`eqsat --probe`, `-Oeq --probe`, and unrelated broad probes remain exit 69 with
+`eqsat --probe`, `-Oeq --probe`, and unrelated broad probes exit 69 with
 `NOT_IMPLEMENTED`.
 
 ### 11.2 Interface
@@ -8427,8 +8369,6 @@ packed_type     := a Section 9 type with every space removed
 evp_int         := "0" | nonzero_digit digit*
 ```
 
-**What each record carries and why.**
-
 | Record | Content | Why a replay needs it |
 |---|---|---|
 | `registry` | Registry name and digest | The authority the rules came from. A reader without that exact registry rejects; a certificate cannot introduce one. |
@@ -8462,7 +8402,7 @@ region block. They are not the persistent `EClassId` handles of Section 8.9.
 The producer snapshots the relevant persistent subgraph into this canonical
 local numbering; proof validity can never depend on two implementations having
 allocated the same persistent handle. The persistent state's own append-only
-history still uses its stable handles and must independently replay to the
+history uses its stable handles and must independently replay to the
 partition it stores.
 
 The operator table is exact. `const` has zero children and the single attribute
@@ -8519,17 +8459,17 @@ itself (a region must change something), and every structural rule of this
 section. Whether the replacement is an improvement is decided by the
 producer's policy (Section 8, "Cost is a policy") and is producer conformance the
 checker cannot observe, like the ceiling-stop rule of 8.11. The default
-policy's cost, for the record: a seed, a `const` node, or a non-root
+policy's cost: a seed, a `const` node, or a non-root
 before-witness reuse costs zero; the replacement root's non-constant before
 node and every non-constant derived node cost one plus the sum of selected
 child costs, repeated child positions counted repeatedly; constants cost
 zero so that `icmp.eq x, x` and its `true` replacement do not tie. A producer
 admits a region block only when the extracted root has strictly lower cost
 than the original witness root under its own policy, ties retaining the
-original; that is producer conformance, not a checker rule.
+original.
 
 **Versions.** The producer writes `evp2`, and `evo-proofcheck` reads `evp1`
-and `evp2`. `evp1` is the earlier format and remains readable: it carries no budget line, no epoch markers and no premises, so a checker
+and `evp2`. `evp1` carries no budget line, no epoch markers and no premises, so a checker
 validates it without a scheduler claim and admits only rules that need no
 premise. `evp2` adds the three. A reader that does not implement a version
 rejects it as malformed rather than guessing. A Tier B rewrite requires `evp2`,
@@ -8569,7 +8509,7 @@ of nodes the region held when the transaction began, the fuel bound is
 `max(256, 8 * n)`, and the fuel consumed is the largest number of firings any
 single rule made in any single epoch of one region. The checker verifies
 that each consumed does not exceed its bound, that the fuel bound equals `max(256, 8 * n)` for
-the recorded `n`, that no epoch marker exceeds the consumed epoch count, and
+the recorded `n`, and
 that a stop reason of `epochs`, `nodes` or `fuel` coincides with that
 quantity's consumed equalling its bound. `n` itself is declared, not
 re-derived: a producer that overstates it only widens a box the checker
@@ -8641,7 +8581,7 @@ exit non-zero for reasons outside this table.
 
 ### 11.5 Dependency Boundary
 
-This is a normative constraint, not a convention. The Cargo test
+The Cargo test
 `crates/evocc-proofcheck/tests/normal_dependencies.rs` reads Cargo's normal-edge
 dependency closure with all features and targets. Dev-only dependencies do not
 enter this closure.
@@ -8929,9 +8869,7 @@ g0_007_signed_count shift_count_defined.signed(?a,?k) => known_const when fully_
 
 **Registries and revisions.** A registry is admissible only when this
 specification prints its rule block and digest; a producer and a checker may
-not agree on a registry between themselves, because a certificate checked
-against rules it supplied establishes only that its merges follow from its own
-claims. A revision includes every rule of the registry it revises, unchanged
+not agree on a registry between themselves. A revision includes every rule of the registry it revises, unchanged
 and in the same order, before its new rules, so a rule id keeps its meaning
 across revisions. `evp1` accepts `p0.scalar.v1` only; `evp2` accepts
 `p0.scalar.v1` through `p0.scalar.v4`, or the independent `g0.ub.v1` under its
@@ -8940,7 +8878,7 @@ own eligibility profile (Section 8.12).
 **Which registry a certificate names, and rule order within a tier.** A
 certificate names a reviewed registry that contains every rule it fires; the
 producer names the narrowest such registry, so a certificate that fired no
-`p1_` rule names `p0.scalar.v1` and stays readable by a checker that admits
+`p1_` rule names `p0.scalar.v1` and is readable by a checker that admits
 only it. Within a tier the producer applies the first applicable rule in
 registry order, so a premise-free fold on a node precedes a fact-driven rule
 on the same node. When both operands of `xor`, `add` or `sub` are
@@ -9001,8 +8939,8 @@ complement integer. Comparison builders return `bits<1>`. The checker performs
 this calculation itself and compares the resulting derived node's sort and
 `value` attribute; the certificate never supplies a trusted fold result.
 
-**Residual risk, recorded rather than implied.** The certificate format
-definition and its reader and writer (`crates/evocc-proof/src/evp1.rs`) remain
+**Residual risk.** The certificate format
+definition and its reader and writer (`crates/evocc-proof/src/evp1.rs`) are
 shared between producer and checker, so a defect in that definition is
 invisible to both; the partial Lean reader of Section 11.3 does not remove
 this risk. The property that would bound it is that **no mutant of the
@@ -9031,39 +8969,37 @@ Section 8.10 transfer, the merge, the join and the side-condition predicates
 that produce or consume a premise are proved over the parameter range the
 registry's rules can reach, including a shift amount of any width. The only
 place a coverage constraint may live is the registry text itself: a registry
-whose proof coverage is incomplete stays usable by producer and checker
-exactly as before and its receipt says which instances are unproved; a
+whose proof coverage is incomplete is usable by producer and checker,
+and its receipt says which instances are unproved; a
 configuration that requires proof either completes the instance space or
 publishes a new registry whose side conditions exclude the unproved
 instances, under a new digest that both sides interpret identically. No
 enabling condition is ever implied under an old digest, and an independent
 proof gate may fail without failing any build. The receipt is
-`tests/contracts/lean-p0-receipt.json`; the plan is `docs/archive/lean-plan.md`.
+`tests/contracts/lean-p0-receipt.json`.
 The receipt binds the revision line and the SHA-256 of this document, and
 `python3 tools/render-status.py --check` fails when either differs from the
 pin of this document in `spec/pins.json`.
 
 ### 11.7 Trusted Base
 
-What a certificate establishes rests on the following, each stated so that a
-reader can see which are checked by a machine and which are believed. The
-Lean receipt `tests/contracts/lean-p0-receipt.json` does not use these
-numbers: its `trust` field lists the assumptions of the Lean layer in its own
+The Lean receipt `tests/contracts/lean-p0-receipt.json` does not use the item
+numbers below: its `trust` field lists the assumptions of the Lean layer in its own
 words.
 
 | Item | Trusted object | Guarantor |
 |---|---|---|
 | A1 | Section 8.5 eligibility and taint: every value the e-graph touches is total, poison-free and effect-free | The producer's and the checker's separate Rust implementations; both enumerate results through the shared `inst_results` (A4) |
-| A2 | The function-level seed-fact fixed point of Section 8.10: entry arguments top, every edge including back edges | The checker's own recomputation; an inductive-invariant check of the final table, where present, adds independent evidence |
+| A2 | The function-level seed-fact fixed point of Section 8.10: entry arguments top, every edge including back edges | The checker's own recomputation; an inductive-invariant check of the final table adds independent evidence |
 | A3 | The checker's replay, extraction and reassembly, including the association of facts with the right class in the pre-merge state | Rust, Section 11.2; the reassembly renumbers operands with `all_values_mut`, a copy of the producer's function |
-| A4 | The code that producer and checker share (Section 11.6): the Section 9 parser and renderer, `validate_module` and `inst_results` of `evocc-evoir`, and the certificate reader and writer of `evocc-proof` | Rust; the field sentinel and the traversal test of `crates/evocc-evoir/tests/section9_completeness.rs` (10 of the 59 instruction variants) are evidence, not proof |
+| A4 | The code that producer and checker share (Section 11.6): the Section 9 parser and renderer, `validate_module` and `inst_results` of `evocc-evoir`, and the certificate reader and writer of `evocc-proof` | Rust; the field sentinel and the traversal test of `crates/evocc-evoir/tests/section9_completeness.rs` (all 59 instruction variants) are evidence, not proof |
 | A5 | The Lean kernel, and on SAT-backed proofs the per-theorem native reflection axioms and the compiler behind them | Lean toolchain pinned in `lean/lean-toolchain` |
 | A6 | The registry decoder, the Lean semantics definitions and the audit script | Reviewed code; round-trip comparison of decoded data against the digest-bound text |
 | A7 | Agreement between the Rust semantics (interpreter, folds, transfers) and the Lean model | Differential vectors only; evidence, not proof |
 | A8 | On the ordinary `-Oeq-scalar` path, the completeness of the renderer (Section 9.1, "Total"): the backend compiles the in-memory module, and the checker sees only its rendering | The field sentinel of `section9_completeness.rs`; evidence, not proof |
 
-A proof of the registry replaces two things that were previously believed on
-review alone: that each registry rule is a valid equality of the Section 3
+A proof of the registry replaces two beliefs that otherwise rest on review
+alone: that each registry rule is a valid equality of the Section 3
 semantics, and that the Section 8.10 transfers, merge, join and predicates are
 sound abstractions of it. It replaces nothing else in this table. The claim a
 proved registry licenses is therefore: "the listed rules and analysis rows are
@@ -9172,6 +9108,18 @@ to the signature spelling.
 ---
 
 ## Revision
+
+**Revision 2.39.1, 2026-10-30.** This revision is editorial and changes no
+requirement. Code references name their current files:
+`crates/evocc-evoir/src/validation.rs` for `validate_ssa` (10.4) and
+`crates/evocc-cpp/predefined/aarch64-apple-darwin.h` for the Darwin macros
+(10.5). Cross-references name the sections that state their rules, 10.1.21
+names `fp.to_bits` and `fp.from_bits`, and the evidence column of 11.7 matches
+the tests. The header names every reader of a machine-read part. Decision
+dates, tracker IDs, process history, repeated limits, sentences that announce
+other text and words that compare the text with an earlier revision are
+removed. No registry, grammar production, row of the Section 6.3 table or
+proved Core domain changes.
 
 **Revision 2.39.0, 2026-10-27.** A call without a prototype of a function that
 the unit defines with an identifier list or an empty parameter list follows
