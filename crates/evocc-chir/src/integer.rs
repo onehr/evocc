@@ -1,6 +1,6 @@
 //! Target-fixed GNU C integer semantics shared by semantic analysis and execution.
 //!
-//! Day 5 deliberately supports one ABI: `aarch64-unknown-linux-gnu`.  Keeping
+//! The constants follow one ABI, `aarch64-unknown-linux-gnu`.  Keeping
 //! widths, ranks, conversions, and checked operations here prevents the parser
 //! and interpreter from silently acquiring different host-language behavior.
 
@@ -20,7 +20,7 @@ pub enum BitBuiltinOp {
     Parity,
 }
 
-/// A C integer type in the Day 5 AArch64 GNU ABI.
+/// A C integer type in the AArch64 GNU ABI.
 ///
 /// The representation is deliberately private: downstream code selects one
 /// of the fixed target constants or maps an [`IntRank`], rather than forging a

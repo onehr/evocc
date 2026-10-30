@@ -260,7 +260,7 @@ impl<'a> FunctionLowerer<'a> {
         self.pack_vector(ty, elements, span, state)
     }
 
-    /// L05: `++` and `--` on a floating vector add or subtract one in each
+    /// `++` and `--` on a floating vector add or subtract one in each
     /// lane, as GCC does. The value is the vector before or after the update.
     pub(super) fn lower_floating_vector_update(
         &mut self,
@@ -342,7 +342,7 @@ impl<'a> FunctionLowerer<'a> {
         )
     }
 
-    /// L05: each lane of a floating vector operation is the scalar operation
+    /// Each lane of a floating vector operation is the scalar operation
     /// of EvoIR 3.13 on that lane, in ascending lane order, so a strict region
     /// threads its world through the lanes. A comparison gives a mask lane of
     /// all ones or zero, and a conversion is the C cast of each lane, with

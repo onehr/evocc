@@ -83,7 +83,7 @@ pub fn shape(types: &TypeInterner, ty: TypeId) -> Option<(TypeId, u16)> {
 }
 
 /// The lane format and lane count of a GNU vector of `float` or `double`
-/// lanes: the floating vectors that execute (L05). `long double` and half
+/// lanes: the floating vectors that execute (EvoIR 10.1.14). `long double` and half
 /// lanes and the nominal `arm_neon.h` vectors have no executable lanes.
 #[must_use]
 pub fn floating(types: &TypeInterner, ty: TypeId) -> Option<(evocc_types::FloatKind, u16)> {

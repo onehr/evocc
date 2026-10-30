@@ -319,7 +319,7 @@ impl<'a> FunctionLowerer<'a> {
             let count = last - first;
             let at = self.bit_field_unit_address(address.clone(), field, offset, state)?;
             // One volatile access of the unit that demands only the field's
-            // bits of it (D25).
+            // bits of it (EvoIR 10.1.6).
             let own = unit_mask(
                 unit_integer,
                 (u128::MAX >> (128 - count)) << (first - offset * 8),
@@ -406,7 +406,7 @@ impl<'a> FunctionLowerer<'a> {
             let at = self.bit_field_unit_address(address.clone(), field, offset, state)?;
             // The unit read keeps the other bits but is no C read of them: it
             // demands no bit, and the store initializes only the field's
-            // bits (D25).
+            // bits (EvoIR 10.1.6).
             let original =
                 self.emit_integer_access(at.clone(), None, unit_integer, true, Some(0), state)?;
             let keep = self.wide_constant(state, unit_integer, !mask_bits)?.value;

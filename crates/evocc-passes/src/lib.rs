@@ -79,9 +79,9 @@ pub struct ExecutionRecord {
     pub outcome: String,
 }
 
-/// One interpreter observation for measurement consumers such as N05. This is
-/// not pass admission: notably a volatile program can be measured while still
-/// being opaque to this version of the transformation-validation profile.
+/// One interpreter observation for measurement consumers. This is not pass
+/// admission: notably a volatile program can be measured while still being
+/// opaque to this version of the transformation-validation profile.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ExecutionMeasurement {
     pub input_sha256: String,
@@ -407,7 +407,7 @@ impl ModulePass for IdentityPass {
 
 impl PipelineReport {
     /// Measured assembly bytes are deliberately absent from this interpreter
-    /// report; N05 supplies them only after real object measurement.
+    /// report; only a measurement of the real object can supply them.
     pub fn render_json(&self) -> String {
         let passes = self.passes.iter().map(|pass| {
             let declines = pass.opportunities.declined_by_reason.iter().map(|(reason, count)| format!("{}:{count}", json_string(reason))).collect::<Vec<_>>().join(",");

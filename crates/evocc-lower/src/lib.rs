@@ -1,8 +1,8 @@
 //! Target-aware C-HIR to block-argument SSA EvoIR lowering.
 //!
-//! Day 6 keeps scalar locals in SSA values.  Memory and world tokens are
-//! nevertheless present on every call edge so Day 7 can add real storage
-//! semantics without changing the call instruction ABI.
+//! Scalar locals that need no object storage stay in SSA values. Every call
+//! still threads the memory and world tokens (EvoIR 3.10): the callee can
+//! access memory even when the caller keeps all its locals in SSA values.
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fmt;
@@ -561,8 +561,7 @@ impl SourceLocations {
 /// Lower a complete C-HIR translation unit into one validated EvoIR module.
 ///
 /// Function order is the C-HIR declaration order.  The target layout is an
-/// explicit input and is consulted for every scalar type admitted by this
-/// Day-6 lowering slice.
+/// explicit input and is consulted for every admitted scalar type.
 pub fn lower_unit(unit: &CHirUnit<'_>, target: &TargetDataLayout) -> Result<Module, LowerError> {
     lower_unit_with_optimization(unit, target, false)
 }

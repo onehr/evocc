@@ -1,4 +1,4 @@
-//! Proof-required compilation: work package V06.
+//! Proof-required compilation (`spec/verification.md`, Section 7).
 //!
 //! This mode exports the typed Core source, the actual EvoIR, the actual SSA
 //! EvoMIR and the actual post-SSA EvoMIR of one compilation into a new

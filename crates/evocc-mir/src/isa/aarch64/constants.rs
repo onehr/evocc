@@ -1,4 +1,4 @@
-//! C1: bounded candidates for the existing total GPR MovImm operation.
+//! Bounded candidates for the existing total GPR MovImm operation (EvoMIR 5.5).
 //! Tables choose which families exist; costs select, never justify equality.
 
 use super::costs::{LOGICAL_BYTES, WIDE_BYTES};

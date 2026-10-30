@@ -1,4 +1,4 @@
-//! S4 producer-only size attribution. Nothing here produces a certificate,
+//! Producer-only size attribution. Nothing here produces a certificate,
 //! edits EvoIR, extends P0 eligibility, or authorizes installation.
 use std::collections::{BTreeMap, BTreeSet};
 

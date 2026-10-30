@@ -1,4 +1,4 @@
-//! Read-only opportunity inspection for the frozen N03b/N03e slices.
+//! Read-only census of inlining and edge-reuse opportunities.
 use std::collections::{BTreeMap, BTreeSet};
 
 use evocc_evoir::{inst_results, Block, Function, GlobalVisibility, Inst, Linkage, Module, Value};

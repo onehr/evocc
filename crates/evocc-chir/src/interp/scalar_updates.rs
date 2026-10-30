@@ -99,8 +99,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             CValue::Aggregate { ty, .. }
                 if crate::vector::floating(self.unit.types(), ty).is_some() =>
             {
-                // L05: one is added to or subtracted from each lane, as GCC
-                // does.
+                // One is added to or subtracted from each lane, as GCC does.
                 let (kind, _) = crate::vector::floating(self.unit.types(), ty).unwrap();
                 let operation = crate::vector::VectorExpr {
                     op: crate::vector::VectorOp::Binary(if direction == OffsetDirection::Add {

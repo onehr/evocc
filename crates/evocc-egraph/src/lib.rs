@@ -262,8 +262,8 @@ impl Egraph {
 
     /// Insert a term and return the node witness selected by hash-consing.
     ///
-    /// The Day 4 proof campaign exercises this richer form; the legacy
-    /// `insert` entry point remains a compatibility wrapper.
+    /// A rewrite merge names the node witness of its right-hand side, so
+    /// `apply_rewrites` uses this form. `insert` returns only the class.
     pub fn insert_with_node(&mut self, op: OpId, children: Vec<EClassId>) -> InsertOutcome {
         let children: Vec<EClassId> = children.iter().map(|&c| self.uf.find(c)).collect();
         let key = (op, children.clone());

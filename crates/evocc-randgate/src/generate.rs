@@ -21,9 +21,9 @@ use evocc_types::{AddressSpace, EvoIRType, ParamMark, RecordShape, Region};
 
 use crate::rng::Rng;
 
-/// Bit widths the generator draws from. Every width the Day 7 profile executes
-/// is representable; this list keeps the boundary widths and a spread of
-/// non-byte widths so masking and extension defects cannot hide in a corner.
+/// Bit widths the generator draws from. The list keeps the boundary widths
+/// and a spread of non-byte widths so masking and extension defects cannot
+/// hide in a corner.
 pub const WIDTHS: [u16; 14] = [1, 2, 3, 5, 7, 8, 13, 16, 17, 31, 32, 33, 47, 64];
 
 /// Element widths a memory access uses.
@@ -33,18 +33,18 @@ pub const WIDTHS: [u16; 14] = [1, 2, 3, 5, 7, 8, 13, 16, 17, 31, 32, 33, 47, 64]
 /// layout its object was allocated with.
 const MEMORY_WIDTHS: [u16; 4] = [8, 16, 32, 64];
 
-/// The tag of the stream that draws masked accesses (D25). The stream is
+/// The tag of the stream that draws masked accesses (EvoMIR 9.1). The stream is
 /// separate, so the main stream makes the draws that it makes without them:
 /// a configuration with masked accesses gives each module the shape of the
 /// same seed without them, with masked accesses added.
 const MASK_STREAM: u64 = 0x4D41_534B_4544_0019;
 
-/// The tag of the stream that draws record calls (D29). It is separate for
+/// The tag of the stream that draws record calls (EvoMIR 9.1). It is separate for
 /// the reason that [`MASK_STREAM`] is: without record calls the generator
 /// never consults it.
 const RECORD_STREAM: u64 = 0x5245_434F_5244_0029;
 
-/// D29: one record shape that a module passes by value or returns.
+/// One record shape that a module passes by value or returns.
 struct RecordKind {
     size: u64,
     align: u32,
@@ -69,7 +69,7 @@ impl RecordKind {
     }
 }
 
-/// The record shapes of D29: each passes in general registers (EvoMIR 6.4),
+/// The generated record shapes: each passes in general registers (EvoMIR 6.4),
 /// with padding, with a chunk that is not a power of two in size, in two
 /// registers, or with a pointer member.
 const RECORD_KINDS: [RecordKind; 8] = [
@@ -139,7 +139,7 @@ const RECORD_KINDS: [RecordKind; 8] = [
     },
 ];
 
-/// D29: a helper that takes a record by value or returns one.
+/// A helper that takes a record by value or returns one.
 #[derive(Debug, Clone)]
 struct RecordHelper {
     name: String,
@@ -214,12 +214,12 @@ pub struct GeneratorConfig {
     pub max_loop_trips: u64,
     /// Ordinary return values one function may declare.
     pub max_results: u32,
-    /// D25: emit masked loads and stores, also into objects of which only
+    /// Emit masked loads and stores, also into objects of which only
     /// some bits are initialized. Off, the generator never consults the
     /// masked-access stream, so the pinned seed space names the modules that
     /// it named before masked accesses existed.
     pub masked_accesses: bool,
-    /// D29: emit calls that pass records of at most sixteen bytes by value
+    /// Emit calls that pass records of at most sixteen bytes by value
     /// and return them, with padding and members that are never stored.
     /// Off, the generator never consults the record stream.
     pub record_calls: bool,
@@ -253,7 +253,7 @@ impl GeneratorConfig {
         }
     }
 
-    /// The same configuration with masked accesses (D25).
+    /// The same configuration with masked accesses (EvoMIR 9.1).
     #[must_use]
     pub fn with_masked_accesses(self) -> Self {
         Self {
@@ -262,7 +262,7 @@ impl GeneratorConfig {
         }
     }
 
-    /// The same configuration with record calls (D29).
+    /// The same configuration with record calls (EvoMIR 9.1).
     #[must_use]
     pub fn with_record_calls(self) -> Self {
         Self {
@@ -649,7 +649,7 @@ fn recursive_helper(rng: &mut Rng) -> (Signature, Function) {
     )
 }
 
-/// D29: the record helpers of one module, from the record stream: one that
+/// The record helpers of one module, from the record stream: one that
 /// takes a record by value and one that returns one. A shape with a pointer
 /// member needs a global for the pointer to name.
 fn record_helpers(
@@ -1106,7 +1106,7 @@ fn generate_function(
     };
 
     let (params, mut entry) = generator.open_entry(signature);
-    // D29: `@main` calls each record helper before anything else, so every
+    // `@main` calls each record helper before anything else, so every
     // program with record calls runs both of them.
     if signature.name == "main" {
         for helper in 0..generator.record_helpers.len() {
@@ -2222,7 +2222,7 @@ impl FunctionGen<'_> {
         }
     }
 
-    /// D25: an object of which only some bits are initialized. A masked
+    /// An object of which only some bits are initialized. A masked
     /// store initializes the bits of its mask, though it writes every bit. A
     /// masked load that demands a subset of them is defined, and the bits it
     /// does not demand hold no value that the program may use, so the value
@@ -2275,7 +2275,7 @@ impl FunctionGen<'_> {
         self.record(block, &defined);
     }
 
-    /// D29: a call of a record helper, from the record stream. Before a call
+    /// A call of a record helper, from the record stream. Before a call
     /// by value, the caller stores the members that the helper reads and
     /// some of the others, never the padding, and copies the record to the
     /// argument object as the C lowering does. After a call that returns a

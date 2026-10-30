@@ -19,7 +19,7 @@ pub type FactProofId = u32;
 pub type OpId = u16;
 
 // ---------------------------------------------------------------------------
-// Bound Day 4 proof vocabulary
+// Bound proof vocabulary
 // ---------------------------------------------------------------------------
 
 /// Append-only identity of an e-node snapshot.
@@ -35,7 +35,7 @@ pub struct NodeSnapshot {
     pub original_children: Vec<EClassId>,
 }
 
-/// One level of a rewrite pattern. Day 4 deliberately covers the current
+/// One level of a rewrite pattern. It deliberately covers just the
 /// e-graph rule language, whose children are exact classes or variables.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Pattern {
@@ -179,7 +179,7 @@ impl ProofCertificate {
 ///
 /// Insertions build an immutable node table and singleton partition. Unions
 /// are then checked against the partition *before* applying the recorded
-/// merge. Guarded rules are intentionally absent from the vocabulary: Day 4
+/// merge. Guarded rules are intentionally absent from the vocabulary: it
 /// covers only unconditional rewrites and congruence.
 pub fn replay_certificate(
     certificate: &ProofCertificate,
@@ -903,8 +903,8 @@ impl ProofDAG {
     /// The context-free checker accepts only the empty proof. A non-empty
     /// rewrite needs a rule/substitution registry, and congruence needs an
     /// immutable e-node snapshot; accepting opaque numeric IDs here would
-    /// turn a syntactic receipt into a forged semantic proof. Day 4 adds the
-    /// bound-context validator that can accept those edges.
+    /// turn a syntactic receipt into a forged semantic proof. Only a replay
+    /// against a bound `ProofContext` accepts rewrite and congruence proofs.
     pub fn validate(&self) -> Result<(), String> {
         for edge in &self.edges {
             if !self.known_ids.contains(&edge.lhs) {

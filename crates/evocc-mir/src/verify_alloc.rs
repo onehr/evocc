@@ -1,5 +1,5 @@
 //! Export of the actual allocator input and output for the independent Lean
-//! allocation checker (work package V03).
+//! allocation checker (`spec/verification.md`, Section 4.5).
 //!
 //! The export has three parts. The first part is the post-SSA program that
 //! the allocator receives, in the `core-mir-v1` format of

@@ -80,10 +80,10 @@ pub(super) fn nullability_keyword(text: &str) -> bool {
 /// Every attribute is accepted on a prototype.
 pub(super) fn convention_permits(attribute: &str, definition: bool) -> bool {
     match attribute {
-        // D16: a second return has a rule (EvoIR 3.10), so the function can
+        // A second return has a rule (EvoIR 3.10), so the function can
         // be defined, called and named.
         "returns_twice" => true,
-        // D17: the callee takes its arguments as the base AAPCS64 does and
+        // The callee takes its arguments as the base AAPCS64 does and
         // preserves a superset of the base callee-saved registers. A caller
         // relies only on the base set, so an ordinary call is correct. EvoCC
         // cannot compile a body to the stronger contract.

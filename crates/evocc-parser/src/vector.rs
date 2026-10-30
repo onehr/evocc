@@ -362,7 +362,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         span: SourceSpan,
     ) -> Option<&'arena CHirExpr<'arena>> {
         let (ty, element, lanes) = self.vector_expression_type(operand)?;
-        // GCC 14 and Clang 19 refuse `!` on a floating vector in C (L05).
+        // GCC 14 and Clang 19 refuse `!` on a floating vector in C (EvoIR 10.1.14).
         if matches!(op, UnaryOp::BitNot | UnaryOp::Not)
             && self.canonical_integer_type(element).is_err()
         {

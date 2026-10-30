@@ -1,4 +1,4 @@
-//! Deterministic, fuel-bounded execution for the Day-5 scalar C-HIR subset.
+//! Deterministic, fuel-bounded execution of C-HIR.
 //!
 //! This interpreter deliberately consumes typed C-HIR and its normalized
 //! initializer plans. It does not reuse the parser's constant-expression
@@ -582,9 +582,8 @@ struct Slot {
     active: bool,
 }
 
-/// One task-machine value. The call-free scalar fast path deliberately keeps
-/// using `CInteger` directly; this boundary is where Day 7 pointer execution
-/// will attach without changing that path.
+/// One task-machine value. Scalar slots keep using `CInteger` directly, so
+/// the pointer, floating and aggregate kinds here leave that path unchanged.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum CValue {
     /// A missing function result can be discarded without being read.

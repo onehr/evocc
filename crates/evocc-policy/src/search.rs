@@ -20,10 +20,10 @@
 //!    result; the best fitness after each generation is the trajectory.
 //!
 //! **Fitness** is the total dynamic interpreter step count after optimization
-//! over the training corpus, which is the pre-backend fitness signal the day-9
-//! contract names. A candidate whose report did not replay every certificate,
-//! or refused any program, has no fitness at all: it is discarded and counted,
-//! never scored as if it were merely bad.
+//! over the training corpus, which is the pre-backend fitness signal that
+//! `day9-acceptance-contract.json` names. A candidate whose report did not
+//! replay every certificate, or refused any program, has no fitness at all:
+//! it is discarded and counted, never scored as if it were merely bad.
 //!
 //! **The red line.** Training and held-out corpora are generated seed ranges,
 //! disjoint by construction, and the harness's refusal of `.build/`,

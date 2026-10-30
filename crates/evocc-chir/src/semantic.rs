@@ -1256,10 +1256,10 @@ impl ScalarPlace {
     }
 }
 
-/// The bounded scalar update plan consumed by the future evaluator.
+/// A bounded scalar update plan.
 ///
-/// This is deliberately a plan, not an interpreter: S3 proves the number of
-/// storage effects without introducing Day-7 memory or G3 execution state.
+/// This is deliberately a plan, not an interpreter: it states the number of
+/// storage effects without memory or execution state.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum UpdatePlan {
     Assignment {

@@ -79,7 +79,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         expect_machine_integer(value, span)
     }
 
-    /// L05: one lane of a floating vector operation, the scalar operation of
+    /// One lane of a floating vector operation: the scalar operation of
     /// that lane, or the C cast of that lane to the element type `element`.
     fn floating_lane(
         &mut self,

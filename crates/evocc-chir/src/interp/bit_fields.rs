@@ -73,7 +73,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     .checked_offset(i64::from(offset) - i64::from(field.bit_offset / 8))
                     .map_err(|error| self.memory_error(error, span))?;
                 // One volatile access of the unit, which demands only the
-                // field's own bits of it (D25).
+                // field's own bits of it (EvoIR 10.1.6).
                 let own = (u128::MAX >> (128 - count)) << (first - offset * 8);
                 let (value, world) = self
                     .memory
@@ -143,7 +143,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 // The unit read keeps the other bits and is one volatile
                 // access, but it is not a C read of the other members: it
                 // demands no bit, and the store initializes only the
-                // field's bits (D25).
+                // field's bits (EvoIR 10.1.6).
                 let (original, world) = self
                     .memory
                     .volatile_load_integer_bits(&self.world, at, layout, 0)

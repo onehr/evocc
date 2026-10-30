@@ -1,4 +1,4 @@
-//! Day-7 pure-scalar EvoIR to e-graph bridge.
+//! Pure-scalar EvoIR to e-graph bridge.
 
 use std::collections::{BTreeMap, HashMap};
 
@@ -36,7 +36,7 @@ const OP_SEXT: OpId = 24;
 const OP_TRUNC: OpId = 25;
 const DYNAMIC_OP_BASE: OpId = 1_000;
 
-/// Public Inst-to-operator authority for the Day-7 P0 profile.
+/// Public Inst-to-operator authority for the P0 profile.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ScalarOperator {
     Const,
@@ -58,7 +58,7 @@ pub enum ScalarOperator {
     Trunc,
 }
 
-/// Why an instruction cannot enter the Day-7 pure scalar e-graph.
+/// Why an instruction cannot enter the pure scalar e-graph.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ScalarBridgeError {
     code: &'static str,

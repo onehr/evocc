@@ -961,7 +961,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
     }
 
     pub(super) fn update_constraint(&self, target_ty: TypeId) -> UpdateConstraint {
-        // L05: `++` and `--` add or subtract one in each lane of a floating
+        // `++` and `--` add or subtract one in each lane of a floating
         // vector, as GCC 14 does.
         if evocc_chir::vector::floating(&self.types, target_ty).is_some() {
             return UpdateConstraint::Scalar;

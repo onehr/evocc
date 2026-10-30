@@ -66,9 +66,9 @@ fn parse(arguments: &[String]) -> Result<Options, String> {
                     other => return Err(format!("{other} is not a generator mode")),
                 };
             }
-            // D25: masked accesses, in either mode.
+            // Masked accesses, in either mode.
             "--masks" => masks = switch(value)?,
-            // D29: record calls, in either mode.
+            // Record calls, in either mode.
             "--records" => records = switch(value)?,
             _ => return Err(USAGE.to_owned()),
         }

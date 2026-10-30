@@ -462,7 +462,7 @@ pub(super) fn function_value_type(
     }
     match types.get(ty).map(|canonical| &canonical.kind) {
         // A short vector of `float` or `double` lanes is a `vec<L, f32>` or
-        // `vec<L, f64>` value; a wider one is an object (L05).
+        // `vec<L, f64>` value; a wider one is an object (EvoIR 10.1.14).
         Some(TypeKind::Vector { lanes, .. })
             if evocc_chir::vector::floating(types, ty).is_some() =>
         {
@@ -656,7 +656,7 @@ pub(super) fn function_pointer_interface(
 /// AAPCS64 homogeneous short-vector aggregate: a record or array of one to
 /// four short vectors (8 or 16 bytes) of one size. AAPCS64 tests only the
 /// size for homogeneity, not the lane type, as GCC 14 and Apple clang do
-/// (L05). The mark keeps the lane count and lane width of the first member,
+/// (EvoMIR 6.3). The mark keeps the lane count and lane width of the first member,
 /// and a record with padding has no HVA shape.
 pub(super) fn homogeneous_vector_aggregate(
     types: &TypeInterner,

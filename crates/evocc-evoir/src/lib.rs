@@ -601,9 +601,9 @@ pub struct Block {
 
 /// The exact observable effects implied by one function and its direct callees.
 ///
-/// Day 8 has a single memory region, so the two region sets are represented by
-/// their `all` membership. The remaining components follow specification
-/// Section 4.6 and participate in the same componentwise join.
+/// The executable profile has only `mem<all>` (Section 1.4), so the two
+/// region sets are represented by their `all` membership. The remaining
+/// components follow Section 4.6 and participate in the same componentwise join.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct EffectSummary {
     pub reads_all: bool,

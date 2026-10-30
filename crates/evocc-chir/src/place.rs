@@ -591,7 +591,7 @@ impl<'arena> MemoryPlace<'arena> {
                             TypeKind::Array { element, .. } | TypeKind::Vector { element, .. },
                         ) if *element == element_ty => {
                             // GCC 14 gives the address of a lane of a
-                            // floating vector (L05); a lane of an integer
+                            // floating vector (EvoIR 10.1.14); a lane of an integer
                             // vector has no address.
                             if matches!(
                                 types.get(current).map(|ty| &ty.kind),

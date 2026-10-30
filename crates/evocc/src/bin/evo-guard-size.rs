@@ -1,4 +1,4 @@
-//! S4 size-only adapter. Never produces an installable or PASS-eligible artifact.
+//! Size-only adapter. Never produces an installable or PASS-eligible artifact.
 use std::collections::BTreeMap;
 use std::io::Write;
 use std::process::ExitCode;

@@ -39,7 +39,7 @@ pub enum RelocationModel {
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct CodegenOptions {
     pub ub_checks: crate::UbCheckProfile,
-    /// S2 attribution only. The driver always leaves common baseline DCE on.
+    /// DCE attribution only. The driver always leaves common baseline DCE on.
     pub retain_dead_computations: bool,
     pub tiny_addresses: bool,
     pub function_sections: bool,
@@ -53,15 +53,15 @@ pub struct CodegenOptions {
     pub stack_guard: StackGuard,
     /// Opt-in frame variants (EvoMIR revision 0.56); all off by default.
     pub frame: FrameVariants,
-    /// C1 GPR constant materialization; all selection options default off.
+    /// GPR constant materialization (EvoMIR 5.5); all selection options default off.
     pub compact_constants: bool,
-    /// C2 adjacent single-use emission idioms.
+    /// Adjacent single-use emission idioms (EvoMIR 5.5).
     pub local_selection: bool,
-    /// C3 exact repeated integer extensions before allocation.
+    /// Exact repeated integer extensions before allocation (EvoMIR 5.5).
     pub reuse_extensions: bool,
-    /// C5 existing-op Boolean branch / constant interval selection.
+    /// Existing-op Boolean branch / constant interval selection (EvoMIR 5.5).
     pub select_controls: bool,
-    /// T2 hints / T3 reload reuse; constraints and verifier remain unchanged.
+    /// Copy hints and reload reuse (EvoMIR 7.6); constraints and verifier remain unchanged.
     pub allocation: crate::generic::allocation::AllocationOptions,
     pub frame_pointer_required: bool,
     pub leaf_frame_pointer_required: bool,
@@ -239,7 +239,7 @@ pub struct Frame {
     pub strict_alignment: bool,
     pub sign_returns: bool,
     pub general_registers_only: bool,
-    /// Revision 0.56 F1: save and restore adjacent slots as pairs.
+    /// Save and restore adjacent slots as pairs (EvoMIR 6.13).
     pub paired_saves: bool,
     pub shared_epilogue: bool,
     pub frameless: bool,
@@ -1772,7 +1772,7 @@ fn emit_single_saves(text: &mut String, frame: &Frame) {
 const PAIR_STRIDE: u64 = regfile::GPR64_VIEW.bits as u64 / 8;
 const PAIR_LIMIT: u64 = encodings::PAIR_MAX as u64 * PAIR_STRIDE;
 
-/// Revision 0.56 F1: the slots of one save area in ascending offset order,
+/// The slots of one save area in ascending offset order (EvoMIR 6.13),
 /// each either alone or paired with the slot directly above it. A pair needs
 /// both slots adjacent, the lower one within the `stp`/`ldp` reach, and a
 /// frame addressed from `sp`; every other slot keeps its single transfer.

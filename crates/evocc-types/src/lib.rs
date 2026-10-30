@@ -14,7 +14,7 @@
 //! [`TargetDataLayout`] is the production bridge from canonical [`TypeId`]s to
 //! concrete ABI sizes, alignments, record offsets, and bit-field allocation.
 //! The older [`TargetLayout`] trait remains only for compatibility with the
-//! Day 1--3 structural `CType` API; new frontend code must not use it as layout
+//! structural `CType` API; new frontend code must not use it as layout
 //! authority.
 
 use std::{collections::HashMap, sync::Arc};
@@ -77,9 +77,9 @@ pub enum IntRank {
 
 /// Signedness of GNU's compiler-provided 128-bit integer type.
 ///
-/// This is deliberately separate from [`IntRank`]. The shared Day 5 integer
-/// kernel stores target values in `u64`, so treating `__int128` as another
-/// ordinary rank would make unsupported evaluation paths silently truncate.
+/// This is deliberately separate from [`IntRank`]. No rank maps to a 128-bit
+/// type, so code that starts from a rank can meet `__int128` only where it
+/// also matches `TypeKind::GnuInt128`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum GnuInt128Signedness {
     Signed,
@@ -108,7 +108,7 @@ impl IntRank {
 /// Void and function types are also C types — they participate in expression
 /// type-checking even though they are not "objects" in the ISO sense.
 ///
-/// This structural representation is retained for the Day 1--3 frontend API.
+/// This structural representation is retained for the older frontend API.
 /// New frontend work should use [`TypeInterner`], whose child-ID representation
 /// can express recursive nominal aggregate types without recursively cloning
 /// their definitions.
@@ -339,15 +339,15 @@ pub enum TypeKind {
     Void,
     /// Canonical but deliberately opaque compiler-provided va-list type.
     ///
-    /// Day 5 needs its identity for declarations and typedefs. Layout and
-    /// varargs operations fail closed instead of guessing a target ABI shape.
+    /// Declarations and typedefs need its identity. The target fixes its
+    /// layout, and EvoIR 3.12 defines the variadic operations on it.
     BuiltinVaList,
     /// Measured target-header identity, without admitted value execution.
     TargetBuiltin(TargetBuiltinType),
-    /// GNU `__int128`, retained as an opaque signed or unsigned type.
+    /// GNU `__int128`, a signed or unsigned 128-bit integer type.
     ///
-    /// Its target layout is known, but Day 5 intentionally provides no value
-    /// representation or arithmetic semantics for it.
+    /// EvoIR 10.1.3 gives its `bits<128>` execution. It has no [`IntRank`];
+    /// [`GnuInt128Signedness`] gives the reason.
     GnuInt128(GnuInt128Signedness),
     Int(IntRank),
     Float(FloatKind),

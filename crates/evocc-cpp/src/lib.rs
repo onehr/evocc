@@ -940,7 +940,7 @@ impl Preprocessor {
 
     /// Configure an ordered `-fmacro-prefix-map=OLD=NEW` mapping.
     ///
-    /// Day 5 applies these mappings only when expanding `__FILE__`. Physical
+    /// These mappings apply only to the expansion of `__FILE__`. Physical
     /// paths used for include lookup, source identity, and diagnostics remain
     /// unchanged. If multiple mappings match, the last command-line mapping
     /// wins, matching GCC. No `__BASE_FILE__` or compiler-builtin coverage is
