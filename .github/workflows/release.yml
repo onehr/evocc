@@ -24,7 +24,7 @@ jobs:
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 120
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - name: Export sealed Linux headers
         run: |
           docker build --platform linux/arm64 -t evo-nexlab:sealed -f .toolchain/Dockerfile.nexlab .toolchain
@@ -48,7 +48,7 @@ jobs:
     env:
       TARGET: ${{ matrix.target }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: actions/download-artifact@v4
         with: {name: linux-headers}
       - run: tar -xzf linux-headers.tar.gz
