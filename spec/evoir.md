@@ -1,6 +1,6 @@
 # EvoIR Specification
 
-**Revision 2.39.1** | **Pinned ground truth** | Editorial corrections on 2026-10-30
+**Revision 3.0.0** | **Pinned ground truth** | Implemented rules where the text disagreed on 2026-10-30
 
 > EvoIR is a typed, contextual equality substrate over explicit state. It is the
 > single semantic contract of the parser, the C lowering, equality saturation,
@@ -759,7 +759,8 @@ reports the exact memory diagnostic in Section 6.1.
 Neither guard consumes or produces `world`.
 
 `icmp.eq` and `icmp.ne` accept two values of the same pointer type and compare
-both provenance and byte offset. No instruction orders or subtracts pointers;
+their abstract addresses, not their provenance (3.5, 5.3). No instruction
+orders or subtracts pointers;
 C lowering writes those operations over `ptr.to_int` (3.5, 10.1.3).
 
 The validator requires every memory guard and memory operation to use
@@ -1240,7 +1241,8 @@ returns twice (4.4). A call that returns twice is outside `core-v1`.
 **Anonymous arguments.** When the callee's signature is
 variadic, the arguments between the last listed parameter and `%m0` are
 anonymous. Each has one of the types `bits<32>`, `bits<64>`, `bits<128>`,
-`f64`, `f128`, `ptr<AS>` or `fnptr<Sig>`: these are the C types that survive the
+`f16`, `bf16`, `f64`, `f128`, `ptr<AS>` or `fnptr<Sig>`: these are the C types
+that survive the
 default argument promotions (10.1.7), and the front end performs the
 promotions, so `bits<8>` and `bits<16>` never appear here. There may be any
 number of them, including none. Their types are not part of the signature and
@@ -1614,7 +1616,9 @@ operands obey local SSA, initializedness, text/proof reconstruction and the
 call/edge rules. Native **E3064** denotes an incompatible FP environment,
 not C UB; no hidden FPCR reset is permitted. Section 3.13.3 admits the bounded
 non-trapping `STDC FENV_ACCESS` profile. Unsupported or malformed requests
-retain **E3065**; unsupported strict/fast/contraction options are not ignored.
+are **E3065**. The strict driver refuses an unsupported strict, fast or
+contraction option, and the cc command line ignores it with the warning of
+10.5.
 Section 3.13.5 admits the parts of a complex product and quotient, and
 Section 10.1.14 applies these operations to each lane of a floating vector.
 
@@ -4375,7 +4379,7 @@ they describe is not a legal module. These are the checks of Section 2.4, Sectio
   symbol/signature pair does not name an exact function definition.
 - A function whose calling convention is not `target_default` in this profile.
 - A `size`, `align`, `scale` or width outside the range its definition allows.
-- A mask on a volatile access or on an access that is not `bits<8>`,
+- A mask on an access that is not `bits<8>`,
   `bits<16>`, `bits<32>`, `bits<64>` or `bits<128>`, or a mask that selects
   every bit of the access or a bit beyond it (3.8).
 
@@ -4499,7 +4503,7 @@ not hard-code target widths, pointer size, or pointer alignment.
 
 | C Qualifier | EvoIR Representation |
 |---|---|
-| `const` | No IR effect. Purely a C-HIR check. |
+| `const` | A C-HIR check. A static-storage object of const-qualified type lowers with `readonly=true` (5.2). |
 | `volatile` | Exact `load volatile` / `store volatile` syntax and ordered world-trace events. |
 | `restrict` | Preserved in C-HIR only; `NoAlias` facts are outside this revision (5.5). |
 | `_Atomic` | The target's atomic layout; `seq_cst` `atomic.load` and `atomic.store` for a read and a simple assignment of an admitted scalar, and a compare-exchange loop for an update (10.1.21). Other atomic objects are `E2702`. |
@@ -4637,9 +4641,9 @@ lowering limit, not a source namespace error or a claim that the program has UB.
 **Declarations with an incomplete enumeration return type.**
 `enum e f(unsigned int);` with `e` not yet complete is an accepted
 declaration. A function that is only declared and
-never defined, called or address-taken produces nothing in EvoIR, because
-EvoIR carries definitions and the calls that name them, not declarations
-(Section 3.10). A call or `func_addr` whose function type
+never defined, called or address-taken produces nothing in EvoIR: an external
+function (2.1) binds only a symbol that the module calls or takes the address
+of. A call or `func_addr` whose function type
 still names an incomplete enumeration at that point is
 `E2930` (`use-with-incomplete-enumeration`) at the use. An enumeration completed
 before the use has its completed type there.
@@ -5170,17 +5174,15 @@ registrations of Section 2.1, `vector_size` through the vector types of
 Section 10.1.14, and `tls_model` through the thread-object model below; these
 are not included in the preserve-only catch-all.
 
-- `aligned(N)` raises alignment. `N` is an integer constant expression that is
+- `aligned(N)` sets alignment. `N` is an integer constant expression that is
   a power of two representable by the target layout; otherwise `E2903`. On a
-  type or typedef it produces a type whose alignment is the greater of its
-  natural alignment and `N`. On an object it sets the object's alignment
-  likewise. On a member it sets that member's alignment, which moves its offset
-  and may raise the containing record's alignment. `aligned` with no argument
-  means the target's largest fundamental alignment, sixteen bytes on AArch64.
-  On a typedef or a type name, `aligned(N)` sets the alignment to exactly `N`,
-  which can lower it: `typedef int t __attribute__((aligned(1)))` has alignment
-  one. On a record, a member or an object it can only raise; lowering there
-  requires `packed`.
+  typedef or a type name it sets the alignment to exactly `N`, which can lower
+  it: `typedef int t __attribute__((aligned(1)))` has alignment one. On a
+  struct or union type, a member or an object it gives the greater of the
+  natural alignment and `N`; lowering there requires `packed`. A member's
+  alignment moves its offset and may raise the containing record's alignment.
+  `aligned` with no argument means the target's largest fundamental alignment,
+  sixteen bytes on AArch64.
 - `packed` removes padding. On a record it gives every member alignment one,
   makes the size the sum of member sizes, and gives the record alignment one
   unless `aligned` on the same record says otherwise. On a member it gives that
@@ -5588,7 +5590,7 @@ representation is `E2903`.
 | `E2914` | `asm` template names an unknown operand, or an output operand is not a modifiable lvalue |
 | `E2915` | `__auto_type` with no initializer, several declarators, or an array/function declarator |
 | `E2916` | `case a ... b` with `a > b` or overlapping another case |
-| `E2917` | designator index or range bound not an integer constant expression, range with `a > b`, or a range initializer that is not constant |
+| `E2917` | designator index or range bound not an integer constant expression, or range with `a > b` |
 | `E2918` | `goto` into a statement expression |
 | `E2919` | initializer for a flexible array member outside file scope |
 | `E2920` | `goto` names a label no enclosing function scope declares |
@@ -5972,9 +5974,10 @@ profile, because C23 makes them constraint violations. Darwin's
 **`__attribute` spelling.** `__attribute` is a synonym for `__attribute__`.
 It is read wherever `__attribute__` is.
 
-Pointer-declarator attributes (10.1.9, position after `*`) are preserved and
-not applied: the reference compilers disagree on `aligned` in that position,
-so this profile applies nothing there.
+Pointer-declarator attributes (10.1.9, position after `*`) are preserved, and
+only the exceptions of the 10.1.9 attachment table have an effect: the
+reference compilers disagree on `aligned` in that position, so this profile
+applies no type attribute there.
 
 A builtin used with the wrong arity is `E2909`
 (`builtin-arity`); a builtin name used other than as a call is `E2910`
@@ -6526,8 +6529,9 @@ strict forms in strict regions:
 A product of two complex values, a quotient of two complex values and a
 quotient of a real by a complex value lower to the parts of 3.13.5, after
 both operands convert to the common complex type; the real dividend gets a
-positive zero imaginary part. GCC's `-fcx-limited-range`, `-fcx-fortran-rules`,
-`-fcomplex-arithmetic=basic` and `-ffast-math` stay refused.
+positive zero imaginary part. The strict driver refuses GCC's
+`-fcx-limited-range`, `-fcx-fortran-rules`, `-fcomplex-arithmetic=basic` and
+`-ffast-math`, and the cc command line ignores them with the warning of 10.5.
 
 **Floating-complex constants.** Translation-time evaluation, as in a static
 initializer, computes a product or quotient with the helper model of 3.13.5
@@ -6697,8 +6701,8 @@ Syntax accepted, in every position GNU C accepts it:
   optional, a constraint string, and a parenthesised expression;
 - qualifiers `volatile`, `inline`, `goto` in any order, each at most once;
 - `__asm__`, `__asm` and `__volatile__` spellings; `__asm` is recognized after
-  preprocessing in every assembly position, and C-HIR keeps the written
-  spelling;
+  preprocessing in every assembly position, and C-HIR does not record which
+  spelling was written;
 - an `asm("name")` label after a declarator (`int x asm("sym");`), which
   renames the object or function for the assembler and is otherwise inert.
 
@@ -6738,8 +6742,8 @@ preserved in C-HIR with its placement and applied to nothing: a null statement
 has no semantics to refine, so `fallthrough` in particular does not change
 control flow, suppress a diagnostic, or reach EvoIR.
 
-Lossless means: the qualifier spellings and `asm`/`__asm__` spelling as
-written, the template as the single concatenated string the assembler will
+Lossless means: each qualifier with its source span, the template as the
+single concatenated string the assembler will
 see (the individual string-literal pieces are not kept), every operand's
 symbolic name, constraint text and expression, clobber strings in order, and
 label names. The keyword-alias and piece spellings are the only things the
@@ -6955,11 +6959,13 @@ it.
   (10.1.14, `size_t (const char *)`), whether or not a declaration is visible.
   A visible incompatible declaration on that call path is E2927. The plain
   spelling `strlen(...)` remains an ordinary call.
-  Except for the explicitly resolved `__builtin_isdigit` and
-  `__builtin_extract_return_addr` operations, the same
-  holds for every library builtin of 10.1.14: the builtin's
-  prototype is the call's type, and the call names the external function.
-  No intrinsic reaches EvoIR. A user-defined `strlen` is called for an
+  The same holds for every other library builtin of 10.1.14: the builtin's
+  prototype is the call's type, and the call names the external function. The
+  exceptions are the builtins that 10.1.14 and this section resolve or lower
+  otherwise: `__builtin_isdigit`, `__builtin_extract_return_addr`,
+  `__builtin_alloca`, `__builtin_prefetch`, the GNU fences and the
+  variable-argument builtins. No intrinsic reaches EvoIR. A user-defined
+  `strlen` is called for an
   operand outside the constant-string rule.
 - `__builtin_frame_address(n)` and `__builtin_return_address(n)` have type
   `void *`. Their operand must be an integer constant expression, converted
@@ -7724,8 +7730,7 @@ mismatch count.
 
 EvoCPP presents itself to headers as the GNU C dialect of the reference
 compiler, GCC 14.2 for `aarch64-unknown-linux-gnu`, so that every `#if` a
-header takes is the branch that compiler takes. Nothing here changes what the front end
-accepts; it changes only which lines reach the front end.
+header takes is the branch that compiler takes.
 
 **Predefined macros.** The predefined set is the list
 `crates/evocc-cpp/predefined/aarch64-unknown-linux-gnu.h` (421 macros, the
@@ -7862,8 +7867,13 @@ on both targets, in any position:
 - `-fexpensive-optimizations`, `-ftree-vectorize`, `-fno-vect-cost-model` and
   `-fno-trapping-math` only permit transforms that EvoCC never makes, and
   `-ftrapping-math` names the default contract, so none of them changes code.
-  `-ffast-math`, `-ffinite-math-only`, `-funsafe-math-optimizations` and
-  `-Ofast` keep their refusals.
+
+The strict driver refuses `-ffast-math`, `-ffinite-math-only` and
+`-funsafe-math-optimizations`. The cc command line ignores them, as it ignores
+every other unsupported `-f` or `-m` option that does not change the ABI
+(EvoMIR 6.14), with the warning "option `NAME` is not supported and has no
+effect". `-Werror` makes the warning an error, `-w` removes it, and
+`--cap-lints` limits it. Both command lines refuse `-Ofast`.
 
 `-fpermissive` and `-fno-permissive` set the base level of `W0012` (Section
 6.3) on both targets and change nothing else. Apple clang ignores
@@ -8429,15 +8439,19 @@ All `source=before` nodes form the exact witness manifest and precede every
 `source=derived` node. A before node's operator, sort, attributes and children
 must equal the independently parsed witness instruction. The `I`th before node
 corresponds to witness `I`, and its owner class is the initial class of that
-instruction's single result. Every derived node must
-be named by a later rewrite as its right-hand `node:` proof reference; unused derived nodes are
-invalid. This prevents an event stream from manufacturing an unproved
-representation and relying on extraction to select it. A derived node is used
-when a rewrite names it or when it is a child, at any depth, of a derived
-node a rewrite names: the `const_like` operand that an emitting right-hand
-side such as `shl(?x,const_like(?x,1))` writes is used through the `shl`
-that names it (child at any depth is decided at class granularity, since the node stream records children as classes: a derived node is used when it belongs to the canonical class of a child, transitively, of a named derived node; a node event always allocates a fresh class, so membership is reached only through a recorded merge), and the checker recomputes its payload from the pattern
-exactly as for a named constant.
+instruction's single result. Every derived node must be used; an unused
+derived node is invalid. This prevents an event stream from manufacturing an
+unproved representation and relying on extraction to select it. A derived
+node is used when a rewrite names it as its right-hand `node:` proof
+reference. When a node becomes used, every derived node that belongs to the
+class of one of its children also becomes used, transitively, in the
+partition at that point of the replay, before the rewrite's union. The node
+stream records children as classes, and a node event always allocates a fresh
+class, so membership is reached only through a recorded merge. The
+`const_like` operand that an emitting right-hand side such as
+`shl(?x,const_like(?x,1))` writes is used through the `shl` that names it,
+and the checker recomputes its payload from the pattern exactly as for a
+named constant.
 
 Extraction entries count from zero and are topological. A selected
 `source=before` witness that is not the replacement root is a terminal reuse:
@@ -8518,8 +8532,10 @@ require re-running the scheduler and are telemetry. A producer that stops by a r
 
 **Zero regions.** Any compilation that accepts no rewrite produces a certificate
 with a header and an `output` line and no region blocks, whether or not eligible
-candidates existed. This is valid only when reassembly is byte-identical to
-`before.evo`. It is not an empty file: budgets and optimization policy may always
+candidates existed. This is valid only when reassembly, the canonical
+rendering of the module parsed from `before.evo`, is byte-identical to
+`after.evo` (below). It is not an empty file: budgets and optimization policy
+may always
 choose the baseline representation, because optimization is never required for
 correctness.
 
@@ -9109,6 +9125,25 @@ to the signature spelling.
 
 ## Revision
 
+**Revision 3.0.0, 2026-10-30.** The specification now states the implemented
+rules where its text disagreed with them. Pointer equality in 3.7 compares
+abstract addresses, as 3.5 states. An anonymous argument can be `f16` or
+`bf16` (3.10). The strict driver refuses the fast-math, contraction and
+complex-range options, and the cc command line ignores them with a warning
+(3.13, 10.1.14, 10.5). A volatile access admits a mask (9.5). A const-qualified
+static object lowers with `readonly=true` (10.1.2). `aligned` sets exactly
+`N` on a typedef or a type name and only raises the alignment of a struct or
+union type, a member or an object (10.1.9). The `E2917` row no longer covers
+range values, which are `E2969` (10.1.9, 10.1.12). Attributes after a pointer
+`*` have the effects of the 10.1.9 attachment table (10.1.14). C-HIR does not
+record which `asm` keyword spelling was written (10.1.16). `__builtin_alloca`,
+`__builtin_prefetch`, the GNU fences and the variable-argument builtins name
+no external function (10.1.17). Section 10.5 no longer claims that it leaves
+front-end acceptance unchanged. Section 11.3 states the derived-node and
+zero-region rules in the form of its amendments and of the checker. The change
+procedure adds each revision paragraph at the top. No registry, grammar
+production, row of the Section 6.3 table or proved Core domain changes.
+
 **Revision 2.39.1, 2026-10-30.** This revision is editorial and changes no
 requirement. Code references name their current files:
 `crates/evocc-evoir/src/validation.rs` for `validate_ssa` (10.4) and
@@ -9617,8 +9652,8 @@ The complete history is in git: `git log -- docs/evoir-spec.md spec/evoir.md`.
    Section 11.6 defines how a new registry revises an older one.
 2. Bump the revision in the header: the patch number for a correction that
    changes no requirement, the minor number for a compatible addition, the
-   major number for an incompatible change. Replace the paragraph above with
-   the new revision, its date and what it changes.
+   major number for an incompatible change. Add its paragraph at the top of
+   this section, with the new revision, its date and what it changes.
 3. Update the digest of this file in `spec/pins.json`.
 4. Run the gate. Every command must pass:
    `cargo build -p evocc`;
