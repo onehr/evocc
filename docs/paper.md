@@ -667,7 +667,7 @@ experiments hold the bugs fixed and vary only the compiler feedback.
 
 ## 11 Conclusion
 
-Coding agents built a C compiler that boots Linux in 79 days because each proposal had to pass a
+Coding agents built a C compiler that boots Linux in 81 days because each proposal had to pass a
 check that was smaller than the proposal and fixed before it. The same structure made the compiler's
 own claims checkable: undefined behavior becomes an obligation, an optimization a replayed
 certificate, and a compilation in a small subset a proof. Next, we will extend `core-v1` to memory
