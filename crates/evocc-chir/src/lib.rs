@@ -631,14 +631,12 @@ pub enum StringPrefix {
 impl StringPrefix {
     #[must_use]
     pub fn element_rank(self) -> evocc_types::IntRank {
-        use evocc_types::{IntRank, TargetDataLayout};
+        use evocc_types::IntRank;
         match self {
             Self::None | Self::U8 => IntRank::Char,
-            Self::L => TargetDataLayout::aarch64_unknown_linux_gnu().wide_character_rank(),
-            Self::L16 => TargetDataLayout::aarch64_unknown_linux_gnu()
-                .with_short_wchar(true)
-                .wide_character_rank(),
-            Self::LInt => TargetDataLayout::aarch64_apple_darwin().wide_character_rank(),
+            Self::L => IntRank::UInt,
+            Self::L16 => IntRank::UShort,
+            Self::LInt => IntRank::Int,
             Self::U16 => IntRank::UShort,
             Self::U => IntRank::UInt,
         }
@@ -1143,48 +1141,7 @@ pub enum CHirExpr<'arena> {
     ),
 }
 
-/// Whether an expression produces effects but no C value. Calls are resolved
-/// through their function type, not through an assumption about the spelling.
-#[must_use]
-pub fn expression_is_void(
-    expression: &CHirExpr<'_>,
-    symbols: &SymbolTable,
-    types: &TypeInterner,
-) -> bool {
-    let is_void = |ty| {
-        types
-            .get(ty)
-            .is_some_and(|ty| matches!(ty.kind, evocc_types::TypeKind::Void))
-    };
-    match expression {
-        CHirExpr::Cast(ty, _, _) => is_void(*ty),
-        CHirExpr::Call(callee, _, _) => PointerTypeDesc::from_expression(symbols, types, callee)
-            .ok()
-            .and_then(|pointer| types.get(pointer.pointee()))
-            .is_some_and(|ty| match ty.kind {
-                evocc_types::TypeKind::Function { return_type, .. } => is_void(return_type),
-                _ => false,
-            }),
-        CHirExpr::Comma(_, right, _) | CHirExpr::EvaluateOnce(right, _) => {
-            expression_is_void(right, symbols, types)
-        }
-        CHirExpr::Ternary(_, left, right, _) => {
-            expression_is_void(left, symbols, types) && expression_is_void(right, symbols, types)
-        }
-        CHirExpr::StatementExpr { facts, value, .. } => {
-            is_void(facts.ty())
-                && value.is_none_or(|value| expression_is_void(value, symbols, types))
-        }
-        CHirExpr::Atomic(access) => is_void(access.facts.ty()),
-        CHirExpr::Floating(access) => is_void(access.facts.ty()),
-        CHirExpr::Vector(access) => is_void(access.facts.ty()),
-        CHirExpr::Complex(access) => is_void(access.facts.ty()),
-        CHirExpr::BuiltinVarArgs { facts, .. }
-        | CHirExpr::BuiltinTrap { facts, .. }
-        | CHirExpr::BuiltinUnreachable { facts, .. } => is_void(facts.ty()),
-        _ => false,
-    }
-}
+pub use place::expression_is_void;
 
 impl CHirExpr<'_> {
     #[must_use]

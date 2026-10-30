@@ -62,18 +62,18 @@ impl Aarch64Abi {
     /// Argument registers of the general bank.
     #[must_use]
     pub fn general_arguments(&self) -> usize {
-        usize::from(self.facts.argument_banks[general_bank()].count)
+        self.facts.argument_banks[general_bank()].count()
     }
 
     #[must_use]
     pub fn vector_arguments(&self) -> usize {
-        usize::from(self.facts.argument_banks[vector_bank()].count)
+        self.facts.argument_banks[vector_bank()].count()
     }
 
     /// Ordinary results a function or call may have.
     #[must_use]
     pub fn general_results(&self) -> usize {
-        usize::from(self.facts.result_banks[general_bank()].count)
+        self.facts.result_banks[general_bank()].count()
     }
 
     #[must_use]
@@ -113,17 +113,25 @@ pub fn place(cursor: &mut ArgumentCursor<'_>, class: RegClass) -> Result<u8, u32
 /// only the results every AArch64 ABI can return in one bank.
 #[must_use]
 pub fn machine_result_registers(bank: usize) -> usize {
-    usize::from(
-        DARWIN.facts.result_banks[bank]
-            .count
-            .min(LINUX.facts.result_banks[bank].count),
-    )
+    DARWIN.facts.result_banks[bank]
+        .count()
+        .min(LINUX.facts.result_banks[bank].count())
 }
 
 impl Target {
     /// The generated ABI table of this operating system.
     #[must_use]
     pub const fn abi(self) -> &'static Aarch64Abi {
+        self.aarch64_abi()
+    }
+
+    pub const fn abi_facts(self) -> &'static AbiFacts {
+        match self.isa() {
+            crate::Isa::Aarch64 => &self.aarch64_abi().facts,
+        }
+    }
+
+    pub const fn aarch64_abi(self) -> &'static Aarch64Abi {
         match self {
             Self::Darwin => &DARWIN,
             Self::Linux => &LINUX,
@@ -171,6 +179,6 @@ impl Profile {
     /// Whether `target` admits `feature` under this profile.
     #[must_use]
     pub fn admits(&self, target: Target, feature: ProfileFeature) -> bool {
-        !self.host_only.contains(&feature.spelling()) || target.abi().facts.name == self.host_abi
+        !self.host_only.contains(&feature.spelling()) || target.abi_facts().name == self.host_abi
     }
 }

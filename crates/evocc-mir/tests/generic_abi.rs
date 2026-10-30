@@ -9,36 +9,18 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use evocc_mir::generic::abi::{AbiFacts, AbiSpec, ArgumentCursor};
 use evocc_mir::generic::frame::{layout, FrameObject, FrameRequest, ObjectLifetime};
-use evocc_mir::generic::register::RegisterBank;
+use evocc_mir::generic::register::RegisterList;
 
-const ARGUMENTS: [RegisterBank; 2] = [
-    RegisterBank {
-        first: 40,
-        count: 3,
-    },
-    RegisterBank {
-        first: 90,
-        count: 1,
-    },
-];
+const ARGUMENTS: [RegisterList; 2] = [RegisterList(&[40, 41, 42]), RegisterList(&[90])];
 
-const RESULTS: [RegisterBank; 2] = [
-    RegisterBank {
-        first: 40,
-        count: 2,
-    },
-    RegisterBank {
-        first: 90,
-        count: 1,
-    },
-];
+const RESULTS: [RegisterList; 2] = [RegisterList(&[40, 41]), RegisterList(&[90])];
 
 const TOY: AbiFacts = AbiFacts {
     name: "toy",
     argument_banks: &ARGUMENTS,
     result_banks: &RESULTS,
-    indirect_result: 47,
-    result_overflow: 41,
+    indirect_result: Some(47),
+    result_overflow: Some(41),
     stack_slot_bytes: 4,
     stack_alignment_bytes: 32,
     stack_arguments: true,

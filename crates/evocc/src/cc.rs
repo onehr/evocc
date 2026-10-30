@@ -783,7 +783,7 @@ impl Session {
         self.validate(&sources)?;
 
         if !cfg!(target_os = "linux")
-            && self.target == DriverTarget::Aarch64UnknownLinuxGnu
+            && self.target.is_linux()
             && action == Action::Link
             && self.command.linker.is_none()
         {
@@ -791,7 +791,7 @@ impl Session {
                 "linking for Linux on a non-Linux host requires --linker=COMMAND; use -c to produce objects",
             ));
         }
-        if self.target == DriverTarget::Aarch64UnknownLinuxGnu
+        if self.target.is_linux()
             && !self.command.compile.iter().any(|arg| arg == "-nostdinc")
             && sources
                 .iter()
@@ -1032,7 +1032,7 @@ impl Session {
         let mut arguments = vec!["-E".into(), "-x".into(), "assembler-with-cpp".into()];
         arguments.extend(self.command.preprocessor.iter().cloned());
         arguments.extend(self.assembly_dependencies(source));
-        if self.target == DriverTarget::Aarch64UnknownLinuxGnu {
+        if self.target.is_linux() {
             if let Some(root) = &self.header_root {
                 arguments.push(format!("--sysroot={root}"));
             }
@@ -1221,7 +1221,7 @@ impl Session {
                 if cpp {
                     arguments.extend(preprocessor);
                     arguments.extend_from_slice(dependencies);
-                    if self.target == DriverTarget::Aarch64UnknownLinuxGnu {
+                    if self.target.is_linux() {
                         if let Some(root) = &self.header_root {
                             arguments.push(format!("--sysroot={root}"));
                         }

@@ -52,10 +52,10 @@ fn run_program(
         }
     })?;
     let linkage = unit.symbol_linkage().map_err(InterpreterError::Linkage)?;
-    let mut requirements = reachable_memory_requirements(unit, main, linkage);
+    let mut requirements = reachable_memory_requirements(unit, main, linkage, target);
     requirements.requires_memory |= arguments.is_some();
     for r in &registrations {
-        let extra = reachable_memory_requirements(unit, r.function, linkage);
+        let extra = reachable_memory_requirements(unit, r.function, linkage, target);
         requirements.requires_memory |= extra.requires_memory;
         requirements.static_objects.extend(extra.static_objects);
     }

@@ -35,7 +35,21 @@ impl PointerTypeDesc {
         types: &TypeInterner,
         expression: &CHirExpr<'_>,
     ) -> Result<Self, MemoryPlaceError> {
-        pointer_expression_type(symbols, types, expression)
+        Self::from_expression_with_target(
+            symbols,
+            types,
+            expression,
+            &TargetDataLayout::aarch64_unknown_linux_gnu(),
+        )
+    }
+
+    pub fn from_expression_with_target(
+        symbols: &SymbolTable,
+        types: &TypeInterner,
+        expression: &CHirExpr<'_>,
+        target: &TargetDataLayout,
+    ) -> Result<Self, MemoryPlaceError> {
+        pointer_expression_type(symbols, types, expression, target)
     }
 
     /// Describe an already-interned pointer type without changing the
@@ -407,7 +421,25 @@ impl<'arena> MemoryPlace<'arena> {
         projections: Vec<PlaceProjection<'arena>>,
         value_ty: TypeId,
     ) -> Result<Self, MemoryPlaceError> {
-        Self::derive_inner(symbols, types, root, projections, value_ty)
+        Self::derive_with_target(
+            symbols,
+            types,
+            root,
+            projections,
+            value_ty,
+            &TargetDataLayout::aarch64_unknown_linux_gnu(),
+        )
+    }
+
+    pub fn derive_with_target(
+        symbols: &SymbolTable,
+        types: &TypeInterner,
+        root: PlaceRoot<'arena>,
+        projections: Vec<PlaceProjection<'arena>>,
+        value_ty: TypeId,
+        target: &TargetDataLayout,
+    ) -> Result<Self, MemoryPlaceError> {
+        Self::derive_inner(symbols, (types, target), root, projections, value_ty)
     }
 
     /// Construct a place after checking all table-backed identities and the
@@ -426,7 +458,34 @@ impl<'arena> MemoryPlace<'arena> {
         addressable: bool,
         bit_field: bool,
     ) -> Result<Self, MemoryPlaceError> {
-        let derived = Self::derive_inner(symbols, types, root, projections, value_ty)?;
+        Self::try_new_with_target(
+            symbols,
+            types,
+            root,
+            projections,
+            value_ty,
+            access_qualifiers,
+            modifiable,
+            addressable,
+            bit_field,
+            &TargetDataLayout::aarch64_unknown_linux_gnu(),
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn try_new_with_target(
+        symbols: &SymbolTable,
+        types: &TypeInterner,
+        root: PlaceRoot<'arena>,
+        projections: Vec<PlaceProjection<'arena>>,
+        value_ty: TypeId,
+        access_qualifiers: Qualifiers,
+        modifiable: bool,
+        addressable: bool,
+        bit_field: bool,
+        target: &TargetDataLayout,
+    ) -> Result<Self, MemoryPlaceError> {
+        let derived = Self::derive_inner(symbols, (types, target), root, projections, value_ty)?;
         if access_qualifiers != derived.access_qualifiers {
             return Err(MemoryPlaceError::AccessQualifierMismatch {
                 expected: derived.access_qualifiers,
@@ -456,7 +515,7 @@ impl<'arena> MemoryPlace<'arena> {
 
     fn derive_inner(
         symbols: &SymbolTable,
-        types: &TypeInterner,
+        (types, target): (&TypeInterner, &TargetDataLayout),
         root: PlaceRoot<'arena>,
         projections: Vec<PlaceProjection<'arena>>,
         value_ty: TypeId,
@@ -491,7 +550,7 @@ impl<'arena> MemoryPlace<'arena> {
                 pointer,
                 pointer_type,
             } => {
-                if !pointer_expression_matches(symbols, types, pointer, *pointer_type) {
+                if !pointer_expression_matches(symbols, types, pointer, *pointer_type, target) {
                     return Err(MemoryPlaceError::PointerExpressionTypeMismatch);
                 }
                 if types.get(pointer_type.pointee()).is_none() {
@@ -705,7 +764,20 @@ impl<'arena> MemoryPlace<'arena> {
         symbols: &SymbolTable,
         types: &TypeInterner,
     ) -> Result<(), MemoryPlaceError> {
-        Self::try_new(
+        self.validate_against_with_target(
+            symbols,
+            types,
+            &TargetDataLayout::aarch64_unknown_linux_gnu(),
+        )
+    }
+
+    pub fn validate_against_with_target(
+        &self,
+        symbols: &SymbolTable,
+        types: &TypeInterner,
+        target: &TargetDataLayout,
+    ) -> Result<(), MemoryPlaceError> {
+        Self::try_new_with_target(
             symbols,
             types,
             self.root.clone(),
@@ -715,6 +787,7 @@ impl<'arena> MemoryPlace<'arena> {
             self.modifiable,
             self.addressable,
             self.bit_field,
+            target,
         )
         .map(|_| ())
     }
@@ -915,418 +988,10 @@ fn merge_qualifiers(left: Qualifiers, right: Qualifiers) -> Qualifiers {
     }
 }
 
-fn pointer_expression_type(
-    symbols: &SymbolTable,
-    types: &TypeInterner,
-    expression: &CHirExpr<'_>,
-) -> Result<PointerTypeDesc, MemoryPlaceError> {
-    if let CHirExpr::StringLit(literal, _) = expression {
-        let rank = literal.prefix.element_rank();
-        let ty = types
-            .find(&evocc_types::CanonicalType {
-                kind: TypeKind::Int(rank),
-                qualifiers: Qualifiers::default(),
-            })
-            .ok_or(MemoryPlaceError::PointerExpressionTypeMismatch)?;
-        return PointerTypeDesc::to_object(types, ty)
-            .ok_or(MemoryPlaceError::PointerExpressionTypeMismatch);
-    }
-    if let CHirExpr::StatementExpr {
-        value: Some(value),
-        facts,
-        ..
-    } = expression
-    {
-        // The producer records the post-lvalue-conversion result type, but a
-        // checked place must not trust that record by itself. Reconstruct the
-        // final expression's pointer descriptor, recursively for nested GNU
-        // statement expressions, and require the two authorities to agree.
-        if facts.category() != crate::ExprCategory::Value {
-            return Err(MemoryPlaceError::PointerExpressionTypeMismatch);
-        }
-        let derived = pointer_expression_type(symbols, types, value)?;
-        let claimed = PointerTypeDesc::from_canonical_pointer(types, facts.ty())?;
-        return (derived == claimed)
-            .then_some(claimed)
-            .ok_or(MemoryPlaceError::PointerExpressionTypeMismatch);
-    }
-    if let CHirExpr::Unary(UnaryOp::AddrOf, addressed, _) = expression {
-        let pointee = addressed_expression_type(symbols, types, addressed)?;
-        return PointerTypeDesc::to_object(types, pointee)
-            .ok_or(MemoryPlaceError::UnknownType(pointee));
-    }
-
-    match expression {
-        CHirExpr::Atomic(access) => {
-            PointerTypeDesc::from_canonical_pointer(types, access.facts.ty())
-        }
-        CHirExpr::Floating(access) => {
-            PointerTypeDesc::from_canonical_pointer(types, access.facts.ty())
-        }
-        CHirExpr::Vector(access) => {
-            PointerTypeDesc::from_canonical_pointer(types, access.facts.ty())
-        }
-        CHirExpr::Complex(_) => Err(MemoryPlaceError::PointerExpressionTypeMismatch),
-        CHirExpr::Ident {
-            symbol,
-            spelling,
-            facts,
-            ..
-        } => {
-            let declaration = symbols
-                .symbol(*symbol)
-                .map_err(|_| MemoryPlaceError::UnknownSymbol(*symbol))?;
-            let ty = declaration.ty();
-            let category_matches = match declaration.kind() {
-                SymbolKind::Function => facts.category() == crate::ExprCategory::FunctionDesignator,
-                SymbolKind::Object | SymbolKind::Parameter => {
-                    facts.category() == crate::ExprCategory::LValue
-                }
-                SymbolKind::Enumerator | SymbolKind::Typedef => false,
-            };
-            if declaration.spelling() != spelling
-                || !crate::type_at_use_matches_binding(types, facts.ty(), ty)
-                || !category_matches
-            {
-                return Err(MemoryPlaceError::PointerExpressionTypeMismatch);
-            }
-            converted_pointer_type(types, ty)
-        }
-        CHirExpr::MemoryRead { place, facts, .. } => {
-            if facts.ty() != place.value_ty() || facts.category() != crate::ExprCategory::Value {
-                return Err(MemoryPlaceError::PointerExpressionTypeMismatch);
-            }
-            converted_pointer_type(types, place.value_ty())
-        }
-        CHirExpr::Assign { place, facts, .. } | CHirExpr::Update { place, facts, .. } => {
-            if facts.ty() != place.ty() || facts.category() != crate::ExprCategory::Value {
-                return Err(MemoryPlaceError::PointerExpressionTypeMismatch);
-            }
-            converted_pointer_type(types, place.ty())
-        }
-        CHirExpr::MemoryAssign { place, facts, .. }
-        | CHirExpr::MemoryUpdate { place, facts, .. } => {
-            if facts.ty() != place.value_ty() || facts.category() != crate::ExprCategory::Value {
-                return Err(MemoryPlaceError::PointerExpressionTypeMismatch);
-            }
-            converted_pointer_type(types, place.value_ty())
-        }
-        CHirExpr::Cast(ty, _, _) | CHirExpr::CompoundLit(ty, _, _) => {
-            converted_pointer_type(types, *ty)
-        }
-        CHirExpr::Call(callee, _, _) => {
-            converted_pointer_type(types, call_expression_return_type(symbols, types, callee)?)
-        }
-        CHirExpr::Unary(UnaryOp::Deref, pointer, _) => converted_pointer_type(
-            types,
-            pointer_expression_type(symbols, types, pointer)?.pointee(),
-        ),
-        CHirExpr::EvaluateOnce(operand, _) => pointer_expression_type(symbols, types, operand),
-        CHirExpr::Binary(BinaryOp::Add, left, right, _) => {
-            pointer_arithmetic_result(symbols, types, left, right, false)
-        }
-        CHirExpr::Binary(BinaryOp::Sub, left, right, _) => {
-            pointer_arithmetic_result(symbols, types, left, right, true)
-        }
-        CHirExpr::Binary(BinaryOp::Comma, _, right, _) | CHirExpr::Comma(_, right, _) => {
-            pointer_expression_type(symbols, types, right)
-        }
-        CHirExpr::Ternary(_, when_true, when_false, _) => {
-            conditional_pointer_type(symbols, types, when_true, when_false)
-        }
-        CHirExpr::Elvis(operand, fallback, _) => {
-            conditional_pointer_type(symbols, types, operand, fallback)
-        }
-        CHirExpr::BuiltinVarArgs { facts, .. }
-        | CHirExpr::BuiltinVarArgPack { facts, .. }
-        | CHirExpr::BuiltinConstantP { facts, .. }
-        | CHirExpr::BuiltinObjectSize { facts, .. }
-        | CHirExpr::LabelAddress { facts, .. }
-        | CHirExpr::BuiltinReturnAddress { facts, .. }
-        | CHirExpr::BuiltinFrameAddress { facts, .. } => converted_pointer_type(types, facts.ty()),
-        CHirExpr::Member(base, name, _) => {
-            // Array members of record values decay too (C11 6.3.2.1p3).
-            // Reconstruct the base's record type, not an invented address-of
-            // the call/assignment/conditional that produced the value.
-            let base = record_expression_type(symbols, types, base)?;
-            let ty = record_member_path(types, base, name)
-                .and_then(|path| path.last().copied())
-                .map(FieldProjection::field_ty)
-                .ok_or(MemoryPlaceError::PointerExpressionTypeUnavailable)?;
-            converted_pointer_type(types, ty)
-        }
-        CHirExpr::PtrMember(_, _, _) | CHirExpr::Index(_, _, _) => converted_pointer_type(
-            types,
-            addressed_expression_type(symbols, types, expression)?,
-        ),
-        CHirExpr::Lit(_, _)
-        | CHirExpr::FloatLit(_, _)
-        | CHirExpr::CharLit(_, _)
-        | CHirExpr::StringLit(_, _)
-        | CHirExpr::Unary(_, _, _)
-        | CHirExpr::Binary(_, _, _, _)
-        | CHirExpr::BuiltinExpect(_, _, _)
-        | CHirExpr::CheckedArithmetic { .. }
-        | CHirExpr::BitBuiltin { .. }
-        | CHirExpr::BuiltinTrap { .. }
-        | CHirExpr::BuiltinUnreachable { .. }
-        | CHirExpr::SizeOf(_, _)
-        | CHirExpr::SizeOfExpr(_, _, _)
-        | CHirExpr::AlignOf(_, _)
-        | CHirExpr::StatementExpr { value: None, .. } => {
-            Err(MemoryPlaceError::PointerExpressionTypeUnavailable)
-        }
-        CHirExpr::StatementExpr { value: Some(_), .. } => {
-            unreachable!("statement expressions are validated before the general match")
-        }
-    }
-}
-
-fn pointer_expression_matches(
-    symbols: &SymbolTable,
-    types: &TypeInterner,
-    expression: &CHirExpr<'_>,
-    expected: PointerTypeDesc,
-) -> bool {
-    if pointer_expression_type(symbols, types, expression).is_ok_and(|actual| actual == expected) {
-        return true;
-    }
-    match expression {
-        CHirExpr::StringLit(literal, _) => string_literal_matches(types, literal.prefix, expected),
-        CHirExpr::Ternary(_, when_true, when_false, _) => {
-            conditional_arm_matches(symbols, types, when_true, expected)
-                && conditional_arm_matches(symbols, types, when_false, expected)
-        }
-        CHirExpr::Elvis(operand, fallback, _) => {
-            conditional_arm_matches(symbols, types, operand, expected)
-                && conditional_arm_matches(symbols, types, fallback, expected)
-        }
-        _ => false,
-    }
-}
-
-fn conditional_arm_matches(
-    symbols: &SymbolTable,
-    types: &TypeInterner,
-    expression: &CHirExpr<'_>,
-    expected: PointerTypeDesc,
-) -> bool {
-    is_null_pointer_constant(symbols, types, expression)
-        || pointer_expression_matches(symbols, types, expression, expected)
-}
-
-fn string_literal_matches(
-    types: &TypeInterner,
-    prefix: crate::StringPrefix,
-    expected: PointerTypeDesc,
-) -> bool {
-    let Some(pointee) = types.get(expected.pointee()) else {
-        return false;
-    };
-    let matches_literal = matches!(
-        (prefix, &pointee.kind),
-        (
-            crate::StringPrefix::None | crate::StringPrefix::U8,
-            TypeKind::Int(
-                evocc_types::IntRank::Char
-                    | evocc_types::IntRank::SignedPlainChar
-                    | evocc_types::IntRank::SChar
-                    | evocc_types::IntRank::UChar
-            )
-        )
-    ) || pointee.kind == TypeKind::Int(prefix.element_rank());
-    matches_literal && expected.pointee_qualifiers() == pointee.qualifiers
-}
-
-fn converted_pointer_type(
-    types: &TypeInterner,
-    ty: TypeId,
-) -> Result<PointerTypeDesc, MemoryPlaceError> {
-    match types.get(ty).map(|canonical| &canonical.kind) {
-        Some(TypeKind::Pointer(_)) => PointerTypeDesc::from_canonical_pointer(types, ty),
-        Some(TypeKind::Array { element, .. }) => PointerTypeDesc::to_object(types, *element)
-            .ok_or(MemoryPlaceError::UnknownType(*element)),
-        Some(TypeKind::Function { .. }) => {
-            PointerTypeDesc::to_object(types, ty).ok_or(MemoryPlaceError::UnknownType(ty))
-        }
-        Some(_) => Err(MemoryPlaceError::NotPointerType(ty)),
-        None => Err(MemoryPlaceError::UnknownType(ty)),
-    }
-}
-
-fn pointer_arithmetic_result(
-    symbols: &SymbolTable,
-    types: &TypeInterner,
-    left: &CHirExpr<'_>,
-    right: &CHirExpr<'_>,
-    subtraction: bool,
-) -> Result<PointerTypeDesc, MemoryPlaceError> {
-    let left_pointer = pointer_expression_type(symbols, types, left);
-    let right_pointer = pointer_expression_type(symbols, types, right);
-    match (left_pointer, right_pointer, subtraction) {
-        (Ok(pointer), Err(_), _) | (Err(_), Ok(pointer), false) => Ok(pointer),
-        _ => Err(MemoryPlaceError::PointerExpressionTypeUnavailable),
-    }
-}
-
-fn conditional_pointer_type(
-    symbols: &SymbolTable,
-    types: &TypeInterner,
-    left: &CHirExpr<'_>,
-    right: &CHirExpr<'_>,
-) -> Result<PointerTypeDesc, MemoryPlaceError> {
-    let left_pointer = pointer_expression_type(symbols, types, left);
-    let right_pointer = pointer_expression_type(symbols, types, right);
-    match (left_pointer, right_pointer) {
-        (Ok(_), Ok(right)) if is_null_pointer_constant(symbols, types, left) => Ok(right),
-        (Ok(left), Ok(_)) if is_null_pointer_constant(symbols, types, right) => Ok(left),
-        (Ok(left), Ok(right)) => PointerTypeDesc::composite(types, left, right),
-        (Ok(left), Err(_)) if is_null_pointer_constant(symbols, types, right) => Ok(left),
-        (Err(_), Ok(right)) if is_null_pointer_constant(symbols, types, left) => Ok(right),
-        _ => Err(MemoryPlaceError::PointerExpressionTypeUnavailable),
-    }
-}
-
-fn is_null_pointer_constant(
-    symbols: &SymbolTable,
-    types: &TypeInterner,
-    expression: &CHirExpr<'_>,
-) -> bool {
-    let target = TargetDataLayout::aarch64_unknown_linux_gnu();
-    if eval_integer_constant(expression, types, symbols, &target)
-        .is_some_and(|value| value.mathematical_value() == 0)
-    {
-        return true;
-    }
-    let CHirExpr::Cast(pointer, operand, _) = expression else {
-        return false;
-    };
-    let Some(TypeKind::Pointer(_)) = types.get(*pointer).map(|ty| &ty.kind) else {
-        return false;
-    };
-    eval_integer_constant(operand, types, symbols, &target)
-        .is_some_and(|value| value.mathematical_value() == 0)
-}
-
-pub(crate) fn record_expression_type(
-    symbols: &SymbolTable,
-    types: &TypeInterner,
-    expression: &CHirExpr<'_>,
-) -> Result<TypeId, MemoryPlaceError> {
-    let ty = match expression {
-        CHirExpr::Call(callee, ..) => call_expression_return_type(symbols, types, callee)?,
-        CHirExpr::MemoryAssign { place, facts, .. } => {
-            if facts.ty() != place.value_ty() || facts.category() != crate::ExprCategory::Value {
-                return Err(MemoryPlaceError::PointerExpressionTypeMismatch);
-            }
-            place.value_ty()
-        }
-        CHirExpr::Comma(_, right, _) | CHirExpr::EvaluateOnce(right, _) => {
-            record_expression_type(symbols, types, right)?
-        }
-        CHirExpr::Ternary(_, left, right, _) => {
-            let ty = record_expression_type(symbols, types, left)?;
-            let other = record_expression_type(symbols, types, right)?;
-            if !types.compatible_ignoring_top_qualifiers(ty, other) {
-                return Err(MemoryPlaceError::PointerExpressionTypeMismatch);
-            }
-            ty
-        }
-        CHirExpr::Member(base, name, _) => {
-            let base = record_expression_type(symbols, types, base)?;
-            record_member_path(types, base, name)
-                .and_then(|path| path.last().copied())
-                .map(FieldProjection::field_ty)
-                .ok_or(MemoryPlaceError::PointerExpressionTypeUnavailable)?
-        }
-        CHirExpr::StatementExpr {
-            value: Some(value),
-            facts,
-            ..
-        } => {
-            let ty = record_expression_type(symbols, types, value)?;
-            if !types.compatible_ignoring_top_qualifiers(ty, facts.ty()) {
-                return Err(MemoryPlaceError::PointerExpressionTypeMismatch);
-            }
-            ty
-        }
-        _ => addressed_expression_type(symbols, types, expression)?,
-    };
-    if matches!(
-        types.get(ty).map(|ty| &ty.kind),
-        Some(TypeKind::Struct(_) | TypeKind::Union(_))
-    ) {
-        Ok(ty)
-    } else {
-        Err(MemoryPlaceError::PointerExpressionTypeMismatch)
-    }
-}
-
-/// The bounded addressable forms needed to validate a pointer yielded by a
-/// statement expression. More complex projected places arrive as a checked
-/// `MemoryRead`; raw projection syntax remains fail-closed here.
-fn addressed_expression_type(
-    symbols: &SymbolTable,
-    types: &TypeInterner,
-    expression: &CHirExpr<'_>,
-) -> Result<TypeId, MemoryPlaceError> {
-    let ty = match expression {
-        CHirExpr::StringLit(literal, _) => literal
-            .array_type(types)
-            .ok_or(MemoryPlaceError::PointerExpressionTypeUnavailable)?,
-        CHirExpr::Ident { symbol, facts, .. } => {
-            let ty = symbols
-                .symbol(*symbol)
-                .map_err(|_| MemoryPlaceError::UnknownSymbol(*symbol))?
-                .ty();
-            if !crate::type_at_use_matches_binding(types, facts.ty(), ty) {
-                return Err(MemoryPlaceError::PointerExpressionTypeMismatch);
-            }
-            ty
-        }
-        CHirExpr::MemoryRead { place, .. } => place.value_ty(),
-        CHirExpr::CompoundLit(ty, _, _) => *ty,
-        CHirExpr::Unary(UnaryOp::Deref, pointer, _) => {
-            pointer_expression_type(symbols, types, pointer)?.pointee()
-        }
-        CHirExpr::Member(base, name, _) => {
-            let base = addressed_expression_type(symbols, types, base)?;
-            record_member_path(types, base, name)
-                .and_then(|path| path.last().copied())
-                .map(FieldProjection::field_ty)
-                .ok_or(MemoryPlaceError::PointerExpressionTypeUnavailable)?
-        }
-        CHirExpr::PtrMember(pointer, name, _) => {
-            let base = pointer_expression_type(symbols, types, pointer)?.pointee();
-            record_member_path(types, base, name)
-                .and_then(|path| path.last().copied())
-                .map(FieldProjection::field_ty)
-                .ok_or(MemoryPlaceError::PointerExpressionTypeUnavailable)?
-        }
-        CHirExpr::Index(left, right, _) => {
-            let base = pointer_expression_type(symbols, types, left)
-                .or_else(|_| pointer_expression_type(symbols, types, right))?;
-            base.pointee()
-        }
-        _ => return Err(MemoryPlaceError::PointerExpressionTypeUnavailable),
-    };
-    types
-        .get(ty)
-        .map(|_| ty)
-        .ok_or(MemoryPlaceError::UnknownType(ty))
-}
-
-fn call_expression_return_type(
-    symbols: &SymbolTable,
-    types: &TypeInterner,
-    callee: &CHirExpr<'_>,
-) -> Result<TypeId, MemoryPlaceError> {
-    let function_ty = pointer_expression_type(symbols, types, callee)?.pointee();
-    match types.get(function_ty).map(|ty| &ty.kind) {
-        Some(TypeKind::Function { return_type, .. }) => Ok(*return_type),
-        _ => Err(MemoryPlaceError::PointerExpressionTypeUnavailable),
-    }
-}
+mod expressions;
+pub use expressions::expression_is_void;
+pub(crate) use expressions::record_expression_type;
+use expressions::*;
 
 fn is_object_or_function_type(kind: &TypeKind) -> bool {
     !matches!(kind, TypeKind::Void)

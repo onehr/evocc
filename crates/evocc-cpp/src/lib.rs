@@ -3,6 +3,7 @@
 //! C preprocessor: macro expansion, directives, token stream
 
 pub mod availability;
+mod profile;
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 
@@ -14,7 +15,10 @@ const AARCH64_UNKNOWN_LINUX_GNU: &str = "aarch64-unknown-linux-gnu";
 const AARCH64_UNKNOWN_LINUX_GNU_PREDEFINED: &str =
     include_str!("../predefined/aarch64-unknown-linux-gnu.h");
 const HAS_ATTRIBUTE_ANSWERS: &str = include_str!("../predefined/has-attribute.tsv");
-const HAS_BUILTIN_NAMES: &str = include_str!("../predefined/has-builtin.txt");
+const AARCH64_LINUX_BUILTINS: &str = include_str!("../predefined/has-builtin.txt");
+const AARCH64_DARWIN_PREDEFINED: &str = include_str!("../predefined/aarch64-apple-darwin.h");
+const AARCH64_DARWIN_BUILTINS: &str =
+    include_str!("../predefined/aarch64-apple-darwin-has-builtin.txt");
 const FEATURE_QUERY_NAMES: [&str; 5] = [
     "__has_attribute",
     "__has_builtin",
@@ -799,63 +803,6 @@ impl Preprocessor {
     pub fn new() -> Self {
         Self::for_target(AARCH64_UNKNOWN_LINUX_GNU)
             .expect("the built-in target profile must be valid")
-    }
-
-    pub fn for_target(target: &str) -> Result<Self, String> {
-        let profile = match target {
-            AARCH64_UNKNOWN_LINUX_GNU => AARCH64_UNKNOWN_LINUX_GNU_PREDEFINED,
-            _ => return Err(format!("unsupported preprocessor target profile: {target}")),
-        };
-        let mut preprocessor = Self {
-            macros: MacroMap::new(),
-            macro_stacks: HashMap::new(),
-            include_guard_seen: false,
-            pragma_once_files: HashSet::new(),
-            include_paths: Vec::new(),
-            system_include_paths: HashSet::new(),
-            current_include_path: None,
-            current_system_header: false,
-            includers: Vec::new(),
-            include_depth: 0,
-            forced_includes: Vec::new(),
-            macro_prefix_maps: Vec::new(),
-            cond_stack: Vec::new(),
-            errors: Vec::new(),
-            warnings: Vec::new(),
-            standard_includes: true,
-            signed_char: false,
-            wide_character_bits: 32,
-            wide_character_unsigned: true,
-            wide_character_refuses_out_of_range_hex: false,
-            target_follows_apple_clang: false,
-            conditional_depth: 0,
-            source_ids: HashMap::new(),
-            source_paths: HashMap::new(),
-            system_source_files: HashSet::new(),
-            user_source_files: HashSet::new(),
-            source_contents: HashMap::new(),
-            line_controls: HashMap::new(),
-            reserved_file_ids: HashSet::new(),
-            next_file_id: 1,
-            counter: 0,
-            builtin_feature_queries: HashSet::new(),
-            target_builtins: HashSet::new(),
-            target_attributes: HashMap::new(),
-            target_features: HashSet::new(),
-            availability_target: None,
-            poisoned_identifiers: HashSet::new(),
-            ignored_pragma_count: 0,
-            ignored_pragma_counts: BTreeMap::new(),
-            empty_macro_pop_count: 0,
-            current_file: String::new(),
-        };
-        preprocessor.install_predefined_profile(profile.as_bytes())?;
-        preprocessor.install_feature_query_macros();
-        preprocessor
-            .macros
-            .define("__DATE__".into(), vec![make_date_token()], Vec::new());
-        preprocessor.set_predefined_time("00:00:00");
-        Ok(preprocessor)
     }
 
     /// Make `__has_builtin` answer 1 for `names`, which the target profile
@@ -2281,12 +2228,8 @@ impl Preprocessor {
                             .copied()
                             .unwrap_or_else(|| attribute_answer(name))
                     }),
-                "__has_builtin" => one_query_token(arguments, source).map(|name| {
-                    i64::from(
-                        HAS_BUILTIN_NAMES.lines().any(|known| known == name)
-                            || self.target_builtins.contains(name),
-                    )
-                }),
+                "__has_builtin" => one_query_token(arguments, source)
+                    .map(|name| i64::from(self.target_builtins.contains(name))),
                 "__has_feature" => one_query_token(arguments, source)
                     .map(normalize_attribute_name)
                     .map(|name| i64::from(self.target_features.contains(name))),

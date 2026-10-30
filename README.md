@@ -377,6 +377,7 @@ EvoCC 0.1.0 is experimental.
 
 ## Learn more
 
+- [Architecture](ARCHITECTURE.md): the pipeline, crate interfaces and trust boundaries.
 - [The EvoCC Book](book/src/SUMMARY.md): installation, a first program, undefined behavior, proofs
   and agents.
 - [The paper](docs/paper.md): how agents built EvoCC, its design and its evaluation.

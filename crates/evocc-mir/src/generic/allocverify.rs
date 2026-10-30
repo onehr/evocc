@@ -259,7 +259,7 @@ where
                 format!("%v{value} is live when the function is entered and was never assigned"),
             ));
         };
-        if allocated.indirect_result && number == target.abi().indirect_result {
+        if allocated.indirect_result && Some(number) == target.abi().indirect_result {
             if entry.insert(number, Some(*value)).is_some() {
                 return Err(refuse(
                     0,
@@ -270,12 +270,10 @@ where
             }
             continue;
         }
-        if !target
-            .abi()
-            .argument_banks
-            .iter()
-            .any(|bank| bank.contains(number) && number - bank.first < limit.min(bank.count))
-        {
+        if !target.abi().argument_banks.iter().any(|bank| {
+            bank.position(number)
+                .is_some_and(|index| index < usize::from(limit))
+        }) {
             return Err(refuse(
                 0,
                 format!(

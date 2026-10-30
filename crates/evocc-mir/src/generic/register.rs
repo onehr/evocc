@@ -42,6 +42,40 @@ impl RegisterBank {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RegisterList(pub &'static [u8]);
+
+impl RegisterList {
+    #[must_use]
+    pub const fn count(self) -> usize {
+        self.0.len()
+    }
+
+    #[must_use]
+    pub fn nth(self, index: usize) -> Option<u8> {
+        self.0.get(index).copied()
+    }
+
+    #[must_use]
+    pub fn position(self, number: u8) -> Option<usize> {
+        self.0.iter().position(|candidate| *candidate == number)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct NamedRegisterView {
+    pub bank: RegisterBank,
+    pub bits: u16,
+    pub names: &'static [&'static str],
+}
+
+impl NamedRegisterView {
+    #[must_use]
+    pub fn spell(self, number: u8) -> String {
+        self.names[usize::from(number - self.bank.first)].to_owned()
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RegisterView {
     pub bank: RegisterBank,
     pub bits: u16,

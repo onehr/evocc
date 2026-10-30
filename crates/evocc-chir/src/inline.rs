@@ -14,6 +14,7 @@ mod literal_queries;
 mod memory_values;
 mod object_size;
 mod ranges;
+mod target;
 
 thread_local! {
     /// GCC's `-fno-inline`: substitute only `always_inline` callees.
@@ -1483,8 +1484,13 @@ fn pure_loop_result(
             }
         },
         &mut |e| {
-            integer_only &=
-                crate::constant::integer_expression_type(e, unit.types(), unit.symbols()).is_some();
+            integer_only &= crate::constant::integer_expression_type_with_target(
+                e,
+                unit.types(),
+                unit.symbols(),
+                target,
+            )
+            .is_some();
         },
     );
     if !uses.has_loops
@@ -1971,11 +1977,7 @@ impl<'a> Substitution<'a, '_> {
         &mut self,
         expression: &'a CHirExpr<'a>,
     ) -> Option<&'a CHirExpr<'a>> {
-        let integer = crate::constant::integer_expression_type(
-            expression,
-            &self.unit.types,
-            &self.unit.symbols,
-        )?;
+        let integer = self.integer_expression_type(expression)?;
         let kind = crate::integer::rank_for_integer_type(integer)
             .map(TypeKind::Int)
             .unwrap_or(TypeKind::GnuInt128(if integer.is_signed() {
@@ -2157,11 +2159,7 @@ impl<'a> Substitution<'a, '_> {
                 if conditions.is_none() && !initialized {
                     return None;
                 }
-                let ty = crate::constant::integer_expression_type(
-                    expression,
-                    &self.unit.types,
-                    &self.unit.symbols,
-                )?;
+                let ty = self.integer_expression_type(expression)?;
                 let mut result = Vec::new();
                 if conditions
                     .as_ref()
@@ -2225,12 +2223,7 @@ impl<'a> Substitution<'a, '_> {
                     &self.unit.symbols,
                     self.target,
                 )?;
-                let pointer = PointerTypeDesc::from_expression(
-                    &self.unit.symbols,
-                    &self.unit.types,
-                    expression,
-                )
-                .ok()?;
+                let pointer = self.pointer_descriptor(expression).ok()?;
                 let mut pointee = self.unit.types.get(pointer.pointee())?.clone();
                 pointee.qualifiers = pointer.pointee_qualifiers();
                 let pointee = self.unit.types.intern(pointee);
@@ -2280,14 +2273,9 @@ impl<'a> Substitution<'a, '_> {
                     });
                 }
                 CHirExpr::MemoryRead {
-                    place: MemoryPlace::derive(
-                        &self.unit.symbols,
-                        &self.unit.types,
-                        root,
-                        projections,
-                        place.value_ty(),
-                    )
-                    .ok()?,
+                    place: self
+                        .derive_memory_place(root, projections, place.value_ty())
+                        .ok()?,
                     facts: *facts,
                     target_span: *target_span,
                     span,
@@ -2458,14 +2446,8 @@ impl<'a> Substitution<'a, '_> {
             });
         }
         let value_ty = self.substituted_type(p.value_ty(), c);
-        MemoryPlace::derive(
-            &self.unit.symbols,
-            &self.unit.types,
-            root,
-            projections,
-            value_ty,
-        )
-        .map_err(|e| self.error(span, e))
+        self.derive_memory_place(root, projections, value_ty)
+            .map_err(|e| self.error(span, e))
     }
     fn initializer(
         &mut self,
@@ -2891,9 +2873,9 @@ impl<'a> Substitution<'a, '_> {
             let root = self.object_root(*symbol, c, e.span())?;
             if matches!(root, PlaceRoot::PointerExpression { .. }) {
                 let ty = self.substituted_type(facts.ty(), c);
-                let place =
-                    MemoryPlace::derive(&self.unit.symbols, &self.unit.types, root, Vec::new(), ty)
-                        .map_err(|err| self.error(e.span(), err))?;
+                let place = self
+                    .derive_memory_place(root, Vec::new(), ty)
+                    .map_err(|err| self.error(e.span(), err))?;
                 let value = self.alloc(CHirExpr::MemoryRead {
                     place,
                     facts: ExprFacts::value(ty),
@@ -3021,22 +3003,12 @@ impl<'a> Substitution<'a, '_> {
                 };
                 *b = self.expr(b, c)?;
                 if self.track_extents && c.expand_calls {
-                    if crate::constant::integer_expression_type(
-                        b,
-                        &self.unit.types,
-                        &self.unit.symbols,
-                    )
-                    .is_some()
+                    if self.integer_expression_type(b).is_some()
                         && self.pointer_bounds(a, c, 0).is_some()
                     {
                         *b = self.capture_extent_value(b, c.scope)?;
                     } else if *op == BinaryOp::Add
-                        && crate::constant::integer_expression_type(
-                            a,
-                            &self.unit.types,
-                            &self.unit.symbols,
-                        )
-                        .is_some()
+                        && self.integer_expression_type(a).is_some()
                         && self.pointer_bounds(b, c, 0).is_some()
                     {
                         *a = self.capture_extent_value(a, c.scope)?;
@@ -3689,14 +3661,13 @@ impl<'a> Substitution<'a, '_> {
                                 span: *span,
                             })
                         } else {
-                            let place = MemoryPlace::derive(
-                                &self.unit.symbols,
-                                &self.unit.types,
-                                PlaceRoot::Object { symbol: result },
-                                Vec::new(),
-                                ty,
-                            )
-                            .map_err(|err| self.error(*span, err))?;
+                            let place = self
+                                .derive_memory_place(
+                                    PlaceRoot::Object { symbol: result },
+                                    Vec::new(),
+                                    ty,
+                                )
+                                .map_err(|err| self.error(*span, err))?;
                             self.alloc(CHirExpr::MemoryAssign {
                                 op: AssignmentOp::Simple,
                                 place,

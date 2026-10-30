@@ -4,7 +4,7 @@
 //! stack-argument rules stay exactly as currently applied.
 
 use evocc_mir::generic::abi::AbiSpec;
-use evocc_mir::generic::register::RegisterBank;
+use evocc_mir::generic::register::RegisterList;
 use evocc_mir::isa::aarch64::abi::{
     self, Aarch64Abi, ProfileFeature, VaListLayout, DARWIN, KERNEL, LINUX,
 };
@@ -61,16 +61,13 @@ fn frozen(name: &'static str, stack_arguments: bool, pair_rounding: bool, abi: &
     let facts = abi.facts();
     assert_eq!(facts.name, name);
     let banks = [
-        RegisterBank { first: 0, count: 8 },
-        RegisterBank {
-            first: 64,
-            count: 8,
-        },
+        RegisterList(&[0, 1, 2, 3, 4, 5, 6, 7]),
+        RegisterList(&[64, 65, 66, 67, 68, 69, 70, 71]),
     ];
     assert_eq!(facts.argument_banks, banks);
     assert_eq!(facts.result_banks, banks);
-    assert_eq!(facts.indirect_result, 8);
-    assert_eq!(facts.result_overflow, 8);
+    assert_eq!(facts.indirect_result, Some(8));
+    assert_eq!(facts.result_overflow, Some(8));
     assert_eq!(facts.stack_slot_bytes, 8);
     assert_eq!(facts.stack_alignment_bytes, 16);
     assert_eq!(facts.stack_arguments, stack_arguments);

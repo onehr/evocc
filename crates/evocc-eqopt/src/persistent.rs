@@ -10,7 +10,7 @@ use evocc_evoir::{
     inst_results, render_target_module, validate_module, Inst, Module, Value, IMPLICIT_TARGET,
 };
 use evocc_proof::{parse_evp1, render_evp1, sha256, sha256_hex};
-use evocc_types::EvoIRType;
+use evocc_types::{EvoIRType, TargetDataLayout, TargetPlatform};
 
 use crate::evp1::{
     optimize_scalar_module_with_evp1_transaction_for_target, policy_for, CertifiedScalarEqOutcome,
@@ -24,6 +24,7 @@ use crate::{ExtractionPolicy, ScalarEqBudget, ScalarEqOutcome};
 const FIRST_PERSISTENT_OP: OpId = 20_000;
 const FIRST_INSTANCE_RULE: u32 = 100_000;
 const REVIEWED_REGISTRY: &str = "p0.scalar.v1";
+#[cfg(test)]
 const FROZEN_LAYOUT_IDENTITY: [u8; 32] = [
     0x94, 0x60, 0xb0, 0x84, 0xc6, 0xb1, 0x10, 0x93, 0x53, 0x28, 0xce, 0xd6, 0xac, 0xde, 0xd2, 0xc8,
     0x69, 0xd6, 0x71, 0x8a, 0x6f, 0xdb, 0xfa, 0x69, 0x51, 0x6b, 0x98, 0x9c, 0xc1, 0xd5, 0x97, 0x98,
@@ -105,45 +106,9 @@ pub struct EqualityState {
     history: Vec<HistoryRecord>,
 }
 
+mod target;
+
 impl EqualityState {
-    /// Bind a fresh state to the first canonical module and frozen target
-    /// layout. No e-node is added and revision zero is observable.
-    pub fn for_module(module: &Module) -> Result<Self, String> {
-        Self::for_target_module(module, IMPLICIT_TARGET)
-    }
-
-    /// Bind the complete text profile, not the host that runs the optimizer.
-    /// Both admitted layouts use the same total integer rules; the explicit
-    /// target remains part of every module and certificate identity.
-    pub fn for_target_module(module: &Module, target: &str) -> Result<Self, String> {
-        if !matches!(target, IMPLICIT_TARGET | "aarch64-apple-darwin") {
-            return Err(format!("unsupported rewrite target `{target}`"));
-        }
-        validate_module(module)?;
-        let canonical_input = render_target_module(module, target);
-        let translation_unit_identity = sha256(canonical_input.as_bytes());
-        Ok(Self {
-            target: target.to_owned(),
-            translation_unit_identity,
-            current_module_identity: translation_unit_identity,
-            target_layout_identity: if target == IMPLICIT_TARGET {
-                FROZEN_LAYOUT_IDENTITY
-            } else {
-                sha256(b"aarch64-apple-darwin/evoir-layout-v1-long-double-binary64\n")
-            },
-            canonical_input,
-            revision: 0,
-            ingested: false,
-            graph: Egraph::new(),
-            values: HashMap::new(),
-            leaves: HashMap::new(),
-            operators: HashMap::new(),
-            next_op: FIRST_PERSISTENT_OP,
-            next_rule: FIRST_INSTANCE_RULE,
-            history: Vec::new(),
-        })
-    }
-
     #[must_use]
     pub const fn revision(&self) -> u64 {
         self.revision

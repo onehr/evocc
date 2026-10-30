@@ -5,22 +5,22 @@
 
 use super::abi::{Aarch64Abi, Profile, VaListLayout};
 use crate::generic::abi::AbiFacts;
-use crate::generic::register::RegisterBank;
+use crate::generic::register::RegisterList;
 
 pub const DARWIN_DIGEST: &str = "e5cf5e15490e774a02d3ae3b89ba217008ae902497a2d8471a74ada5b7cc2b7c";
 pub const LINUX_DIGEST: &str = "eeee405a280b3735abdfad5c9076d94170677230d097c801d616a88a4b7bf526";
 pub const KERNEL_DIGEST: &str = "d61471addc623b6056a5e5d2c392e1e1159f5511bf5bab749a04f3ccc164f5df";
 
 #[rustfmt::skip]
-const DARWIN_ARGUMENT_BANKS: [RegisterBank; 2] = [
-    RegisterBank { first: 0, count: 8 },
-    RegisterBank { first: 64, count: 8 },
+const DARWIN_ARGUMENT_BANKS: [RegisterList; 2] = [
+    RegisterList(&[0, 1, 2, 3, 4, 5, 6, 7]),
+    RegisterList(&[64, 65, 66, 67, 68, 69, 70, 71]),
 ];
 
 #[rustfmt::skip]
-const DARWIN_RESULT_BANKS: [RegisterBank; 2] = [
-    RegisterBank { first: 0, count: 8 },
-    RegisterBank { first: 64, count: 8 },
+const DARWIN_RESULT_BANKS: [RegisterList; 2] = [
+    RegisterList(&[0, 1, 2, 3, 4, 5, 6, 7]),
+    RegisterList(&[64, 65, 66, 67, 68, 69, 70, 71]),
 ];
 
 pub(super) const DARWIN_CALLEE_SAVED: [u8; 10] = [19, 20, 21, 22, 23, 24, 25, 26, 27, 28];
@@ -36,8 +36,8 @@ pub const DARWIN: Aarch64Abi = Aarch64Abi {
         name: "darwin",
         argument_banks: &DARWIN_ARGUMENT_BANKS,
         result_banks: &DARWIN_RESULT_BANKS,
-        indirect_result: 8,
-        result_overflow: 8,
+        indirect_result: Some(8),
+        result_overflow: Some(8),
         stack_slot_bytes: 8,
         stack_alignment_bytes: 16,
         stack_arguments: false,
@@ -62,15 +62,15 @@ pub const DARWIN: Aarch64Abi = Aarch64Abi {
 };
 
 #[rustfmt::skip]
-const LINUX_ARGUMENT_BANKS: [RegisterBank; 2] = [
-    RegisterBank { first: 0, count: 8 },
-    RegisterBank { first: 64, count: 8 },
+const LINUX_ARGUMENT_BANKS: [RegisterList; 2] = [
+    RegisterList(&[0, 1, 2, 3, 4, 5, 6, 7]),
+    RegisterList(&[64, 65, 66, 67, 68, 69, 70, 71]),
 ];
 
 #[rustfmt::skip]
-const LINUX_RESULT_BANKS: [RegisterBank; 2] = [
-    RegisterBank { first: 0, count: 8 },
-    RegisterBank { first: 64, count: 8 },
+const LINUX_RESULT_BANKS: [RegisterList; 2] = [
+    RegisterList(&[0, 1, 2, 3, 4, 5, 6, 7]),
+    RegisterList(&[64, 65, 66, 67, 68, 69, 70, 71]),
 ];
 
 pub(super) const LINUX_CALLEE_SAVED: [u8; 10] = [19, 20, 21, 22, 23, 24, 25, 26, 27, 28];
@@ -86,8 +86,8 @@ pub const LINUX: Aarch64Abi = Aarch64Abi {
         name: "linux",
         argument_banks: &LINUX_ARGUMENT_BANKS,
         result_banks: &LINUX_RESULT_BANKS,
-        indirect_result: 8,
-        result_overflow: 8,
+        indirect_result: Some(8),
+        result_overflow: Some(8),
         stack_slot_bytes: 8,
         stack_alignment_bytes: 16,
         stack_arguments: true,

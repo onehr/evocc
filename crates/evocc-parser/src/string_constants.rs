@@ -161,9 +161,14 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 };
                 // A cast outside this addition cannot change its stride.
                 // In particular, &array + 1 is not its second character.
-                let pointee = PointerTypeDesc::from_expression(&self.symbols, &self.types, pointer)
-                    .ok()?
-                    .pointee();
+                let pointee = PointerTypeDesc::from_expression_with_target(
+                    &self.symbols,
+                    &self.types,
+                    pointer,
+                    &self.target_layout,
+                )
+                .ok()?
+                .pointee();
                 if !self.string_byte_type(pointee) {
                     return None;
                 }

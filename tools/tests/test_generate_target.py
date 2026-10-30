@@ -545,5 +545,106 @@ class AbiDescriptionTest(unittest.TestCase):
             self.decoded_abi(mutated)
 
 
+class TargetDirectoryTest(unittest.TestCase):
+    def retarget(self, source, target):
+        return replace_one(source, b"target aarch64\n", f"target {target}\n".encode())
+
+    def test_named_views_and_optional_roles_are_target_data(self):
+        source = self.retarget(DESCRIPTION.read_bytes(), "example")
+        names = " ".join("named"+str(index) for index in range(31))
+        source = replace_one(source, b"view gpr64 gpr 64 x\n",
+                             ("view-names gpr64 gpr 64 "+names+"\n").encode())
+        source = replace_one(source, b"role LINK_REGISTER gpr 30\n", b"role LINK_REGISTER none\n")
+        source = replace_one(source, b"role PLATFORM_REGISTER gpr 18\n", b"role PLATFORM_REGISTER none\n")
+        description = gen.parse_description(source, "example")
+        gen.validate(description)
+        text = gen.render_mir(description)
+        self.assertIn("NamedRegisterView", text)
+        self.assertIn('SCRATCH_GPR64: &str = "named16";', text)
+        self.assertIn('LINK_REGISTER: Option<u8> = None;', text)
+        self.assertIn("targets/example/regfile", text)
+        with self.assertRaisesRegex(gen.TargetDescriptionError, "target"):
+            gen.parse_description(source)
+
+    def test_named_views_reject_missing_or_repeated_spellings(self):
+        for names in [" ".join("r"+str(index) for index in range(30)), " ".join(["same"]*31)]:
+            source = replace_one(DESCRIPTION.read_bytes(), b"view gpr64 gpr 64 x\n",
+                                 ("view-names gpr64 gpr 64 "+names+"\n").encode())
+            with self.assertRaisesRegex(gen.TargetDescriptionError, "named register view"):
+                gen.validate(gen.parse_description(source))
+
+    def test_abi_lists_preserve_order_and_allow_absent_roles(self):
+        regfile = gen.parse_description(DESCRIPTION.read_bytes())
+        source = (ROOT/"targets/aarch64/abi-linux").read_bytes()
+        for old, new in [
+            (b"arguments gpr 8\n", b"arguments gpr list 7 1 9 4\n"),
+            (b"results gpr 8\n", b"results gpr list 4 1\n"),
+            (b"indirect-result gpr 8\n", b"indirect-result none\n"),
+            (b"result-overflow gpr 8\n", b"result-overflow none\n"),
+        ]:
+            source = replace_one(source, old, new)
+        abi = gen.parse_abi(source)
+        values = gen.abi_values(abi, regfile)
+        self.assertEqual(values["argument_banks"][0], (7, 1, 9, 4))
+        self.assertEqual(values["result_banks"][0], (4, 1))
+        self.assertIsNone(values["indirect_result"])
+        self.assertIsNone(values["result_overflow"])
+        text = gen.render_abi(regfile, [abi], [])
+        self.assertIn("RegisterList(&[7, 1, 9, 4])", text)
+        self.assertIn("indirect_result: None", text)
+
+    def test_abi_lists_reject_duplicates_reserved_and_foreign_registers(self):
+        regfile = gen.parse_description(DESCRIPTION.read_bytes())
+        source = (ROOT/"targets/aarch64/abi-linux").read_bytes()
+        for members, reason in [("7 7", "duplicate"), ("16", "reserved"), ("64", "bank")]:
+            mutated = replace_one(source, b"arguments gpr 8\n",
+                                  ("arguments gpr list "+members+"\n").encode())
+            with self.assertRaisesRegex(gen.TargetDescriptionError, reason):
+                gen.validate_abi(gen.parse_abi(mutated), regfile)
+
+    def target_tree(self, root, target):
+        directory = root/"targets"/target
+        directory.mkdir(parents=True)
+        source = DESCRIPTION.read_bytes()
+        if target != "aarch64":
+            source = self.retarget(source, target)
+        (directory/"regfile").write_bytes(source)
+        digest = gen.parse_description(source, target).digest
+        abi = (ROOT/"targets/aarch64/abi-linux").read_bytes()
+        abi = replace_one(abi, ("regfile "+gen.parse_description(DESCRIPTION.read_bytes()).digest+"\n").encode(),
+                          ("regfile "+digest+"\n").encode())
+        if target != "aarch64":
+            abi = self.retarget(abi, target)
+        (directory/"abi-linux").write_bytes(abi)
+        return directory
+
+    def test_output_paths_follow_the_directory_and_check_visits_all_targets(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root/"tools").mkdir()
+            for name in ["generate-target.py", "target_description.py"]:
+                (root/"tools"/name).write_bytes((ROOT/"tools"/name).read_bytes())
+            script = root/"tools/generate-target.py"
+            directories = [self.target_tree(root, target) for target in ["aarch64", "example"]]
+            for directory in directories:
+                result = subprocess.run([sys.executable, script, "--target-dir", directory],
+                                        capture_output=True, text=True, timeout=30)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                generated = root/"crates/evocc-mir/src/isa"/directory.name/"abi_tables.rs"
+                self.assertTrue(generated.is_file())
+                if directory.name != "aarch64":
+                    self.assertNotIn("Aarch64Abi", generated.read_text())
+            result = subprocess.run([sys.executable, script, "--check"], capture_output=True, text=True, timeout=30)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            generated = root/"crates/evocc-mir/src/isa/example/regfile.rs"
+            generated.write_bytes(generated.read_bytes()+b"\n")
+            result = subprocess.run([sys.executable, script, "--check"], capture_output=True, text=True, timeout=30)
+            self.assertEqual(result.returncode, 2)
+            self.assertIn(str(generated), result.stderr)
+            result = subprocess.run([sys.executable, script, "--target-dir", directories[0], "--check"],
+                                    capture_output=True, text=True, timeout=30)
+            self.assertEqual(result.returncode, 0, result.stderr)
+
+
 if __name__ == "__main__":
     unittest.main()

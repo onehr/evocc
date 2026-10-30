@@ -72,6 +72,7 @@ fn fixed_helpers_and_ordinary_calls_do_not_erase_the_environment_boundary() {
             &arguments,
             MirLimits::new(1000),
             env,
+            &evocc_types::TargetDataLayout::aarch64_unknown_linux_gnu(),
         )
         .unwrap();
         assert_eq!(actual.results[0], value(0x3fff0000000000000000000000000001));
@@ -82,7 +83,8 @@ fn fixed_helpers_and_ordinary_calls_do_not_erase_the_environment_boundary() {
         "strict_add",
         &arguments,
         MirLimits::new(1000),
-        env
+        env,
+        &evocc_types::TargetDataLayout::aarch64_unknown_linux_gnu(),
     )
     .is_err());
     let env = FpEnvironment {
@@ -95,6 +97,7 @@ fn fixed_helpers_and_ordinary_calls_do_not_erase_the_environment_boundary() {
         &arguments,
         MirLimits::new(1000),
         env,
+        &evocc_types::TargetDataLayout::aarch64_unknown_linux_gnu(),
     )
     .unwrap();
     assert_eq!(actual.results[0], arguments[0]);
@@ -167,6 +170,7 @@ fn quad_conversion_domain_is_pure_and_raw_strict_conversion_is_total() {
                         &[value(bits)],
                         MirLimits::new(1000),
                         env,
+                        &evocc_types::TargetDataLayout::aarch64_unknown_linux_gnu(),
                     )
                     .unwrap();
                     assert_eq!(
@@ -181,6 +185,7 @@ fn quad_conversion_domain_is_pure_and_raw_strict_conversion_is_total() {
                         &[value(bits)],
                         MirLimits::new(1000),
                         env,
+                        &evocc_types::TargetDataLayout::aarch64_unknown_linux_gnu(),
                     )
                     .unwrap();
                     let raw = expected.value.unwrap_or(0) & (u128::MAX >> (128 - width));

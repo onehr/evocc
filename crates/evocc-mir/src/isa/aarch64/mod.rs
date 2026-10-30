@@ -10,5 +10,6 @@ pub mod encodings;
 pub mod extensions;
 pub mod insts;
 pub mod local;
+pub(crate) mod lower;
 pub mod patterns;
 pub mod regfile;

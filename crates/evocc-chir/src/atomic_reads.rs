@@ -246,10 +246,7 @@ impl Walk<'_> {
             CHirExpr::Update { .. } => {}
             CHirExpr::Unary(UnaryOp::AddrOf, operand, _) => self.expression(operand, false),
             CHirExpr::Unary(UnaryOp::Deref, operand, span) => {
-                if read
-                    && PointerTypeDesc::from_expression(self.symbols, self.types, operand)
-                        .is_ok_and(|pointer| self.unadmitted_atomic_object(pointer.pointee()))
-                {
+                if read && self.points_to_unadmitted_atomic(operand) {
                     self.read(*span);
                 }
                 self.expression(operand, true);
@@ -366,5 +363,17 @@ impl Walk<'_> {
             | CHirExpr::BuiltinFrameAddress { .. }
             | CHirExpr::BuiltinVarArgPack { .. } => {}
         }
+    }
+}
+
+impl Walk<'_> {
+    fn points_to_unadmitted_atomic(&self, expression: &CHirExpr<'_>) -> bool {
+        PointerTypeDesc::from_expression_with_target(
+            self.symbols,
+            self.types,
+            expression,
+            self.target,
+        )
+        .is_ok_and(|pointer| self.unadmitted_atomic_object(pointer.pointee()))
     }
 }

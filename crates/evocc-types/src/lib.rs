@@ -20,6 +20,8 @@
 use std::{collections::HashMap, sync::Arc};
 
 pub mod floating;
+mod target;
+pub use target::{Isa, ObjectFormat, OperatingSystem, TargetPlatform};
 
 /// The requested ELF TLS addressing contract. It is independent of C linkage.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -1964,16 +1966,14 @@ impl std::fmt::Display for LayoutError {
 
 impl std::error::Error for LayoutError {}
 
-/// GNU AArch64 target layout over the canonical [`TypeInterner`] universe.
-///
-/// The constructor names the target explicitly so a future x86-64 or Apple
-/// AArch64 implementation cannot silently inherit this ABI's decisions.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct TargetDataLayout {
+    platform: TargetPlatform,
     short_wchar: bool,
     int_wchar: bool,
     signed_char: bool,
     pointer_va_list: bool,
+    anonymous_on_stack: bool,
     binary64_long_double: bool,
     narrow_call_extension: bool,
     sixteen_byte_lock_free: bool,
@@ -1990,10 +1990,12 @@ impl TargetDataLayout {
     #[must_use]
     pub const fn aarch64_unknown_linux_gnu() -> Self {
         Self {
+            platform: TargetPlatform::Aarch64UnknownLinuxGnu,
             short_wchar: false,
             int_wchar: false,
             signed_char: false,
             pointer_va_list: false,
+            anonymous_on_stack: false,
             binary64_long_double: false,
             narrow_call_extension: false,
             sixteen_byte_lock_free: false,
@@ -2007,17 +2009,15 @@ impl TargetDataLayout {
         }
     }
 
-    /// Apple arm64 layout. Its `va_list` is one pointer to the anonymous
-    /// arguments, which the caller passes on the stack, its `long double`
-    /// has the binary64 format of `double`, and its `wchar_t` is `int`.
-    /// Plain `char` signedness stays a separate selection.
     #[must_use]
     pub const fn aarch64_apple_darwin() -> Self {
         Self {
+            platform: TargetPlatform::Aarch64AppleDarwin,
             short_wchar: false,
             int_wchar: true,
             signed_char: false,
             pointer_va_list: true,
+            anonymous_on_stack: true,
             binary64_long_double: true,
             narrow_call_extension: true,
             sixteen_byte_lock_free: true,
@@ -2114,7 +2114,7 @@ impl TargetDataLayout {
     /// (EvoIR 3.13.6).
     #[must_use]
     pub const fn passes_half_anonymous_arguments(&self) -> bool {
-        !self.pointer_va_list
+        !self.anonymous_on_stack
     }
 
     /// Whether a floating constant can have the `bf16` or `BF16` suffix.

@@ -42,8 +42,8 @@ pub use allocverify::{
     verify_allocation, verify_allocation_against, verify_allocation_for, VerifierRefusal,
 };
 pub use emit::{
-    emit_module, emit_module_for, emit_module_unit, frame_of, frame_of_for, Frame, RelocationModel,
-    Target,
+    emit_module, emit_module_for, emit_module_unit, frame_of, frame_of_for, Frame, Isa,
+    RelocationModel, Target,
 };
 pub use interp::{interpret_module, MirError, MirLimits, MirOutcome, MirValue};
 pub use linkage::{emitted_functions, emitted_functions_with_entries};

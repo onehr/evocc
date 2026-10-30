@@ -4,7 +4,7 @@
 //! this module only places those pieces. Every register bank has its own
 //! argument counter and all banks share one stack cursor counted in slots.
 
-use super::register::RegisterBank;
+use super::register::RegisterList;
 
 /// The generated facts of one ABI. Banks are indexed by the allocator's
 /// register-bank number, so a bank's argument registers and its variadic save
@@ -12,14 +12,12 @@ use super::register::RegisterBank;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct AbiFacts {
     pub name: &'static str,
-    /// The leading registers of each bank that carry arguments.
-    pub argument_banks: &'static [RegisterBank],
-    /// The leading registers of each bank that carry results.
-    pub result_banks: &'static [RegisterBank],
+    pub argument_banks: &'static [RegisterList],
+    pub result_banks: &'static [RegisterList],
     /// Where a caller passes the destination of a memory-returned result.
-    pub indirect_result: u8,
+    pub indirect_result: Option<u8>,
     /// The existing location of a result beyond its bank's result registers.
-    pub result_overflow: u8,
+    pub result_overflow: Option<u8>,
     pub stack_slot_bytes: u64,
     pub stack_alignment_bytes: u64,
     /// Whether arguments beyond the general registers are lowered at all.
@@ -38,6 +36,18 @@ pub struct AbiFacts {
 }
 
 impl AbiFacts {
+    pub fn require_indirect_result(&self) -> Result<u8, String> {
+        self.indirect_result
+            .ok_or_else(|| "ABI has no indirect-result register".into())
+    }
+
+    pub fn result_register(&self, location: Result<u8, u32>) -> Result<u8, String> {
+        location
+            .ok()
+            .or(self.result_overflow)
+            .ok_or_else(|| "ABI has no overflow-result register".into())
+    }
+
     #[must_use]
     pub const fn stack_alignment_words(&self) -> u64 {
         self.stack_alignment_bytes / self.stack_slot_bytes
@@ -46,7 +56,7 @@ impl AbiFacts {
     /// One bank's variadic register save area.
     #[must_use]
     pub fn variadic_save_area_bytes(&self, bank: usize) -> u64 {
-        u64::from(self.argument_banks[bank].count) * self.variadic_save_bytes[bank]
+        self.argument_banks[bank].count() as u64 * self.variadic_save_bytes[bank]
     }
 
     /// The adjacent save areas of every bank, in bank order.
@@ -91,14 +101,14 @@ impl AbiSpec for AbiFacts {
 /// Independent per-bank register counters over one shared stack cursor.
 #[derive(Debug, Clone)]
 pub struct ArgumentCursor<'a> {
-    banks: &'a [RegisterBank],
-    used: Vec<u8>,
+    banks: &'a [RegisterList],
+    used: Vec<usize>,
     stack: u32,
 }
 
 impl<'a> ArgumentCursor<'a> {
     #[must_use]
-    pub fn new(banks: &'a [RegisterBank]) -> Self {
+    pub fn new(banks: &'a [RegisterList]) -> Self {
         Self {
             banks,
             used: vec![0; banks.len()],
@@ -112,8 +122,7 @@ impl<'a> ArgumentCursor<'a> {
     pub fn place(&mut self, bank: usize, words: u32) -> Result<u8, u32> {
         let limit = self.banks[bank];
         let next = &mut self.used[bank];
-        if *next < limit.count {
-            let number = limit.first + *next;
+        if let Some(number) = limit.nth(*next) {
             *next += 1;
             Ok(number)
         } else {
@@ -126,7 +135,7 @@ impl<'a> ArgumentCursor<'a> {
 
     /// Registers of `bank` consumed so far.
     #[must_use]
-    pub fn used(&self, bank: usize) -> u8 {
+    pub fn used(&self, bank: usize) -> usize {
         self.used[bank]
     }
 
@@ -144,8 +153,8 @@ impl<'a> ArgumentCursor<'a> {
     /// even register, or at an even stack slot once the bank is exhausted.
     #[must_use]
     pub fn pair_padding(&self, bank: usize) -> usize {
-        if self.used[bank] < self.banks[bank].count {
-            usize::from(self.used[bank] % 2)
+        if self.used[bank] < self.banks[bank].count() {
+            self.used[bank] % 2
         } else {
             (self.stack % 2) as usize
         }

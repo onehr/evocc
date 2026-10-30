@@ -1,3 +1,12 @@
+//! Independent scalar certificate replay and standalone checker entry point.
+//!
+//! `main` reads before/after EvoIR and a certificate, reconstructs each
+//! admitted region and checks the reassembled module. It distinguishes
+//! malformed input from invalid claims. Production dependencies exclude
+//! the optimizer and e-graph; integration tests enforce this boundary.
+//!
+//! This Rust checker is not `evoir-sem`, the Lean pipeline executable.
+
 use std::fs;
 use std::path::Path;
 use std::process::ExitCode;

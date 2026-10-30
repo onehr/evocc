@@ -5,316 +5,26 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib.util
 import re
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
 
-class TargetDescriptionError(ValueError):
-    """A malformed or inconsistent target fact, not an inferred repair."""
-
-
-@dataclass(frozen=True)
-class Bank:
-    first: int
-    count: int
-
-    def contains(self, number: int) -> bool:
-        return self.first <= number < self.first + self.count
-
-
-@dataclass(frozen=True)
-class View:
-    bank: str
-    bits: int
-    prefix: str
-
-
-@dataclass(frozen=True)
-class Role:
-    bank: str
-    number: int
-
-
-@dataclass
-class Description:
-    digest: str
-    banks: dict[str, Bank] = field(default_factory=dict)
-    views: dict[str, View] = field(default_factory=dict)
-    aliases: list[tuple[str, str]] = field(default_factory=list)
-    set_tokens: dict[str, tuple[str, ...]] = field(default_factory=dict)
-    roles: dict[str, Role] = field(default_factory=dict)
-    specials: dict[str, str] = field(default_factory=dict)
-    clobber_aliases: dict[str, tuple[str, ...]] = field(default_factory=dict)
-    asm_views: dict[str, tuple[str, ...]] = field(default_factory=dict)
-    binding_prefixes: dict[str, str] = field(default_factory=dict)
-    virtuals: dict[str, tuple[str, int]] = field(default_factory=dict)
-
-
-def number(token: str) -> int:
-    if not re.fullmatch(r"0|[1-9][0-9]*", token):
-        raise TargetDescriptionError(f"noncanonical integer: {token}")
-    value = int(token)
-    if value > 255:
-        raise TargetDescriptionError(f"register integer exceeds u8: {token}")
-    return value
-
-
-def identifier(token: str) -> str:
-    if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", token):
-        raise TargetDescriptionError(f"invalid identifier: {token}")
-    return token
-
-
-def insert(mapping: dict, key: str, value, kind: str):
-    if key in mapping:
-        raise TargetDescriptionError(f"duplicate {kind}: {key}")
-    mapping[key] = value
-
-
-def parse_description(source: bytes) -> Description:
-    try:
-        text = source.decode("ascii")
-    except UnicodeDecodeError as error:
-        raise TargetDescriptionError("description must be canonical ASCII") from error
-    if not text.endswith("\n") or "\r" in text or "\t" in text:
-        raise TargetDescriptionError("description requires canonical LF lines")
-    lines = text.splitlines()
-    if len(lines) < 3 or lines[:2] != ["version regfile.v1", "target aarch64"]:
-        raise TargetDescriptionError("unsupported description version or target")
-    digest_rows = [line for line in lines if line.startswith("sha256 ")]
-    if len(digest_rows) != 1 or lines[2] != digest_rows[0]:
-        raise TargetDescriptionError("expected one canonical digest row")
-    stated = digest_rows[0].removeprefix("sha256 ")
-    if not re.fullmatch(r"[0-9a-f]{64}", stated):
-        raise TargetDescriptionError("malformed digest")
-    payload = "".join(line + "\n" for line in lines if not line.startswith("sha256 "))
-    if hashlib.sha256(payload.encode("ascii")).hexdigest() != stated:
-        raise TargetDescriptionError("description digest mismatch")
-    description = Description(stated)
-    for line in lines[3:]:
-        parts = line.split(" ")
-        if not line or any(not part for part in parts):
-            raise TargetDescriptionError("noncanonical fact spacing")
-        kind, *args = parts
-        if kind == "bank" and len(args) == 3:
-            name, first, count = args
-            insert(description.banks, identifier(name), Bank(number(first), number(count)), "bank")
-        elif kind == "view" and len(args) == 4:
-            name, bank, bits, prefix = args
-            insert(description.views, identifier(name), View(identifier(bank), number(bits), prefix), "view")
-        elif kind == "alias" and len(args) == 2:
-            pair = tuple(identifier(arg) for arg in args)
-            if pair in description.aliases:
-                raise TargetDescriptionError("duplicate alias")
-            description.aliases.append(pair)
-        elif kind == "set" and len(args) >= 2:
-            name, *members = args
-            insert(description.set_tokens, identifier(name), tuple(members), "set")
-        elif kind == "role" and len(args) == 3:
-            name, bank, physical = args
-            insert(description.roles, identifier(name), Role(identifier(bank), number(physical)), "role")
-        elif kind == "special" and len(args) == 2:
-            name, spelling = args
-            insert(description.specials, identifier(name), identifier(spelling), "special")
-        elif kind in ("clobber-alias", "asm-view") and len(args) >= 2:
-            bank, *prefixes = args
-            mapping = description.clobber_aliases if kind == "clobber-alias" else description.asm_views
-            insert(mapping, identifier(bank), tuple(prefixes), kind)
-        elif kind == "binding-prefix" and len(args) == 2:
-            bank, prefix = args
-            insert(description.binding_prefixes, identifier(bank), prefix, kind)
-        elif kind == "virtual" and len(args) == 3:
-            name, spelling, tag = args
-            insert(description.virtuals, identifier(name), (identifier(spelling), number(tag)), "virtual")
-        else:
-            raise TargetDescriptionError(f"unknown fact or wrong arity: {line}")
-    return description
-
-
-def resolve_sets(description: Description) -> dict[str, tuple[int, ...]]:
-    resolved: dict[str, tuple[int, ...]] = {}
-    active: set[str] = set()
-
-    def visit(name: str) -> tuple[int, ...]:
-        if name in resolved:
-            return resolved[name]
-        if name in active:
-            raise TargetDescriptionError(f"cyclic set reference: {name}")
-        if name not in description.set_tokens:
-            raise TargetDescriptionError(f"unknown set: {name}")
-        active.add(name)
-        tokens = description.set_tokens[name]
-        values: list[int] = []
-        if tokens != ("none",):
-            for token in tokens:
-                values.extend(visit(token[1:]) if token.startswith("@") else (number(token),))
-        if len(values) != len(set(values)):
-            raise TargetDescriptionError(f"duplicate register in set: {name}")
-        active.remove(name)
-        resolved[name] = tuple(values)
-        return resolved[name]
-
-    for name in description.set_tokens:
-        visit(name)
-    return {name: resolved[name] for name in description.set_tokens}
-
-
-def validate(description: Description):
-    physical: set[int] = set()
-    for name, bank in description.banks.items():
-        if bank.count == 0 or bank.first + bank.count > 256:
-            raise TargetDescriptionError(f"invalid register bank extent: {name}")
-        members = set(range(bank.first, bank.first + bank.count))
-        if physical & members:
-            raise TargetDescriptionError(f"physical register bank overlap: {name}")
-        physical |= members
-    for name, view in description.views.items():
-        if view.bank not in description.banks:
-            raise TargetDescriptionError(f"view {name} names an unknown bank")
-        if view.bits == 0 or not re.fullmatch("[a-z]", view.prefix):
-            raise TargetDescriptionError(f"invalid register view: {name}")
-    for left, right in description.aliases:
-        if left not in description.views or right not in description.views:
-            raise TargetDescriptionError("alias names an unknown view")
-        if description.views[left].bank != description.views[right].bank:
-            raise TargetDescriptionError(f"alias crosses physical bank: {left} {right}")
-    sets = resolve_sets(description)
-    for name, members in sets.items():
-        if not set(members) <= physical:
-            raise TargetDescriptionError(f"set contains unknown physical register: {name}")
-    required_banks = {"gpr", "simd"}
-    required_views = {"gpr32", "gpr64", "simd32", "simd64", "simd128"}
-    required_sets = {
-        "CALLER_SAVED", "CALLEE_SAVED", "SIMD_CALLER_SAVED", "GPR_CALL_CLOBBERS",
-        "SIMD_CALL_CLOBBERS", "SIMD_ACROSS_CALL", "SIMD_LOW64_PRESERVED", "RESERVED",
-        "FIXED_ASM_GPR", "FIXED_ASM_SIMD", "FIXED_ASM",
-    }
-    if set(description.banks) != required_banks or set(description.views) != required_views:
-        raise TargetDescriptionError("missing or unexpected register bank/view")
-    if not required_sets <= sets.keys():
-        raise TargetDescriptionError("missing required register set")
-    for name in ("CALLER_SAVED", "CALLEE_SAVED", "SIMD_CALLER_SAVED", "SIMD_ACROSS_CALL"):
-        if set(sets[name]) & set(sets["RESERVED"]):
-            raise TargetDescriptionError(f"allocatable pool intersects reserved registers: {name}")
-    for name, bank_name in (
-        ("CALLER_SAVED", "gpr"), ("CALLEE_SAVED", "gpr"), ("GPR_CALL_CLOBBERS", "gpr"),
-        ("FIXED_ASM_GPR", "gpr"), ("SIMD_CALLER_SAVED", "simd"),
-        ("SIMD_ACROSS_CALL", "simd"), ("SIMD_CALL_CLOBBERS", "simd"),
-        ("SIMD_LOW64_PRESERVED", "simd"), ("FIXED_ASM_SIMD", "simd"),
-    ):
-        if any(not description.banks[bank_name].contains(member) for member in sets[name]):
-            raise TargetDescriptionError(f"set {name} crosses its physical bank")
-    for name, role in description.roles.items():
-        if role.bank not in description.banks or not description.banks[role.bank].contains(role.number):
-            raise TargetDescriptionError(f"role names an incompatible register bank: {name}")
-    for mapping in (description.clobber_aliases, description.asm_views):
-        for bank, prefixes in mapping.items():
-            if bank not in description.banks or len(prefixes) != len(set(prefixes)):
-                raise TargetDescriptionError("invalid register prefix bank")
-            if any(not re.fullmatch("[a-z]", prefix) for prefix in prefixes):
-                raise TargetDescriptionError("invalid register prefix")
-    for bank, prefix in description.binding_prefixes.items():
-        if bank not in description.banks or not re.fullmatch("[a-z]", prefix):
-            raise TargetDescriptionError("invalid binding prefix")
-    if set(description.virtuals) != {"flags"}:
-        raise TargetDescriptionError("missing or unexpected virtual register class")
-    for mapping in (description.clobber_aliases, description.asm_views, description.binding_prefixes):
-        if set(mapping) != required_banks:
-            raise TargetDescriptionError("missing register prefix family")
-    for required in ("SCRATCH", "SCRATCH_UNIT", "SIMD_SCRATCH", "SIMD_SCRATCH_UNIT", "FRAME_POINTER", "LINK_REGISTER", "PLATFORM_REGISTER"):
-        if required not in description.roles:
-            raise TargetDescriptionError(f"missing register role: {required}")
-
-
-def constant(name: str, ty: str, expression: str, visibility: str = "pub") -> str:
-    prefix = f"{visibility} const {name}: {ty} ="
-    complete = f"{prefix} {expression};"
-    return complete + "\n" if len(complete) <= 100 else prefix + "\n    " + expression + ";\n"
-
-
-def array(name: str, ty: str, values, visibility: str = "pub") -> str:
-    values = tuple(values)
-    rendered = [repr(value) if isinstance(value, str) else str(value) for value in values]
-    expression = "[" + ", ".join(rendered) + "]"
-    declaration = f"{visibility} const {name}: [{ty}; {len(values)}] = "
-    if len(expression) - 2 <= 60:
-        return constant(name, f"[{ty}; {len(values)}]", expression, visibility)
-    lines = [declaration + "["]
-    pending = "    "
-    for value in rendered:
-        item = value + ","
-        if len(pending) + len(item) > 100:
-            lines.append(pending.rstrip())
-            pending = "    "
-        pending += item + " "
-    if pending.strip():
-        lines.append(pending.rstrip())
-    lines.append("];")
-    return "\n".join(lines) + "\n"
-
-
-def header(description: Description) -> str:
-    return (
-        "// Generated by tools/generate-target.py; do not edit.\n"
-        f"// Source: targets/aarch64/regfile; sha256 {description.digest}.\n\n"
-    )
-
-
-def render_mir(description: Description) -> str:
-    sets = resolve_sets(description)
-    out = [header(description), "use crate::generic::register::{RegisterBank, RegisterView};\n\n"]
-    out.append(constant("DESCRIPTION_DIGEST", "&str", f'"{description.digest}"'))
-    for name, bank in description.banks.items():
-        out.append(f"\npub const {name.upper()}_BANK: RegisterBank = RegisterBank {{\n    first: {bank.first},\n    count: {bank.count},\n}};\n")
-    for name, view in description.views.items():
-        out.append(f'\npub const {name.upper()}_VIEW: RegisterView = RegisterView {{\n    bank: {view.bank.upper()}_BANK,\n    bits: {view.bits},\n    prefix: "{view.prefix}",\n}};\n')
-    out.append("\n")
-    for name, members in sets.items():
-        out.append(array(name, "u8", members))
-    out.append(array("GPR_ALLOCATABLE", "u8", (*sets["CALLER_SAVED"], *sets["CALLEE_SAVED"])))
-    out.append(array("CALL_CLOBBERS", "u8", (*sets["GPR_CALL_CLOBBERS"], *sets["SIMD_CALL_CLOBBERS"])))
-    simd = description.banks["simd"]
-    out.append(array("SIMD_LOW64_PRESERVED_INDICES", "u8", (number - simd.first for number in sets["SIMD_LOW64_PRESERVED"])))
-    out.append(constant("SIMD_BASE", "u8", str(simd.first)))
-    for name, role in description.roles.items():
-        out.append(constant(name, "u8", str(role.number)))
-        bank = description.banks[role.bank]
-        prefixes = [view.prefix for view in description.views.values() if view.bank == role.bank]
-        prefixes.extend(description.asm_views[role.bank])
-        for prefix in dict.fromkeys(prefixes):
-            out.append(constant(f"{name}_{prefix.upper()}", "&str", f'"{prefix}{role.number - bank.first}"'))
-    for name, spelling in description.specials.items():
-        out.append(constant(name, "&str", f'"{spelling}"'))
-    for name, (spelling, tag) in description.virtuals.items():
-        out.append(constant(f"{name.upper()}_SPELLING", "&str", f'"{spelling}"'))
-        out.append(constant(f"{name.upper()}_ASSIGNMENT_TAG", "u8", str(tag)))
-    for bank, prefixes in description.clobber_aliases.items():
-        out.append(array(f"{bank.upper()}_CLOBBER_PREFIXES", "char", prefixes))
-    for bank, prefixes in description.asm_views.items():
-        out.append(array(f"{bank.upper()}_ASM_VIEWS", "char", prefixes))
-    for bank, prefix in description.binding_prefixes.items():
-        out.append(constant(f"{bank.upper()}_BINDING_PREFIX", "char", repr(prefix)))
-    return "".join(out)
-
-
-def render_evoir_primitives(description: Description) -> str:
-    sets = resolve_sets(description)
-    out = [header(description)]
-    visibility = "pub(super)"
-    out.append(array("GPR_BINDINGS", "u8", sets["FIXED_ASM_GPR"], visibility))
-    simd = description.banks["simd"]
-    out.append(array("SIMD_BINDING_INDICES", "u8", (number - simd.first for number in sets["FIXED_ASM_SIMD"]), visibility))
-    out.append(constant("SIMD_BASE", "u8", str(simd.first), visibility))
-    for name, bank in description.banks.items():
-        out.append(constant(f"{name.upper()}_LAST_INDEX", "u8", str(bank.count - 1), visibility))
-    for bank, prefixes in description.clobber_aliases.items():
-        out.append(array(f"{bank.upper()}_CLOBBER_PREFIXES", "char", prefixes, visibility))
-    for bank, prefix in description.binding_prefixes.items():
-        out.append(constant(f"{bank.upper()}_BINDING_PREFIX", "char", repr(prefix), visibility))
-    return "".join(out)
-
+_description_spec = importlib.util.spec_from_file_location(
+    "evocc_target_description", Path(__file__).with_name("target_description.py"))
+_description_module = importlib.util.module_from_spec(_description_spec)
+sys.modules[_description_spec.name] = _description_module
+_description_spec.loader.exec_module(_description_module)
+globals().update({name: getattr(_description_module, name) for name in (
+    "TargetDescriptionError", "Bank", "View", "Role", "Description", "number", "identifier",
+    "insert", "parse_description", "resolve_sets", "validate", "constant", "array", "header",
+    "render_mir", "render_evoir_primitives", "parse_envelope", "quantity", "ABI_SINGLE",
+    "ABI_PER_BANK", "VA_LIST_FIELDS", "PROFILE_FEATURES", "AbiDescription", "parse_abi",
+    "single", "register_set", "abi_register", "abi_values", "validate_abi",
+    "ProfileDescription", "parse_profile", "validate_profile", "render_abi",
+)})
 
 
 # The structural shapes below mirror only the fields present in the current
@@ -404,7 +114,7 @@ class InstructionDescription:
     terminators: dict[str, dict[str, str]] = field(default_factory=dict)
 
 
-def parse_instructions(source: bytes) -> InstructionDescription:
+def parse_instructions(source: bytes, target: str = "aarch64") -> InstructionDescription:
     # Keep the same canonical byte envelope as the register component.
     try:
         text = source.decode("ascii")
@@ -413,7 +123,7 @@ def parse_instructions(source: bytes) -> InstructionDescription:
     lines = text.splitlines()
     if not text.endswith("\n") or "\r" in text or "\t" in text:
         raise TargetDescriptionError("description requires canonical LF lines")
-    if len(lines) < 3 or lines[:2] != ["version insts.v1", "target aarch64"]:
+    if len(lines) < 3 or lines[:2] != ["version insts.v1", f"target {identifier(target)}"]:
         raise TargetDescriptionError("unsupported instruction version or target")
     digest_rows = [line for line in lines if line.startswith("sha256 ")]
     if len(digest_rows) != 1 or lines[2] != digest_rows[0]:
@@ -868,312 +578,14 @@ def render_instructions(description: InstructionDescription) -> str:
     out.append(render_allocation(description))
     return "".join(out)
 
-def parse_envelope(source: bytes, version: str) -> tuple[str, list[str]]:
-    """The canonical byte envelope shared by every target component."""
-    try:
-        text = source.decode("ascii")
-    except UnicodeDecodeError as error:
-        raise TargetDescriptionError("description must be canonical ASCII") from error
-    if not text.endswith("\n") or "\r" in text or "\t" in text:
-        raise TargetDescriptionError("description requires canonical LF lines")
-    lines = text.splitlines()
-    if len(lines) < 3 or lines[:2] != [f"version {version}", "target aarch64"]:
-        raise TargetDescriptionError(f"unsupported {version} version or target")
-    digest_rows = [line for line in lines if line.startswith("sha256 ")]
-    if len(digest_rows) != 1 or lines[2] != digest_rows[0]:
-        raise TargetDescriptionError("expected one canonical digest row")
-    digest = digest_rows[0].removeprefix("sha256 ")
-    payload = "".join(line + "\n" for line in lines if not line.startswith("sha256 "))
-    if not re.fullmatch(r"[0-9a-f]{64}", digest) or hashlib.sha256(payload.encode()).hexdigest() != digest:
-        raise TargetDescriptionError(f"{version} description digest mismatch")
-    for line in lines[3:]:
-        if not line or any(not part for part in line.split(" ")):
-            raise TargetDescriptionError("noncanonical fact spacing")
-    return digest, lines[3:]
-
-
-def quantity(token: str) -> int:
-    if not re.fullmatch(r"0|[1-9][0-9]*", token) or int(token) >= 2**32:
-        raise TargetDescriptionError(f"noncanonical quantity: {token}")
-    return int(token)
-
-
-ABI_SINGLE = (
-    "abi", "regfile", "indirect-result", "result-overflow", "stack-slot-bytes",
-    "stack-alignment-bytes", "stack-arguments", "callee-saved", "call-clobbers",
-    "partially-preserved", "frame-record-bytes", "save-slot-bytes", "variadic-save-alignment",
-    "record-register-bytes", "aligned-record-pair-rounding",
-)
-ABI_PER_BANK = ("arguments", "results", "variadic-save")
-VA_LIST_FIELDS = ("stack", "general-top", "vector-top", "general-offset", "vector-offset")
-PROFILE_FEATURES = (
-    "function-sections", "data-sections", "explicit-sections", "tls", "patchable-entry",
-    "protected-visibility",
-)
-
-
-@dataclass
-class AbiDescription:
-    digest: str
-    facts: dict = field(default_factory=dict)
-
-
-def parse_abi(source: bytes) -> AbiDescription:
-    digest, lines = parse_envelope(source, "abi.v1")
-    description = AbiDescription(digest)
-    facts = description.facts
-    for line in lines:
-        kind, *args = line.split(" ")
-        if kind in ABI_PER_BANK or kind == "va-list":
-            if len(args) != 2:
-                raise TargetDescriptionError(f"wrong ABI fact arity: {line}")
-            if not re.fullmatch(r"[a-z][a-z0-9-]*", args[0]):
-                raise TargetDescriptionError(f"invalid ABI fact key: {line}")
-            rows = facts.setdefault(kind, {})
-            if args[0] in rows:
-                raise TargetDescriptionError(f"duplicate ABI fact: {kind} {args[0]}")
-            rows[args[0]] = quantity(args[1])
-        elif kind in ABI_SINGLE:
-            if not args:
-                raise TargetDescriptionError(f"wrong ABI fact arity: {line}")
-            if kind in facts:
-                raise TargetDescriptionError(f"duplicate ABI fact: {kind}")
-            facts[kind] = tuple(args)
-        else:
-            raise TargetDescriptionError(f"unknown ABI fact: {line}")
-    for kind in (*ABI_SINGLE, *ABI_PER_BANK, "va-list"):
-        if kind not in facts:
-            raise TargetDescriptionError(f"missing ABI fact: {kind}")
-    for name in VA_LIST_FIELDS:
-        if name not in facts["va-list"]:
-            raise TargetDescriptionError(f"missing va-list field: {name}")
-    if set(facts["va-list"]) != set(VA_LIST_FIELDS):
-        raise TargetDescriptionError("unexpected va-list field")
-    return description
-
-
-def single(abi: AbiDescription, kind: str, arity: int = 1) -> tuple[str, ...]:
-    values = abi.facts[kind]
-    if len(values) != arity:
-        raise TargetDescriptionError(f"wrong ABI fact arity: {kind}")
-    return values
-
-
-def register_set(tokens: tuple[str, ...], sets: dict[str, tuple[int, ...]]) -> tuple[int, ...]:
-    values: list[int] = []
-    for token in tokens:
-        if token.startswith("@"):
-            if token[1:] not in sets:
-                raise TargetDescriptionError(f"unknown register set: {token[1:]}")
-            values.extend(sets[token[1:]])
-        else:
-            values.append(number(token))
-    if len(values) != len(set(values)):
-        raise TargetDescriptionError("duplicate register in ABI set")
-    return tuple(values)
-
-
-def abi_register(abi: AbiDescription, kind: str, regfile: Description, reserved: set[int]) -> int:
-    bank_name, index = single(abi, kind, 2)
-    if bank_name not in regfile.banks:
-        raise TargetDescriptionError(f"{kind} names an unknown bank")
-    bank = regfile.banks[bank_name]
-    if number(index) >= bank.count:
-        raise TargetDescriptionError(f"{kind} register exceeds its bank")
-    physical = bank.first + number(index)
-    if physical in reserved:
-        raise TargetDescriptionError(f"{kind} register {physical} is reserved")
-    return physical
-
-
-def abi_values(abi: AbiDescription, regfile: Description) -> dict:
-    """Validated, resolved values in regfile bank order."""
-    facts = abi.facts
-    sets = resolve_sets(regfile)
-    reserved = set(sets["RESERVED"])
-    if single(abi, "regfile") != (regfile.digest,):
-        raise TargetDescriptionError("ABI names a different register description revision")
-    name = single(abi, "abi")[0]
-    identifier(name)
-    banks = list(regfile.banks)
-    values = {"name": name, "argument_banks": [], "result_banks": [], "variadic_save_bytes": []}
-    for kind in ABI_PER_BANK:
-        if set(facts[kind]) != set(banks):
-            raise TargetDescriptionError(f"{kind} must name every register bank")
-    for bank_name in banks:
-        bank = regfile.banks[bank_name]
-        for kind, key in (("arguments", "argument_banks"), ("results", "result_banks")):
-            count = facts[kind][bank_name]
-            if count == 0 or count > bank.count:
-                raise TargetDescriptionError(f"{kind} registers exceed their bank: {bank_name}")
-            if reserved & set(range(bank.first, bank.first + count)):
-                raise TargetDescriptionError(f"{kind} registers are reserved: {bank_name}")
-            values[key].append((bank.first, count))
-        if facts["variadic-save"][bank_name] == 0:
-            raise TargetDescriptionError("variadic save width must be positive")
-        values["variadic_save_bytes"].append(facts["variadic-save"][bank_name])
-    values["indirect_result"] = abi_register(abi, "indirect-result", regfile, reserved)
-    values["result_overflow"] = abi_register(abi, "result-overflow", regfile, reserved)
-    for kind in ("stack-slot-bytes", "stack-alignment-bytes", "frame-record-bytes", "save-slot-bytes",
-                 "variadic-save-alignment", "record-register-bytes"):
-        values[kind.replace("-", "_")] = quantity(single(abi, kind)[0])
-        if values[kind.replace("-", "_")] == 0:
-            raise TargetDescriptionError(f"{kind} must be positive")
-    if values["stack_alignment_bytes"] % values["stack_slot_bytes"]:
-        raise TargetDescriptionError("stack alignment is not a whole number of slots")
-    for kind, choices in (("stack-arguments", ("admitted", "refused")),
-                          ("aligned-record-pair-rounding", ("true", "false"))):
-        if single(abi, kind)[0] not in choices:
-            raise TargetDescriptionError(f"invalid {kind} fact")
-    values["stack_arguments"] = single(abi, "stack-arguments")[0] == "admitted"
-    values["aligned_record_pair_rounding"] = single(abi, "aligned-record-pair-rounding")[0] == "true"
-    values["callee_saved"] = register_set(facts["callee-saved"], sets)
-    values["call_clobbers"] = register_set(facts["call-clobbers"], sets)
-    partial = facts["partially-preserved"]
-    if len(partial) < 2:
-        raise TargetDescriptionError("wrong ABI fact arity: partially-preserved")
-    values["partially_preserved"] = register_set(partial[:-1], sets)
-    values["partially_preserved_bytes"] = quantity(partial[-1])
-    if set(values["callee_saved"]) & set(values["call_clobbers"]):
-        raise TargetDescriptionError("callee-saved registers cannot be call clobbered")
-    if set(values["partially_preserved"]) & (set(values["call_clobbers"]) | set(values["callee_saved"])):
-        raise TargetDescriptionError("partially preserved registers overlap another preservation class")
-    values["va_list"] = [facts["va-list"][name] for name in VA_LIST_FIELDS]
-    return values
-
-
-def validate_abi(abi: AbiDescription, regfile: Description):
-    abi_values(abi, regfile)
-
-
-@dataclass
-class ProfileDescription:
-    digest: str
-    name: str = ""
-    host_abi: tuple[str, str] = ("", "")
-    host_only: list[str] = field(default_factory=list)
-    stack_guard_slot_bytes: int = 0
-
-
-def parse_profile(source: bytes) -> ProfileDescription:
-    digest, lines = parse_envelope(source, "profile.v1")
-    profile = ProfileDescription(digest)
-    seen: set[str] = set()
-    for line in lines:
-        kind, *args = line.split(" ")
-        if kind in ("profile", "abi", "stack-guard-slot-bytes") and kind in seen:
-            raise TargetDescriptionError(f"duplicate profile fact: {kind}")
-        seen.add(kind)
-        if kind == "profile" and len(args) == 1:
-            profile.name = identifier(args[0])
-        elif kind == "abi" and len(args) == 2:
-            profile.host_abi = (identifier(args[0]), args[1])
-        elif kind == "host-only" and len(args) == 1:
-            if args[0] in profile.host_only:
-                raise TargetDescriptionError(f"duplicate profile feature: {args[0]}")
-            profile.host_only.append(args[0])
-        elif kind == "stack-guard-slot-bytes" and len(args) == 1:
-            profile.stack_guard_slot_bytes = quantity(args[0])
-        else:
-            raise TargetDescriptionError(f"unknown profile fact or wrong arity: {line}")
-    for kind in ("profile", "abi", "stack-guard-slot-bytes"):
-        if kind not in seen:
-            raise TargetDescriptionError(f"missing profile fact: {kind}")
-    return profile
-
-
-def validate_profile(profile: ProfileDescription, abis: dict):
-    name, revision = profile.host_abi
-    if name not in abis:
-        raise TargetDescriptionError(f"profile names an unknown ABI: {name}")
-    if abis[name].digest != revision:
-        raise TargetDescriptionError("profile names a different ABI revision")
-    for feature in profile.host_only:
-        if feature not in PROFILE_FEATURES:
-            raise TargetDescriptionError(f"unknown profile feature: {feature}")
-    alignment = quantity(single(abis[name], "stack-alignment-bytes")[0])
-    if profile.stack_guard_slot_bytes == 0 or profile.stack_guard_slot_bytes % alignment:
-        raise TargetDescriptionError("stack guard slot must preserve the stack alignment")
-
-
-def render_abi(regfile: Description, abis: list[AbiDescription], profiles: list[ProfileDescription]) -> str:
-    by_name = {abi.facts["abi"][0]: abi for abi in abis}
-    for profile in profiles:
-        validate_profile(profile, by_name)
-    out = ["// Generated by tools/generate-target.py; do not edit.\n"]
-    for abi in abis:
-        out.append(f"// Source: targets/aarch64/abi-{abi.facts['abi'][0]}; sha256 {abi.digest}.\n")
-    for profile in profiles:
-        out.append(f"// Source: targets/aarch64/profile-{profile.name}; sha256 {profile.digest}.\n")
-    out.append(
-        "\nuse super::abi::{Aarch64Abi, Profile, VaListLayout};\n"
-        "use crate::generic::abi::AbiFacts;\n"
-        "use crate::generic::register::RegisterBank;\n\n"
-    )
-    for abi in abis:
-        out.append(constant(f"{abi.facts['abi'][0].upper()}_DIGEST", "&str", f'"{abi.digest}"'))
-    for profile in profiles:
-        out.append(constant(f"{profile.name.upper()}_DIGEST", "&str", f'"{profile.digest}"'))
-    for abi in abis:
-        values = abi_values(abi, regfile)
-        prefix = values["name"].upper()
-        for key in ("argument_banks", "result_banks"):
-            out.append(f"\n#[rustfmt::skip]\nconst {prefix}_{key.upper()}: [RegisterBank; {len(values[key])}] = [\n")
-            for first, count in values[key]:
-                out.append(f"    RegisterBank {{ first: {first}, count: {count} }},\n")
-            out.append("];\n")
-        out.append("\n")
-        for key in ("callee_saved", "call_clobbers", "partially_preserved"):
-            out.append(array(f"{prefix}_{key.upper()}", "u8", values[key], "pub(super)"))
-        va_list = "".join(
-            f"        {name.replace('-', '_')}: {value},\n" for name, value in zip(VA_LIST_FIELDS, values["va_list"])
-        )
-        out.append(
-            f"\n#[rustfmt::skip]\npub const {prefix}: Aarch64Abi = Aarch64Abi {{\n"
-            "    facts: AbiFacts {\n"
-            f"        name: \"{values['name']}\",\n"
-            f"        argument_banks: &{prefix}_ARGUMENT_BANKS,\n"
-            f"        result_banks: &{prefix}_RESULT_BANKS,\n"
-            f"        indirect_result: {values['indirect_result']},\n"
-            f"        result_overflow: {values['result_overflow']},\n"
-            f"        stack_slot_bytes: {values['stack_slot_bytes']},\n"
-            f"        stack_alignment_bytes: {values['stack_alignment_bytes']},\n"
-            f"        stack_arguments: {str(values['stack_arguments']).lower()},\n"
-            f"        callee_saved: &{prefix}_CALLEE_SAVED,\n"
-            f"        call_clobbers: &{prefix}_CALL_CLOBBERS,\n"
-            f"        partially_preserved: &{prefix}_PARTIALLY_PRESERVED,\n"
-            f"        partially_preserved_bytes: {values['partially_preserved_bytes']},\n"
-            f"        frame_record_bytes: {values['frame_record_bytes']},\n"
-            f"        save_slot_bytes: {values['save_slot_bytes']},\n"
-            f"        variadic_save_bytes: &[{', '.join(str(v) for v in values['variadic_save_bytes'])}],\n"
-            f"        variadic_save_alignment: {values['variadic_save_alignment']},\n"
-            "    },\n"
-            f"    record_register_bytes: {values['record_register_bytes']},\n"
-            f"    aligned_record_pair_rounding: {str(values['aligned_record_pair_rounding']).lower()},\n"
-            f"    va_list: VaListLayout {{\n{va_list}    }},\n"
-            "};\n"
-        )
-    for profile in profiles:
-        features = "".join(f"        \"{feature}\",\n" for feature in profile.host_only)
-        out.append(
-            f"\n#[rustfmt::skip]\npub const {profile.name.upper()}: Profile = Profile {{\n"
-            f"    name: \"{profile.name}\",\n"
-            f"    host_abi: \"{profile.host_abi[0]}\",\n"
-            f"    host_only: &[\n{features}    ],\n"
-            f"    stack_guard_slot_bytes: {profile.stack_guard_slot_bytes},\n"
-            "};\n"
-        )
-    return "".join(out)
-
-
 @dataclass
 class PatternDescription:
     digest: str
     rows: list[dict[str, str]]
 
 
-def parse_patterns(source: bytes) -> PatternDescription:
-    digest, lines = parse_envelope(source, "patterns.v1")
+def parse_patterns(source: bytes, target: str = "aarch64") -> PatternDescription:
+    digest, lines = parse_envelope(source, "patterns.v1", target)
     rows, seen = [], set()
     families = {
         "const_movz": ("movz_movk", "any"),
@@ -1347,8 +759,8 @@ class EncodingDescription:
     instruction: dict[str, int] = field(default_factory=dict)
 
 
-def parse_encodings(source: bytes) -> EncodingDescription:
-    digest, lines = parse_envelope(source, "encodings.v1")
+def parse_encodings(source: bytes, target: str = "aarch64") -> EncodingDescription:
+    digest, lines = parse_envelope(source, "encodings.v1", target)
     result = EncodingDescription(digest)
     for line in lines:
         parts = line.split(" ")
@@ -1542,8 +954,8 @@ def render_encoding_docs(description: EncodingDescription) -> str:
     return "".join(out) + "\n"
 
 
-def parse_costs(source: bytes) -> tuple[str, dict[str, int]]:
-    digest, lines = parse_envelope(source, "costs.v1")
+def parse_costs(source: bytes, target: str = "aarch64") -> tuple[str, dict[str, int]]:
+    digest, lines = parse_envelope(source, "costs.v1", target)
     costs = {}
     for line in lines:
         parts = line.split(" ")
@@ -1567,76 +979,92 @@ def render_costs(description: tuple[str, dict[str, int]]) -> str:
     )
 
 
+def target_outputs(directory: Path, args) -> dict[Path, bytes]:
+    root, target = directory.parent.parent, identifier(directory.name)
+    machine = root / "crates/evocc-mir/src/isa" / target
+    def path(option, default):
+        return getattr(args, option) or default
+    description = parse_description(path("input", directory / "regfile").read_bytes(), target)
+    validate(description)
+    abis = [parse_abi(item.read_bytes(), target) for item in
+            (args.abi_input if args.abi_input is not None else sorted(directory.glob("abi-*")))]
+    for abi in abis:
+        validate_abi(abi, description)
+    if len({abi.facts["abi"] for abi in abis}) != len(abis):
+        raise TargetDescriptionError("duplicate ABI description")
+    profiles = [parse_profile(item.read_bytes(), target) for item in
+                (args.profile_input if args.profile_input is not None else sorted(directory.glob("profile-*")))]
+    evoir = root / "crates/evocc-evoir/src" / (
+        "assembly_registers.rs" if target == "aarch64" else f"assembly_{target}_registers.rs")
+    outputs = {
+        path("output", machine / "regfile.rs"): render_mir(description).encode(),
+        path("evoir_output", evoir): render_evoir_primitives(description).encode(),
+    }
+    if abis or profiles or args.abi_output:
+        outputs[path("abi_output", machine / "abi_tables.rs")] = render_abi(description, abis, profiles).encode()
+    instructions = path("insts_input", directory / "insts")
+    if instructions.is_file():
+        decoded = parse_instructions(instructions.read_bytes(), target)
+        validate_instructions(decoded)
+        rendered = render_instructions(decoded).replace("targets/aarch64/insts", f"targets/{target}/insts")
+        outputs[path("insts_output", machine / "insts.rs")] = rendered.encode()
+    docs_path = path("pattern_docs", root / "spec/evomir.md")
+    docs = None
+    for kind, parse, render, render_docs in [
+        ("patterns", parse_patterns, render_patterns, render_pattern_docs),
+        ("encodings", parse_encodings, render_encodings, render_encoding_docs),
+        ("costs", parse_costs, render_costs, None),
+    ]:
+        source = path(kind+"_input", directory/kind)
+        if not source.is_file():
+            continue
+        decoded = parse(source.read_bytes(), target)
+        rendered = render(decoded).replace(f"targets/aarch64/{kind}", f"targets/{target}/{kind}")
+        outputs[path(kind+"_output", machine/(kind+".rs"))] = rendered.encode()
+        if render_docs is not None:
+            if docs is None:
+                docs = docs_path.read_text(encoding="utf-8")
+            start, end = f"<!-- {target}-{kind}:start -->", f"<!-- {target}-{kind}:end -->"
+            if docs.count(start) != 1 or docs.count(end) != 1:
+                raise TargetDescriptionError(f"missing or duplicate {kind} document markers")
+            before, rest = docs.split(start)
+            _, after = rest.split(end)
+            docs = before+start+"\n"+render_docs(decoded).replace("targets/aarch64/", f"targets/{target}/")+end+after
+    if docs is not None:
+        outputs[docs_path] = docs.encode()
+    return outputs
+
+
 def main() -> int:
     root = Path(__file__).resolve().parents[1]
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--input", type=Path, default=root / "targets/aarch64/regfile")
-    parser.add_argument("--output", type=Path, default=root / "crates/evocc-mir/src/isa/aarch64/regfile.rs")
-    parser.add_argument("--evoir-output", type=Path, default=root / "crates/evocc-evoir/src/assembly_registers.rs")
-    parser.add_argument("--insts-input", type=Path, default=root / "targets/aarch64/insts")
-    parser.add_argument("--insts-output", type=Path, default=root / "crates/evocc-mir/src/isa/aarch64/insts.rs")
-    parser.add_argument("--abi-input", type=Path, action="append",
-                        help="ABI descriptions, in table order (default: Darwin, then Linux)")
-    parser.add_argument("--profile-input", type=Path, action="append",
-                        help="profile descriptions (default: the kernel profile)")
-    parser.add_argument("--abi-output", type=Path, default=root / "crates/evocc-mir/src/isa/aarch64/abi_tables.rs")
-    parser.add_argument("--patterns-input", type=Path, default=root / "targets/aarch64/patterns")
-    parser.add_argument("--patterns-output", type=Path, default=root / "crates/evocc-mir/src/isa/aarch64/patterns.rs")
-    parser.add_argument("--costs-input", type=Path, default=root / "targets/aarch64/costs")
-    parser.add_argument("--costs-output", type=Path, default=root / "crates/evocc-mir/src/isa/aarch64/costs.rs")
-    parser.add_argument("--encodings-input", type=Path, default=root / "targets/aarch64/encodings")
-    parser.add_argument("--encodings-output", type=Path, default=root / "crates/evocc-mir/src/isa/aarch64/encodings.rs")
-    parser.add_argument("--pattern-docs", type=Path, default=root / "spec/evomir.md")
+    parser.add_argument("--target-dir", type=Path)
+    for name in ["input", "output", "evoir-output", "insts-input", "insts-output", "abi-output",
+                 "patterns-input", "patterns-output", "costs-input", "costs-output",
+                 "encodings-input", "encodings-output", "pattern-docs"]:
+        parser.add_argument("--"+name, type=Path)
+    parser.add_argument("--abi-input", type=Path, action="append")
+    parser.add_argument("--profile-input", type=Path, action="append")
     parser.add_argument("--check", action="store_true")
     args = parser.parse_args()
-    abi_inputs = args.abi_input or [root / "targets/aarch64/abi-darwin", root / "targets/aarch64/abi-linux"]
-    profile_inputs = args.profile_input or [root / "targets/aarch64/profile-kernel"]
+    directories = [args.target_dir.resolve()] if args.target_dir else [
+        item for item in sorted((root/"targets").iterdir()) if item.is_dir() and (item/"regfile").is_file()]
     try:
-        description = parse_description(args.input.read_bytes())
-        validate(description)
-        instructions = parse_instructions(args.insts_input.read_bytes())
-        validate_instructions(instructions)
-        abis = [parse_abi(path.read_bytes()) for path in abi_inputs]
-        for abi in abis:
-            validate_abi(abi, description)
-        if len({abi.facts["abi"] for abi in abis}) != len(abis):
-            raise TargetDescriptionError("duplicate ABI description")
-        profiles = [parse_profile(path.read_bytes()) for path in profile_inputs]
-        patterns = parse_patterns(args.patterns_input.read_bytes())
-        costs = parse_costs(args.costs_input.read_bytes())
-        encodings = parse_encodings(args.encodings_input.read_bytes())
-        docs = args.pattern_docs.read_text(encoding="utf-8")
-        start, end = "<!-- aarch64-patterns:start -->", "<!-- aarch64-patterns:end -->"
-        if docs.count(start) != 1 or docs.count(end) != 1:
-            raise TargetDescriptionError("missing or duplicate pattern document markers")
-        before, rest = docs.split(start)
-        _, after = rest.split(end)
-        docs = before + start + "\n" + render_pattern_docs(patterns) + end + after
-        start, end = "<!-- aarch64-encodings:start -->", "<!-- aarch64-encodings:end -->"
-        if docs.count(start) != 1 or docs.count(end) != 1:
-            raise TargetDescriptionError("missing or duplicate encoding document markers")
-        before, rest = docs.split(start)
-        _, after = rest.split(end)
-        docs = before + start + "\n" + render_encoding_docs(encodings) + end + after
-        outputs = {
-            args.output: render_mir(description).encode("utf-8"),
-            args.evoir_output: render_evoir_primitives(description).encode("utf-8"),
-            args.insts_output: render_instructions(instructions).encode("utf-8"),
-            args.abi_output: render_abi(description, abis, profiles).encode("utf-8"),
-            args.patterns_output: render_patterns(patterns).encode("utf-8"),
-            args.costs_output: render_costs(costs).encode("utf-8"),
-            args.encodings_output: render_encodings(encodings).encode("utf-8"),
-            args.pattern_docs: docs.encode("utf-8"),
-        }
-        if args.check:
-            for path, expected in outputs.items():
-                if not path.is_file() or path.read_bytes() != expected:
-                    raise TargetDescriptionError(f"generated file differs: {path}")
-        else:
-            for path, contents in outputs.items():
-                if not path.is_file() or path.read_bytes() != contents:
-                    path.parent.mkdir(parents=True, exist_ok=True)
-                    path.write_bytes(contents)
+        outputs = {}
+        for directory in directories:
+            for destination, contents in target_outputs(directory, args).items():
+                if destination in outputs and outputs[destination] != contents:
+                    raise TargetDescriptionError(f"targets disagree on output: {destination}")
+                outputs[destination] = contents
+        if not outputs:
+            raise TargetDescriptionError("no target descriptions")
+        for destination, contents in outputs.items():
+            changed = not destination.is_file() or destination.read_bytes() != contents
+            if args.check and changed:
+                raise TargetDescriptionError(f"generated file differs: {destination}")
+            if not args.check and changed:
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                destination.write_bytes(contents)
     except (OSError, TargetDescriptionError) as error:
         print(f"generate-target: {error}", file=sys.stderr)
         return 2

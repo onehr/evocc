@@ -210,11 +210,16 @@ impl Folder<'_> {
             CHirExpr::Ternary(_, left, right, _) | CHirExpr::Elvis(left, right, _) => {
                 common(self.ty(left, depth + 1)?, self.ty(right, depth + 1)?)
             }
-            _ => integer_expression_type(expression, self.types, self.symbols)
-                .map(NumberType::Integer)
-                .or_else(|| {
-                    self.declared_type(attribute_query_expression_type(expression, self.types)?)
-                }),
+            _ => integer_expression_type_with_target(
+                expression,
+                self.types,
+                self.symbols,
+                self.target,
+            )
+            .map(NumberType::Integer)
+            .or_else(|| {
+                self.declared_type(attribute_query_expression_type(expression, self.types)?)
+            }),
         }
     }
 

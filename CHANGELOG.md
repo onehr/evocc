@@ -7,9 +7,8 @@ All notable changes to EvoCC are listed in this file. The format follows
 
 ### Added
 
-- A RISC-V64 Linux backend design with measured RV64GC/LP64D layout, ABI, floating-point
-  environment and assembler behavior. It shares its section structure with the x86-64 design;
-  both designs are in `docs/design/`. Neither backend is implemented by this change.
+- Describe the compiler pipeline and crate interfaces in `ARCHITECTURE.md`.
+- Add the RV64GC/LP64D Linux backend design in `docs/design/`.
 - Experiment 8: with EvoCC's record, three chat models used fewer output tokens on bugs that
   GCC 14's warnings and UBSan miss (p < 0.01), and Qwen3.8 27B repaired 54 of 54 against 30 of
   54. Records: `tests/contracts/agent-repair-8-*`.
@@ -18,8 +17,9 @@ All notable changes to EvoCC are listed in this file. The format follows
 
 ### Changed
 
-- The task tracker keeps active work and one-line references to closed work. The full closed
-  history is in `docs/archive/todo-0.1.0.md`.
+- ABI descriptions use ordered argument and result register lists and optional result registers.
+- Limit new Rust and Python files to 1,500 lines and functions to 150, with shrinking older exceptions.
+- Move closed tracker entries to `docs/archive/todo-0.1.0.md`.
 - Cargo builds into its default `target/` directory, so the binaries are in `target/release/`.
   `tools/release.sh` writes the archives to `target/distrib/`.
 - The book chapter on the agent experiments is now "Agent Experiments", and it reports
