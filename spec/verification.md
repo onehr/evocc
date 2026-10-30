@@ -1,6 +1,6 @@
 # Verification Contract
 
-**Revision 1.1.4** | **Pinned ground truth** | **2026-10-30**
+**Revision 2.0.0** | **Pinned ground truth** | **2026-10-30**
 
 ## Status and scope
 
@@ -607,9 +607,10 @@ refresh each receipt that it makes stale.
 
 ## 11. Revision
 
-Revision 1.1.4 of 2026-10-30 drops tracker IDs, archive pointers and repeated text. Sections 6 and
-7.6 name the functions and exit codes that the driver uses, and Section 8 adds the publication path
-of the driver as part 8 of the trusted base, which the record field `trusted` does not list.
+Revision 2.0.0 of 2026-10-30 changes the claim: the trusted base now names the publication path of
+the driver (Section 8, part 8), which the record field `trusted` does not list. Sections 6 and 7.6
+name the functions and exit codes that the driver uses, and tracker IDs, archive pointers and
+repeated text are removed.
 
 Revision 1.1.3 of 2026-10-27 names the modules that now hold the `bv_decide` rows of the
 transfer table: `Proofs/TransferCarry.lean`, `Proofs/TransferMul.lean` and `Proofs/TransferCompare.lean`. `Proofs/Transfer.lean` keeps the

@@ -27,10 +27,12 @@ code that holds it (Appendix A) until it moves.
 
 A vendor architecture manual cannot be verified; it is a source. EvoCC keeps
 **one internal, machine-readable description per target** and makes it the
-only place a target fact is written down. Backend tables, documentation and
-tests are generated from it, and every backend operation is shown correct
-**against it**. The vendor material is checked once, at the boundary, by
-differential testing, instead of being re-read and re-typed in every pass.
+only place a target fact is written down. From it, `tools/generate-target.py`
+generates the Rust tables of the backend, the register primitives of EvoIR
+and the pattern and encoding tables of `spec/evomir.md` (Section 3). Section 5
+states how each backend operation is shown correct **against it**. The vendor
+material is checked once, at the boundary, by differential testing, instead of
+being re-read and re-typed in every pass.
 
 This is the pattern that the EvoIR rule registries follow: registry text in
 the specification, a digest, `tools/lean/registry_to_lean.py` generating Lean
@@ -137,9 +139,9 @@ derived from encoding facts and are not widened to the architectural maximum.
    the `compare` mode of `crates/evocc-mir/tests/support/object_capture.rs` in
    the C-corpus tests `crates/evocc-mir/tests/section8_linux_profile.rs` and
    `section9_c_corpus.rs`. Moving `encodings` also requires that the generated
-   instances assemble; moving `isa-semantics`, that the emulator agrees with the
-   native run and the interpreters on the corpus; moving `patterns`, that every
-   existing rule gets a verdict, where a failing row is a bug report.
+   instances assemble (`target_encodings.rs`); moving `isa-semantics`, that the
+   emulator agrees with the native run and the interpreters on the corpus
+   (`tools/isa_model_diff.py`).
 
 ## 5. What "this backend operation is correct" means
 
@@ -255,9 +257,10 @@ constant names are the anchors.
 ## Revision
 
 **Revision 1.1.1, 2026-10-30.** Appendix A and the change procedure are
-corrected, and redundant text is removed. Section 5, Rule 6 and Appendix A
-state what the code does: the two generated pattern artifacts, the object
-checks of Rule 6, and where the pair rounding and the Apple convention are
+corrected, and redundant text is removed. Sections 1 and 5, Rule 6 and
+Appendix A state what the code does: the generator outputs, the two generated
+pattern artifacts, the checks of Rule 6 without the pattern verdict that no
+check enforces, and where the pair rounding and the Apple convention are
 decided.
 
 **Revision 1.1.0, 2026-10-16.** A terminator's `forwarding` fact can name
