@@ -63,12 +63,12 @@ it. Use `evocc` in place of `cc`, and give `evo mcp` to your coding agent.
   rewrite rules that Lean 4 proves for every bit width. For the `core-v1` subset, `evo prove` has
   Lean 4 check every stage, from typed Core source to the final assembly text.
   ([Checked optimization](book/src/optimization.md), [compiling with proof](book/src/proof.md))
-- **Built for agents to change.** In EqSat mode, a new optimization is an equality with a Lean
-  proof, not a new pass. The two interpreters give each lowering an executable reference, the
-  target is a set of tables, the specifications are pinned, and each result has a receipt.
-  Agents use EvoCC too: diagnostics have stable codes and JSON, and in a
-  [registered experiment](book/src/evaluation-agents.md#experiment-5-repair-effort-and-program-size)
-  a coding agent needed about a third fewer steps with EvoCC.
+- **Built for agents.** Where GCC's warnings and UBSan are silent, `evo check` gives an agent a
+  stable code and the line in a JSON record, and `evo mcp` serves it. In registered experiments, a
+  coding agent needed about a third fewer steps with EvoCC, and three chat models needed fewer
+  tokens ([Built for agents](#built-for-agents)). Agents can also change it: in EqSat mode a new
+  optimization is an equality with a Lean proof, not a new pass, the target is a set of tables,
+  the specifications are pinned, and each result has a receipt.
 - **Experimental, at real scale.** A Linux kernel built with `make CC=evocc` boots, and 15
   application lanes and Doom run with no compiler failure. The [scope of 0.1.0](#scope-of-010)
   lists what is not done yet.
@@ -102,6 +102,103 @@ The release compiler of commit `08bf09bd` measured these results on 2026-10-27. 
 [Csmith](tests/contracts/ladder-csmith-receipt.json) and
 [Lean 4 rules](tests/contracts/lean-p0-receipt.json). The [status page](docs/status.md) and the
 [evidence](docs/evidence.md) give each count with its limits.
+
+## Built for agents
+
+An agent repairs C in a loop: it builds, runs, reads the output and edits. It can act only on what
+the tools report, and each turn costs tokens and time. When the tools report nothing, the agent
+must find the bug in the source alone. In 18 programs of our experiments, GCC 14's warnings and
+UBSan reported nothing for an uninitialized read, a dangling pointer or an out-of-bounds access.
+The build was clean, and the run gave the same output as the fixed program.
+
+EvoCC is made for that loop. `evo check` runs the program on the rules of C and stops at the first
+operation that breaks one. It checks the path that ran, not all inputs. It gives the agent a stable
+code and the line in a JSON record. `evo explain` gives the rule, and `evo fix --plan` gives the
+repairs.
+
+### What the agent sees
+
+In this program from the experiments, `prepare()` keeps a pointer to its local array, and
+`byte_at()` reads through it after `prepare()` returns. This is the record that the agent got from
+GCC 14 with `-O0 -Wall -Wextra -fsanitize=undefined`. The fixed program gives the same record, byte
+for byte:
+
+```text
+=== build exit 0
+=== run exit 16
+--- stdout
+--- stderr
+```
+
+EvoCC's record adds the `evo check` result as JSON. Its `rendered` field names the rule and the
+line (path shortened):
+
+```text
+error[E3010]: dangling-pointer-access
+  --> input.c:43:12
+   |
+43 |     return view->data[index];
+   |            ^^^^^^^^^^^^^^^^^ dangling-pointer-access
+   |
+   = note: this operation failed on the executed path
+```
+
+On the six dangling-pointer programs, Qwen3.8 27B repaired 3 of 18 trials with the GCC record and
+18 of 18 with the EvoCC record.
+
+### What an agent gets
+
+- **Stable codes with explanations.** Each finding has a code, such as `E3010`, and a line.
+  `evo explain E3010` gives the rule, with examples that a test runs against the compiler.
+- **JSON records and fixed exit rules.** `evo run`, `check`, `explain`, `fix`, `prove` and `build`
+  each have one exit-status rule. With `--json`, each writes one JSON object per line.
+- **Repairs as data, with a human gate.** `evo fix --plan` lists repairs and edits nothing.
+  `evo fix --apply` applies only safe repairs; a review repair needs a human.
+- **The same bytes for the same input.** A test runs `run`, `check`, `explain`, `fix --plan` and
+  `prove` twice on fixed inputs. It requires the same JSON records, apart from temporary paths.
+- **Ready to connect.** `evo mcp` gives `run`, `check`, `explain`, `prove` and `fix_plan` to an
+  agent ([setup](#give-it-to-your-agent)). [`AGENTS.md`](AGENTS.md), also as
+  [`llms.txt`](llms.txt), and the [EvoCC skill](skills/evocc/SKILL.md) give the commands, the exit
+  codes and the review rule.
+
+### What we measured
+
+We gave agents the same bugs with GCC and UBSan or with EvoCC. We registered the predictions before
+each measured run.
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/images/readme/agent-results-dark.svg">
+    <img src="docs/images/readme/agent-results-light.svg" alt="The same bugs, with GCC 14's warnings and UBSan or with EvoCC: the effort with EvoCC as a share of the effort with GCC and UBSan, and the share of runs that repaired the bug. Silent bugs: GCC 14's warnings and UBSan report nothing. Kimi K3, coding agent, 18 short programs: 325 to 206 steps (−37%), repaired 33 to 36 of 36. Kimi K3, coding agent, 12 programs of 722 lines: 241 to 156 steps (−35%), repaired 24 of 24 with both. Qwen3.8 27B, chat model, 18 short programs: 2,717 to 1,103 tokens (−59%), repaired 30 to 54 of 54. DeepSeek V4.1 Flash, chat model, 18 short programs: 6,421 to 1,534 tokens (−76%), repaired 50 to 54 of 54. MiniMax M3.1 Flash, chat model, 18 short programs: 1,108 to 932 tokens (−16%), repaired 54 of 54 with both. Control bugs: GCC and UBSan report them. Kimi K3, coding agent, 6 programs: 63 to 60 steps (−5%), repaired 11 of 12 with both. Qwen3.8 27B, chat model, 6 programs: 959 to 886 tokens (−8%), repaired 18 of 18 with both. DeepSeek V4.1 Flash, chat model, 6 programs: 979 to 746 tokens (−24%), repaired 18 to 17 of 18. MiniMax M3.1 Flash, chat model, 6 programs: 701 to 770 tokens (+10%), repaired 15 to 16 of 18. Kimi K3: total agent steps over 2 runs of each program. Chat models: mean output tokens per answer over 3 runs. Each saving on silent bugs is a registered prediction that held, with p < 0.01. Mistral Small 4 stopped after 6 of 144 runs and is not shown." width="830">
+  </picture>
+</p>
+
+- **Kimi K3, 144 sessions:** p < 0.001 for each step saving and for 40% fewer tokens on short programs.
+- **Three chat models, 432 trials of one answer:** p < 0.01 for each token saving.
+- **Repairs:** more with EvoCC for Qwen3.8 27B, p = 0.004. The others repaired nearly all with both.
+- **Control bugs,** which GCC and UBSan report: about the same repairs with both.
+
+The gain appears where the usual tools are silent. Not every experiment gave a clear answer. We
+report all six that had a measured run; protocols 6 and 7 have pilots only:
+
+| # | Model and programs | Result |
+|---|---|---|
+| 1 | DeepSeek V4.1 Flash, as a chat model; 30 short programs | no difference: 91 to 98% repaired on the first try with each toolchain, a ceiling |
+| 2 | DeepSeek V4.1 Flash and Qwen3.5 9B; 30 longer programs | inconclusive: most answers ran out of output tokens or time, and the spending limit stopped the run |
+| 3 | Kimi K3, as a coding agent; pilots | without a sandbox, the agent downloaded the original sources; with one, a ceiling again |
+| 4 | Kimi K3, sandboxed; 18 silent bugs, 6 controls | the same repairs, 23 of 24 with each toolchain; fewer steps with EvoCC, found after the run |
+| 5 | Kimi K3, registered replication; 18 short and 12 longer programs | fewer steps and fewer tokens with EvoCC, p < 0.001 |
+| 8 | DeepSeek V4.1 Flash, MiniMax M3.1 Flash and Qwen3.8 27B, as chat models; the bugs of 4 | fewer tokens with EvoCC for all three, p < 0.01; more repairs with Qwen3.8 27B, 54 against 30 of 54 |
+
+[Agent experiments](book/src/evaluation-agents.md) gives each protocol, receipt and transcript, and
+the commands that reproduce each analysis without a model call.
+
+### Agents can change it, too
+
+Agents wrote EvoCC, and its design keeps their changes checkable. In EqSat mode, a new optimization
+is an equality with a Lean proof, not a new pass. The target is a set of tables, the specifications
+are pinned, and each result has a receipt. [Add a proved optimization](#add-a-proved-optimization)
+shows the steps.
 
 ## Quick start
 
@@ -316,6 +413,12 @@ EvoCC 0.1.0 is experimental.
   ([verification contract](spec/verification.md)).
 - GNU C support is broad but not complete, and full kernel test acceptance is open. The changelog
   lists each [known limit](CHANGELOG.md#known-limits).
+- The agent results use injected bugs in programs adapted from zlib, Zstandard and cJSON. The
+  coding-agent result comes from one model, Kimi K3 at low reasoning effort, with two repetitions.
+  The chat-model result comes from three models, one response for each trial and three
+  repetitions. On bugs that UBSan also reports, DeepSeek V4.1 Flash did not do better with EvoCC.
+  The results do not rank models or toolchains in general
+  ([limits](book/src/evaluation-agents.md)).
 
 ## Learn more
 

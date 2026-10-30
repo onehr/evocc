@@ -267,7 +267,7 @@ class StagesFigureTests(unittest.TestCase):
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
         section = readme.split("## Why EvoCC\n", 1)[1].split("\n## ", 1)[0]
         self.assertLess(section.index("propose-check-light.svg"), section.index("\n### "))
-        self.assertLess(section.index("- **Built for agents to change.**"), section.index("\n### "))
+        self.assertLess(section.index("- **Built for agents.**"), section.index("\n### "))
         self.assertIn('srcset="docs/images/readme/stages-dark.svg"', section)
         alt = re.search(r'stages-light\.svg" alt="([^"]+)"', section).group(1)
         for value in ("s->count += 1;", "E3001 read-of-uninitialized-object at mean.c:7:9",
@@ -322,8 +322,10 @@ class HighlightsTests(unittest.TestCase):
 
     def test_check_names_a_stale_figure(self):
         with tempfile.TemporaryDirectory() as directory:
-            out = Path(directory)
-            with patch.object(render, "OUT", out), patch.object(render, "PAPER", out):
+            out, book = Path(directory), Path(directory) / "book"
+            book.mkdir()
+            with (patch.object(render, "OUT", out), patch.object(render, "PAPER", out),
+                  patch.object(render, "BOOK", book)):
                 files = {path: text for path, text in render.rendered(self.transcript(),
                                                                        with_compiler=False).items()}
                 for path, text in files.items():
@@ -332,6 +334,88 @@ class HighlightsTests(unittest.TestCase):
                 victim = out / "scoreboard-light.svg"
                 victim.write_text("stale", encoding="utf-8")
                 self.assertEqual(render.stale(files), [victim])
+
+
+class AgentResultsFigureTests(unittest.TestCase):
+    def test_committed_figure_is_current(self):
+        data = render.agent_results()
+        for theme in render.THEMES:
+            with self.subTest(theme=theme):
+                committed = (render.OUT / f"agent-results-{theme}.svg").read_text(encoding="utf-8")
+                self.assertEqual(committed, render.agent_results_chart(data, theme))
+                committed = (render.BOOK / f"agent-results-{theme}.svg").read_text(encoding="utf-8")
+                self.assertEqual(committed, render.agent_results_chart(data, theme, card=True))
+
+    def test_the_book_card_draws_the_same_figure_on_its_surface(self):
+        data = render.agent_results()
+        for theme, surface in (("light", "#ffffff"), ("dark", "#0d1117")):
+            with self.subTest(theme=theme):
+                plain = render.agent_results_chart(data, theme).splitlines()
+                card = render.agent_results_chart(data, theme, card=True).splitlines()
+                self.assertIn('viewBox="-16 -16 862 ', card[0])
+                self.assertIn(f'rx="6" fill="{surface}"', card[1])
+                self.assertEqual(card[2:], plain[1:])
+
+    def test_readme_shows_every_value_in_the_alt_text(self):
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        section = readme.split("## Built for agents\n", 1)[1].split("\n## ", 1)[0]
+        self.assertIn('srcset="docs/images/readme/agent-results-dark.svg"', section)
+        alt = re.search(r'agent-results-light\.svg" alt="([^"]+)"', section).group(1)
+        self.assertEqual(alt, render.agent_results_alt(render.agent_results()))
+
+    def test_book_shows_the_card_with_every_value_in_the_alt_text(self):
+        book = (ROOT / "book" / "src" / "evaluation-agents.md").read_text(encoding="utf-8")
+        self.assertIn('srcset="images/agent-results-dark.svg"', book)
+        alt = re.search(r'src="images/agent-results-light\.svg" alt="([^"]+)"', book).group(1)
+        self.assertEqual(alt, render.agent_results_alt(render.agent_results()))
+
+    def test_rows_agree_with_the_registered_analyses(self):
+        silent, controls = (rows for _, rows in render.agent_results()["groups"])
+        five = render.receipt("agent-repair-5-20261010.json")
+        # The registered tests of experiment 5 sum item means of two runs: half the totals.
+        for (_, _, _, cells), test in ((silent[0], five["P1"]), (silent[1], five["P3"])):
+            self.assertEqual((cells["c1"]["effort"], cells["c3"]["effort"]),
+                             (2 * test["c1"], 2 * test["c3"]))
+        tests = {row["model"]: row for row in render.receipt("agent-repair-8-20261029.json")}
+        for (_, name), row, control in zip(render.CHAT_MODELS, silent[2:], controls[1:]):
+            table = tests[render.receipt(name)["plan"]["model"]["model"]]["table"]
+            for (_, _, _, cells), key in ((row, "silent"), (control, "controls")):
+                self.assertEqual((cells["c1"]["repaired"], cells["c3"]["repaired"]),
+                                 (table[key]["c1"], table[key]["c3"]))
+            for condition in ("c1", "c3"):
+                self.assertAlmostEqual(row[3][condition]["effort"],
+                                       table["silent_tokens"][condition], delta=0.05)
+
+    def test_a_stopped_run_or_a_failed_prediction_is_refused(self):
+        original = render.receipt
+
+        def stopped(name):
+            value = copy.deepcopy(original(name))
+            if name == render.CHAT_MODELS[0][1]:
+                value["stop_reason"] = "retry_failed:http_429"
+            return value
+
+        def failed(name):
+            value = copy.deepcopy(original(name))
+            if name == "agent-repair-8-20261029.json":
+                for row in value:
+                    row["P3"]["p"] = 0.2
+            return value
+
+        for receipts, message in ((stopped, "stopped"), (failed, "p < 0.01")):
+            with self.subTest(message=message), patch.object(render, "receipt", receipts):
+                with self.assertRaisesRegex(ValueError, message):
+                    render.agent_results()
+
+    def test_text_stays_legible_in_the_readme_column(self):
+        data = render.agent_results()
+        for theme in render.THEMES:
+            with self.subTest(theme=theme):
+                svg = render.agent_results_chart(data, theme)
+                scale = 830 / float(re.search(r'viewBox="0 0 ([\d.]+) ', svg).group(1))
+                sizes = [float(size) for size in re.findall(r'font-size="([\d.]+)"', svg)]
+                self.assertTrue(sizes)
+                self.assertGreaterEqual(min(sizes) * scale, 13)
 
 
 if __name__ == "__main__":

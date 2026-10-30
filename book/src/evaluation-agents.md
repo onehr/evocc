@@ -1,10 +1,84 @@
-# Agent repair experiment
+# Agent experiments
 
-The registered run is complete. It does not show an overall advantage for EvoCC.
-The second experiment, below, stopped at the provider key limit after 444 of
-900 repetitions. None of its five predictions held for either model.
+We asked one question: does EvoCC's feedback help an AI agent repair a bug in
+C? We ran six experiments with a measured run. Each one fixed a flaw of an
+earlier one. This page reports all six, in the order in which we ran them,
+with their receipts. Protocols 6 and 7 have pilots only (see the follow-ups).
 
-## Question and corpus
+**Result.** The fifth experiment, a registered replication, gives a clear
+answer. A coding agent on the Kimi K3 model repaired bugs that GCC 14's
+warnings and UBSan do not report: uninitialized reads, dangling pointers and
+out-of-bounds accesses. With EvoCC, it used 37% fewer steps and 40% fewer
+tokens on 18 short programs, and 35% fewer steps on 12 programs of 722 lines.
+Each of the three registered predictions held with p < 0.001, over 144
+sessions. On control bugs that GCC and UBSan also report, the two toolchains
+cost about the same. The first three experiments did not separate the
+toolchains.
+
+**Chat models.** The eighth experiment gave the same bugs to chat models,
+with the frozen feedback of experiment 4 and one response for each trial.
+Three models completed all 144 trials. With EvoCC's feedback, each one used
+fewer completion tokens on the silent bugs: 76% fewer with DeepSeek V4.1
+Flash, 59% with Qwen3.8 27B and 16% with MiniMax M3.1 Flash (p < 0.01 for
+each). Qwen3.8 27B also repaired more of them: 54 of 54, against 30 of 54
+with GCC and UBSan (p = 0.004). DeepSeek V4.1 Flash and MiniMax M3.1 Flash
+repaired nearly all of them with both records, so their repair counts did
+not differ significantly. On the controls, EvoCC lost at most one trial.
+
+The figure shows the registered results of experiments 5 and 8.
+`tools/render-readme.py` draws it from their receipts and analyses.
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="images/agent-results-dark.svg">
+    <img src="images/agent-results-light.svg" alt="The same bugs, with GCC 14's warnings and UBSan or with EvoCC: the effort with EvoCC as a share of the effort with GCC and UBSan, and the share of runs that repaired the bug. Silent bugs: GCC 14's warnings and UBSan report nothing. Kimi K3, coding agent, 18 short programs: 325 to 206 steps (−37%), repaired 33 to 36 of 36. Kimi K3, coding agent, 12 programs of 722 lines: 241 to 156 steps (−35%), repaired 24 of 24 with both. Qwen3.8 27B, chat model, 18 short programs: 2,717 to 1,103 tokens (−59%), repaired 30 to 54 of 54. DeepSeek V4.1 Flash, chat model, 18 short programs: 6,421 to 1,534 tokens (−76%), repaired 50 to 54 of 54. MiniMax M3.1 Flash, chat model, 18 short programs: 1,108 to 932 tokens (−16%), repaired 54 of 54 with both. Control bugs: GCC and UBSan report them. Kimi K3, coding agent, 6 programs: 63 to 60 steps (−5%), repaired 11 of 12 with both. Qwen3.8 27B, chat model, 6 programs: 959 to 886 tokens (−8%), repaired 18 of 18 with both. DeepSeek V4.1 Flash, chat model, 6 programs: 979 to 746 tokens (−24%), repaired 18 to 17 of 18. MiniMax M3.1 Flash, chat model, 6 programs: 701 to 770 tokens (+10%), repaired 15 to 16 of 18. Kimi K3: total agent steps over 2 runs of each program. Chat models: mean output tokens per answer over 3 runs. Each saving on silent bugs is a registered prediction that held, with p < 0.01. Mistral Small 4 stopped after 6 of 144 runs and is not shown." width="862">
+  </picture>
+</p>
+
+| # | Model and programs | Result |
+| --- | --- | --- |
+| [1](#experiment-1-a-chat-model-and-30-short-programs) | DeepSeek V4.1 Flash, as a chat model; 30 short programs | no difference: every success came on the first response, a ceiling |
+| [2](#experiment-2) | DeepSeek V4.1 Flash and Qwen3.5 9B; 30 longer programs | inconclusive: most answers ran out of output tokens or time, and the spending limit stopped the run |
+| [3](#experiment-3-pilots-with-a-coding-agent) | Kimi K3, as a coding agent; pilots | without a sandbox, the agent downloaded the original sources; with one, a ceiling again |
+| [4](#experiment-4-silent-undefined-behavior) | Kimi K3, sandboxed; 18 silent bugs, 6 controls | the same repairs, 23 of 24 with each toolchain; fewer steps with EvoCC, found after the run |
+| [5](#experiment-5-repair-effort-and-program-size) | Kimi K3, registered replication; 18 short and 12 longer programs | fewer steps and fewer tokens with EvoCC, p < 0.001 |
+| [8](#experiment-8-chat-models-and-silent-bugs) | DeepSeek V4.1 Flash, MiniMax M3.1 Flash and Qwen3.8 27B, as chat models; the 24 programs of experiment 4 | fewer tokens with EvoCC for all three, p < 0.01; more repairs with Qwen3.8 27B, 54 against 30 of 54, p = 0.004 |
+
+**By model.** Kimi K3 ran at low reasoning effort in Kimi Code 2.0.2, which
+logs it as `kimi-code/k3`. It gives the registered result for a coding agent.
+DeepSeek V4.1 Flash, MiniMax M3.1 Flash and Qwen3.8 27B give the registered
+results for chat models, in experiment 8. In experiments 1 and 2, UBSan also
+reported each undefined behavior, and DeepSeek V4.1 Flash did not do better
+with EvoCC. In experiment 1 it repaired 87 of 90, against 88 with GCC and 82
+with Clang. In experiment 2 its completion rate was 0.600, against 0.556 with
+GCC and 0.622 with Clang. With Qwen3.5 9B, EvoCC had the highest completion
+rate in experiment 2: 10 of 44, against 6 with GCC, 2 with Clang and 1 with
+no feedback. That run stopped early and registered no test of completion, so
+this is a hint, not a result.
+
+**Limits.** The coding-agent result comes from one model at one effort
+setting and two repetitions. The chat-model result comes from three models,
+one response for each trial and three repetitions at temperature 0. Both use
+injected bugs in programs adapted from zlib, Zstandard and cJSON. They do not
+rank models or toolchains in general. A clean check is not a correct repair:
+several repairs removed the undefined behavior and changed the required
+result.
+
+**Follow-ups.** Protocols 6 and 7 have pilots but no measured run. Protocol
+6, P17a (DeepSeek V4.1 Flash), tests shorter E3004 guidance and the response
+budget; it is registered, and its pilot of 2026-10-20 met every go criterion.
+Protocol 7, P22 (Kimi K3), tests the concise check record; its pilot of
+2026-10-20 stopped on an escape record, so it is not registered. In
+experiment 8, the Mistral Small 4 run stopped at trial 6 of 144 on a provider
+rate limit, so it tests nothing. Pilot data stay out of every analysis.
+
+## Experiment 1: a chat model and 30 short programs
+
+This registered run does not show an overall advantage for EvoCC. Every
+successful repair came on the first response, so the corpus did not separate
+the conditions.
+
+### Question and corpus
 
 The hypothesis is that structured EvoCC feedback increases repair rate and reduces
 repair rounds compared with GCC or Clang plus UndefinedBehaviorSanitizer (UBSan).
@@ -21,7 +95,7 @@ to trigger EvoCC and GCC UBSan.
 Thus UB detection was an eligibility rule, not a measured coverage result.
 The retained preflight records include rejected candidates and their replacements.
 
-## Frozen method
+### Frozen method
 
 The measured registration is `agent-repair-corpus-2`, commit `7eed5eac`.
 Each registration in this chapter was a local Git tag on the commit that the
@@ -72,7 +146,7 @@ reached; the last request can cross it. Unknown cost stops the campaign. The pla
 permits 810 model rounds. Only HTTP 429 and 5xx errors are retried, at most three
 times, with 1, 2, and 4 second delays.
 
-## Results and limits
+### Results and limits
 
 The run completed all 270 repetitions on 2026-10-08, with 272 model requests,
 139,629 input tokens and 259,683 output tokens. Reported cost was
@@ -209,7 +283,7 @@ Stop: completed. Unattempted repetitions: 0.
 Reported cost: USD 0.198289.
 Rates include recorded errors in the attempted denominator. A range from incomplete repetitions is not a full-population estimate.
 
-### Response failures and follow-up
+#### Response failures and follow-up
 
 All 13 terminal errors returned HTTP 200 with `finish_reason=length` and
 4,096 completion tokens. Eleven had no final content; two had an incomplete
@@ -239,7 +313,7 @@ defect. Saturation changes behavior and cannot be a generic safe repair.
 This run does not establish that an additional diagnostic or repair would
 have prevented a model response from exhausting its token budget.
 
-### Validation
+#### Validation
 
 The full workspace gate passed 3,228 tests with zero failures and five existing
 ignored campaigns; Clippy and formatting passed. An earlier sandboxed run
@@ -263,7 +337,7 @@ has no compiler or sanitizer findings. Differences there do not show a UB benefi
 This is one model on a small constructed corpus with bounded, self-contained C.
 Finite-input output agreement is not proof of correctness or absence of UB.
 
-## Reproduce or extend
+### Reproduce or extend
 
 Use a clean checkout of commit `7eed5eac`, release `evo` and `evocc`, and the
 pinned image. Use a new output directory outside the repo. The owner supplies
@@ -1085,4 +1159,207 @@ Reproduce the registered analysis without making a model request:
 python3 tools/experiment/report.py \
   tests/contracts/agent-repair-5-replication-20261010.json \
   --part-b tests/contracts/agent-repair-5-scale-20261010.json
+```
+
+## Experiment 8: chat models and silent bugs
+
+This registered experiment puts the question of experiment 4 to chat models.
+A chat model gets the program and one frozen feedback record. It answers once,
+with the complete repaired program. It cannot run a tool or test its answer.
+Three models completed all 144 trials. With EvoCC's record, each of them used
+fewer completion tokens on the silent bugs, so P3 held for each. Qwen3.8 27B
+also repaired more silent bugs, 54 of 54 against 30 of 54, so P1 held for it.
+DeepSeek V4.1 Flash and MiniMax M3.1 Flash repaired nearly every silent bug
+with both records, so P1 did not hold for them. P2 held for all three. The
+Mistral Small 4 run stopped early on a provider rate limit and tests nothing.
+
+### Registration and method
+
+[Protocol 8](../../tools/experiment/protocol-8.json) was committed before
+measurement. The registration `agent-repair-experiment-8` is commit
+`0b9cef894a1237bbe37848d0494a9615e6ae2b60`. All four runs started from its
+clean tree at 10:36 UTC on 2026-10-29, one process for each model. The
+harness is [`silent_chat.py`](../../tools/experiment/silent_chat.py).
+
+The items are the 24 items of experiment 4. There are 18 silent bugs, six
+each of E3001, E3010 and E3011, and 6 controls, two each of E3002, E3004 and
+E3005. The feedback is frozen: each trial sends the record that the
+experiment 4 qualification stored for the original program. No compiler runs
+while a request is open.
+
+- C1 is the GCC 14 record: a build at O0 with
+  `-Wall -Wextra -fsanitize=undefined`, then a run. For a silent bug, it
+  shows a clean build and the exit status of the run, and nothing more.
+- C3 is the EvoCC record: the build and the run, the `evo check` diagnostic
+  with its code and line, one `evo explain` page for each code and the
+  `evo fix` plan.
+
+The [prompt](../../tools/experiment/prompt.txt) asks for the complete
+replacement `program.c` in one fenced block. Each model ran each item three
+times in each condition: 144 trials. Repetitions ran in turn, with items in
+sorted order. The first condition alternated by item and by repetition. Each
+request went through OpenRouter to one pinned provider, with no fallback, at
+temperature 0, low reasoning effort and at most 16,384 output tokens. A length
+stop counts as not repaired. The scoring is that of experiment 4: the answer
+must pass the hidden driver under GCC 14 at O0 and O2 and Clang 19 at O2.
+
+| Model | Provider | USD per million tokens, input / output | Cost cap |
+| --- | --- | --- | ---: |
+| DeepSeek V4.1 Flash, `deepseek/deepseek-v4.1-flash` | AtlasCloud | 0.135 / 0.54 | $2 |
+| Mistral Small 4, `mistralai/mistral-small-2603` | Mistral | 0.15 / 0.60 | $2 |
+| MiniMax M3.1 Flash, `minimax/minimax-m3.1-flash` | MiniMax | 0.15 / 0.60 | $2 |
+| Qwen3.8 27B, `qwen/qwen3.8-27b` | Cerebras | 0.99 / 1.49 | $3 |
+
+The protocol registered three predictions for each model:
+
+- P1: on the 18 silent items, C3 repairs more than C1.
+- P2: on the 6 controls, C3 loses at most 2 of the 18 trials. This has no test.
+- P3: on the 18 silent items, C3 uses fewer completion tokens than C1. A
+  length stop counts its tokens.
+
+P1 and P3 use the item as the unit and the exact one-sided Wilcoxon
+signed-rank test of experiment 5. Each holds at p < 0.05. Only a run that
+completes all 144 trials tests a prediction.
+
+### Pilots
+
+Four pilots of five trials came before registration. Each change below came
+before the next pilot.
+
+- Qwen3.5 9B received HTTP 429 from the shared pools of DeepInfra and then
+  Parasail. Mistral Small 4, MiniMax M3.1 Flash and Qwen3.8 Flash replaced it.
+- At 8,192 output tokens, low reasoning effort did not bound the reasoning,
+  and one answer of each model stopped at the limit. The limit became
+  16,384 tokens, and P3 was added.
+- Qwen3.8 Flash on Alibaba used 11,000 to 13,000 reasoning tokens. Its median
+  request took 296 seconds, and one request reached the 300-second deadline.
+  Qwen3.8 27B on Cerebras replaced it.
+
+The fourth pilot ran at the clean commit `6a3ded5e`. It met all six go
+criteria for all four models, and the registration records the SHA-256
+values of its receipts. All pilots cost $0.08. Pilot data stay out of the
+analysis.
+
+### Measured results
+
+Qwen3.8 27B finished at 10:45 UTC, MiniMax M3.1 Flash at 10:57 and DeepSeek
+V4.1 Flash at 11:32. Each of the three completed all 144 trials. Each request
+received HTTP 200 from the pinned provider with the registered model name,
+and no request needed a retry. Each delivered answer was a valid program and
+was scored on all three builds, with no score error.
+
+DeepSeek V4.1 Flash had one length stop: `adler-byte`, C1, repetition 2. It
+used all 16,384 output tokens, 16,192 of them for reasoning, and it counts as
+not repaired. There were no deadlines and no other undelivered answers.
+
+The Mistral Small 4 run received HTTP 429 from the shared pool of its
+provider. The harness retried once after 2 seconds, as registered. Trials 1
+and 3 passed on the retry. Trial 6 failed twice, and the run stopped after 6
+of 144 trials. A run that stops early tests nothing, so this page gives no
+Mistral result.
+
+| Model | Silent, C1 | Silent, C3 | Controls, C1 | Controls, C3 | Cost |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| DeepSeek V4.1 Flash | 50/54 | 54/54 | 18/18 | 17/18 | $0.256 |
+| MiniMax M3.1 Flash | 54/54 | 54/54 | 15/18 | 16/18 | $0.095 |
+| Qwen3.8 27B | 30/54 | 54/54 | 18/18 | 18/18 | $0.527 |
+
+The counts are repaired trials. The next table gives them by code, as C1 /
+C3, out of 18 trials for each silent code and 6 for each control code.
+
+| Code | DeepSeek V4.1 Flash | MiniMax M3.1 Flash | Qwen3.8 27B |
+| --- | --- | --- | --- |
+| E3001 uninitialized read | 16 / 18 | 18 / 18 | 12 / 18 |
+| E3010 dangling pointer | 18 / 18 | 18 / 18 | 3 / 18 |
+| E3011 out-of-bounds access | 16 / 18 | 18 / 18 | 15 / 18 |
+| E3002 division by zero | 6 / 5 | 3 / 4 | 6 / 6 |
+| E3004 signed overflow | 6 / 6 | 6 / 6 | 6 / 6 |
+| E3005 shift count | 6 / 6 | 6 / 6 | 6 / 6 |
+
+No failed answer returned the program unchanged. Each failed answer changed
+the source and failed the hidden test. All control failures came from
+`mean-empty`: DeepSeek V4.1 Flash failed it once in C3, and MiniMax M3.1 Flash
+failed it three times in C1 and twice in C3.
+
+The token columns are means for each trial, and completion tokens include
+reasoning tokens. The cost is the total of the cell. The models use
+different tokenizers, so their prompt tokens differ.
+
+| Model | Cell | Prompt | Completion | Reasoning | Cost |
+| --- | --- | ---: | ---: | ---: | ---: |
+| DeepSeek V4.1 Flash | C1, silent | 849 | 6,421 | 5,749 | $0.190 |
+| | C3, silent | 1,357 | 1,534 | 866 | $0.048 |
+| | C1, controls | 705 | 979 | 467 | $0.010 |
+| | C3, controls | 1,228 | 746 | 233 | $0.008 |
+| MiniMax M3.1 Flash | C1, silent | 1,000 | 1,108 | 442 | $0.041 |
+| | C3, silent | 1,475 | 932 | 267 | $0.035 |
+| | C1, controls | 860 | 701 | 197 | $0.009 |
+| | C3, controls | 1,352 | 770 | 260 | $0.010 |
+| Qwen3.8 27B | C1, silent | 952 | 2,717 | 1,941 | $0.270 |
+| | C3, silent | 1,501 | 1,103 | 348 | $0.169 |
+| | C1, controls | 820 | 959 | 347 | $0.040 |
+| | C3, controls | 1,391 | 886 | 274 | $0.049 |
+
+EvoCC's record is longer, so a C3 prompt has about 500 more tokens. On the
+silent items, the shorter answers paid for that: C3 cost 75% less than C1
+with DeepSeek V4.1 Flash, 37% less with Qwen3.8 27B and 14% less with
+MiniMax M3.1 Flash. On the controls, the two conditions cost within $0.01 of
+each other. These cost figures are descriptive. The four runs cost $0.887 in
+all, $0.009 of it for Mistral Small 4.
+
+### Registered predictions and limits
+
+| Model | P1 items / nonzero | P1 exact p | P1 | P2 C3 loss | P2 | P3 items / nonzero | P3 exact p | P3 |
+| --- | --- | --- | --- | ---: | --- | --- | --- | --- |
+| DeepSeek V4.1 Flash | 18 / 4 | 1/16 = 0.0625 | Did not hold | 1 | Held | 18 / 18 | 1/262144 = 0.0000038 | Held |
+| MiniMax M3.1 Flash | 18 / 0 | 1 | Did not hold | -1 | Held | 18 / 18 | 341/65536 = 0.0052 | Held |
+| Qwen3.8 27B | 18 / 8 | 1/256 = 0.0039 | Held | 0 | Held | 18 / 18 | 1/262144 = 0.0000038 | Held |
+| Mistral Small 4 | stopped | | Not tested | | Not tested | stopped | | Not tested |
+
+On the silent items, the mean completion tokens fell from 6,421 to 1,534
+(76%) with DeepSeek V4.1 Flash, from 2,717 to 1,103 (59%) with Qwen3.8 27B
+and from 1,108 to 932 (16%) with MiniMax M3.1 Flash. An independent
+dynamic-programming calculation reproduced each exact probability.
+
+P1 could not hold for DeepSeek V4.1 Flash: only four items differed, and
+with four nonzero items the smallest exact p is 1/16. MiniMax M3.1 Flash
+repaired all 54 silent trials in both conditions. Both models were at or
+near the ceiling, so their P1 results do not show that the two records help
+equally. P3 held for both: with EvoCC's record, they repaired as many bugs
+or more, with shorter answers. For Qwen3.8 27B, the largest gap is on
+dangling pointers: 3 of 18 repaired with C1 and 18 of 18 with C3.
+
+These are chat models with one response and no tools. Unlike the coding
+agent of experiments 4 and 5, they cannot test a change. The 18 silent items
+adapt six shared kernels, so they are not independent, and the nominal
+p-values overstate the independent evidence. Three repetitions at
+temperature 0 do not remove provider variation. The items were selected so
+that GCC 14's warnings and UBSan miss each silent bug, so the C1 record is
+empty by design. Other tools find some of these bugs: see the detection
+matrix of experiment 4. The experiment compares two frozen records, not two
+complete toolchains. Each model ran with one provider at low reasoning
+effort. Three models do not rank models in general.
+
+Sources: [registered analysis](../../tests/contracts/agent-repair-8-20261029.json);
+receipts for [DeepSeek V4.1 Flash](../../tests/contracts/agent-repair-8-deepseek-v4.1-flash-20261029.json),
+[MiniMax M3.1 Flash](../../tests/contracts/agent-repair-8-minimax-m3.1-flash-20261029.json),
+[Qwen3.8 27B](../../tests/contracts/agent-repair-8-qwen3.8-27b-20261029.json)
+and [Mistral Small 4](../../tests/contracts/agent-repair-8-mistral-small-2603-20261029.json);
+[wire logs](../../tests/contracts/agent-repair-8-wire-20261029.tar.gz) and
+[pilot records](../../tests/contracts/agent-repair-8-pilot-20261029.tar.gz).
+The archives leave out the bodies of the HTTP 429 responses, because they
+carry the OpenRouter account ID. The receipts keep their SHA-256 values. The
+18 tests of the harness passed before registration. An exact-value scan
+checked 1,021 capture files against the private credential value and found
+none. This scan does not prove that the transcripts contain no other
+sensitive information.
+
+Reproduce the registered analysis without making a model request:
+
+```sh
+python3 tools/experiment/silent_chat.py analyze \
+  tests/contracts/agent-repair-8-deepseek-v4.1-flash-20261029.json \
+  tests/contracts/agent-repair-8-minimax-m3.1-flash-20261029.json \
+  tests/contracts/agent-repair-8-qwen3.8-27b-20261029.json \
+  tests/contracts/agent-repair-8-mistral-small-2603-20261029.json
 ```

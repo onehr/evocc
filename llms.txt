@@ -43,7 +43,7 @@ Do not change emitted assembly, IR or certificates to repair presentation.
 ## Repository checks
 
 Use `CARGO_TARGET_DIR=target/frontend CARGO_BUILD_JOBS=2` for Cargo commands.
-Run Cargo commands serially and offline. Do not create another target tree.
+Run Cargo commands serially and offline. Use only this target tree of the worktree.
 Check free disk space first: do not start below 25 GiB; stop below 15 GiB.
 Keep captures below 500 MiB. Do not commit raw captures or generated binaries.
 Preserve `tests/contracts/`, sealed fixtures, required evidence and `.lake`.
@@ -51,5 +51,27 @@ Preserve `tests/contracts/`, sealed fixtures, required evidence and `.lake`.
 Run `tools/gate-changed.sh --full-workspace --offline` for package acceptance.
 Run `tools/gate-lean.sh` when the work requires the Lean gate.
 Keep specification pins current. Update TODO.md and render-status output.
-Keep code, comments and documentation in English. State the tested scope.
-Commit only intended files. Do not push without the owner's instruction.
+Keep code, comments and documentation in English. Put the tested scope in the
+commit message. Commit only intended files. Do not push without the owner's
+instruction.
+
+## Writing
+
+Let the work explain itself. Show the command and its real output, the code,
+the table or the receipt. Do not describe what the reader can already see.
+
+- Write in ASD-STE100 style: short active sentences, one fact in each.
+- Give each number its source: a receipt, a test or a commit.
+- State each fact once, in one place. Link to it from other places.
+- Do not announce or summarize nearby text: no "This page describes",
+  "The following table lists" or "In summary".
+- Do not add a label that carries no fact: no bold run-in label, no "Note:",
+  no heading over one line of text.
+- Put limits in one Scope or Limits section. Do not repeat them elsewhere.
+- Keep the process out of the repository. Goal sections, review rounds, hash
+  counts and "authorized by" go in the commit message or the task report.
+- A DONE tracker entry is one line with its commit.
+- A comment gives the reason for the code. It does not restate the code.
+- Add a file, section, table or template only when the task names it.
+
+Bad: "The following table lists the direct dependencies." Good: the table.
