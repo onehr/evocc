@@ -48,7 +48,7 @@ jobs:
           python3 tools/gen-compat-matrix.py
           mdbook --version
           mdbook build book --dest-dir "$RUNNER_TEMP/site"
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: ${{ runner.temp }}/site
 
