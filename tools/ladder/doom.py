@@ -235,7 +235,7 @@ def native_run(work):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--evocc", type=Path, default=ROOT / "target/pinned-check/release/evocc")
+    parser.add_argument("--evocc", type=Path, default=ROOT / "target/release/evocc")
     parser.add_argument("--work", type=Path, default=ROOT / ".build/ladder/doom")
     parser.add_argument("--sysroot", type=Path, default=ROOT / ".build/ladder/sysroot")
     parser.add_argument("--native", action="store_true")

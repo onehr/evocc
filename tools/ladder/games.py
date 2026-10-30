@@ -188,7 +188,7 @@ def main():
     parser.add_argument("phase", choices=["prepare", "reference", "emit", "link"])
     parser.add_argument("game", choices=list(PINS), nargs="?")
     parser.add_argument("--work", type=Path, default=ROOT / ".build/ladder/games")
-    parser.add_argument("--evocc", type=Path, default=ROOT / "target/pinned-check/release/evocc")
+    parser.add_argument("--evocc", type=Path, default=ROOT / "target/release/evocc")
     args = parser.parse_args()
     work = args.work.resolve()
     if args.phase == "prepare":
