@@ -12,8 +12,9 @@ session runs in one shell, in a temporary directory. The GCC session runs in the
 `evo-nexlab:sealed` container. The sessions go to `highlights.json`; both variants of the figure
 are drawn from it. The scoreboard reads the receipts of the release campaign. The explicit-check
 figure shows the EvoIR and the assembly that the release compiler makes for `examples/abs.c`.
-The stages figure follows line 7 of `examples/mean.c`: the record of `evo check`, then the EvoIR
-and the assembly of that line, and it refuses facts that do not match the source. The agent
+The stages figure follows line 7 of `examples/mean.c`: its typed C, the EvoIR that `evo check`
+executes with the record of the check, and the assembly. It refuses facts that do not match the
+source. The agent
 results figure reads the receipts and the registered analyses of experiments 5 and 8. The book
 shows it as a card on its own surface, because a reader can choose a book theme that differs from
 the system theme. `--check` runs no session: it draws every figure again from the transcript, the receipts and the
@@ -250,8 +251,8 @@ def pipeline(theme):
         if i:
             out.append(f'<path d="M{x - 21} 56 H{x - 5}" stroke="{t["arrow"]}" stroke-width="2"/>'
                        f'<path d="M{x - 3} 56 l-8 -5 v10 z" fill="{t["arrow"]}"/>')
-    out.append(pill(LEFT + STEP + BOX // 2, 102, "evo check runs here", t["check"]))
-    out.append(pill(LEFT + 2 * STEP + BOX // 2, 102, "proved rewrite rules", t["rules"]))
+    out.append(pill(LEFT + 2 * STEP + BOX // 2, 102, "evo check runs here", t["check"]))
+    out.append(pill(LEFT + 2 * STEP + BOX // 2, 130, "proved rewrite rules", t["rules"]))
     start, end = LEFT + STEP, LEFT + 4 * STEP + BOX
     out.append(f'<path d="M{start} 154 v12 H{end} v-12" fill="none" stroke="{t["prove"]}" '
                f'stroke-width="2"/>')
@@ -933,9 +934,10 @@ def stages(data, theme):
     t = THEMES[theme]
     rows = [
         ("C source", data["where"], [(data["source"], False)], []),
-        ("C-HIR", "typed C", data["facts"], [(data["check"], t["check"], 600)]),
+        ("C-HIR", "typed C", data["facts"], []),
         ("EvoIR", "typed SSA", [(data["header"], False)] + data["evoir"],
-         [("Each rule of C is a predicate and an obligation that no pass may delete.", t["rules"], 600),
+         [(data["check"], t["check"], 600),
+          ("Each rule of C is a predicate and an obligation that no pass may delete.", t["rules"], 600),
           ("Lean proves the rewrite rules on bits<N> values, for every N.", t["rules"], 600)]),
         ("AArch64", "bits only", data["asm"],
          [("Only bits remain: no type, no init state, no pointer object.", t["sub"], None),

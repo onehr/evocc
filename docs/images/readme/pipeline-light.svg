@@ -18,8 +18,8 @@
 <text x="796" y="51" fill="#1f2328" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="15" font-weight="600" text-anchor="middle">AArch64</text>
 <text x="796" y="71" fill="#59636e" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" text-anchor="middle">assembly text</text>
 <path d="M699 56 H715" stroke="#8c959f" stroke-width="2"/><path d="M717 56 l-8 -5 v10 z" fill="#8c959f"/>
-<rect x="198" y="102" width="141" height="24" rx="12" fill="none" stroke="#1a7f37"/><text x="268" y="118" fill="#1a7f37" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" text-anchor="middle">evo check runs here</text>
-<rect x="370" y="102" width="148" height="24" rx="12" fill="none" stroke="#8250df"/><text x="444" y="118" fill="#8250df" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" text-anchor="middle">proved rewrite rules</text>
+<rect x="374" y="102" width="141" height="24" rx="12" fill="none" stroke="#1a7f37"/><text x="444" y="118" fill="#1a7f37" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" text-anchor="middle">evo check runs here</text>
+<rect x="370" y="130" width="148" height="24" rx="12" fill="none" stroke="#8250df"/><text x="444" y="146" fill="#8250df" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" text-anchor="middle">proved rewrite rules</text>
 <path d="M192 154 v12 H872 v-12" fill="none" stroke="#0969da" stroke-width="2"/>
 <text x="532" y="194" fill="#0969da" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" font-weight="600" text-anchor="middle">evo prove: Lean 4 checks every stage, or EvoCC writes nothing</text>
 </svg>

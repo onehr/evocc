@@ -66,7 +66,7 @@ Line 7 of [`mean.c`](examples/mean.c) at four stages of the release compiler:
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/images/readme/stages-dark.svg">
-    <img src="docs/images/readme/stages-light.svg" alt="One line of mean.c, s->count += 1;, at four stages of the release compiler. C-HIR, typed C: s->count is an int of 4 bytes, its bytes are not initialized, and s points into the struct stats object of mean(); evo check stops here with E3001 read-of-uninitialized-object at mean.c:7:9. EvoIR, typed SSA: the block passes the values ptr<generic>, mem<all> and world, and the line becomes access_in_bounds, a load of bits<32>, signed_add_defined with ub.assume.signed_overflow, add.bits<32> and a store; each rule of C is a predicate and an obligation that no pass may delete, and Lean proves the rewrite rules on bits<N> values for every N. AArch64, bits only: movz, ldr, adds, b.vs and str, with no type, no init state and no pointer object; the overflow rule stays a trap, because b.vs leads to brk #3004." width="860">
+    <img src="docs/images/readme/stages-light.svg" alt="One line of mean.c, s->count += 1;, at four stages of the release compiler. C-HIR, typed C: s->count is an int of 4 bytes, its bytes are not initialized, and s points into the struct stats object of mean(). EvoIR, typed SSA: the block passes the values ptr<generic>, mem<all> and world, and the line becomes access_in_bounds, a load of bits<32>, signed_add_defined with ub.assume.signed_overflow, add.bits<32> and a store; evo check executes this IR and stops here with E3001 read-of-uninitialized-object at mean.c:7:9; each rule of C is a predicate and an obligation that no pass may delete, and Lean proves the rewrite rules on bits<N> values for every N. AArch64, bits only: movz, ldr, adds, b.vs and str, with no type, no init state and no pointer object; the overflow rule stays a trap, because b.vs leads to brk #3004." width="860">
   </picture>
 </p>
 
@@ -314,14 +314,14 @@ Each image is program output, a plot of it or an excerpt of a recorded test log
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/images/readme/pipeline-dark.svg">
-    <img src="docs/images/readme/pipeline-light.svg" alt="C source, C-HIR, EvoIR, EvoMIR and AArch64 assembly; evo check runs on C-HIR; Lean 4 checks every stage for evo prove" width="860">
+    <img src="docs/images/readme/pipeline-light.svg" alt="C source, C-HIR, EvoIR, EvoMIR and AArch64 assembly; evo check runs on EvoIR, where the proved rewrite rules also apply; Lean 4 checks every stage for evo prove" width="860">
   </picture>
 </p>
 
 - **C-HIR** keeps the meaning of C: types, evaluation order, which bytes are initialized and what
-  each pointer may point to. `evo check` runs at this level.
-- **EvoIR** turns the undefined-behavior rules of C into explicit checks. An optimization can
-  remove work, but never a check.
+  each pointer may point to. `evo run` executes this level.
+- **EvoIR** turns the undefined-behavior rules of C into explicit checks. `evo check` executes
+  this level. An optimization can remove work, but never a check.
 - **EvoMIR** treats the machine as data. Registers, calling conventions and instruction encodings
   are tables in [`targets/aarch64/`](targets/aarch64/).
 - **Lean 4** proves the 62 rewrite rules of the optimizer. For `core-v1` on AArch64 Linux, five

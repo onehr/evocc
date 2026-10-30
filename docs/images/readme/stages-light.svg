@@ -11,22 +11,22 @@
 <rect x="178" y="123" width="676" height="24" rx="4" fill="#fff8c5" stroke="#d4a72c"/>
 <text x="186" y="140" fill="#1f2328" xml:space="preserve" font-weight="600"><tspan font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14">its bytes are not initialized</tspan></text>
 <text x="186" y="166" fill="#1f2328" xml:space="preserve"><tspan font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13">s</tspan><tspan font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14"> points into the struct stats object of mean()</tspan></text>
-<text x="172" y="205" fill="#1a7f37" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" font-weight="600">evo check stops here: E3001 read-of-uninitialized-object at mean.c:7:9</text>
-<path d="M516 217 V235" stroke="#8c959f" stroke-width="2"/><path d="M516 243 l-6 -10 h12 z" fill="#8c959f"/>
-<text x="0" y="275" fill="#1f2328" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="17" font-weight="700">EvoIR</text>
-<text x="0" y="297" fill="#59636e" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14">typed SSA</text>
-<rect x="172.5" y="255.5" width="687" height="204" rx="10" fill="#f6f8fa" stroke="#d0d7de"/>
-<text x="186" y="277" fill="#1f2328" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" xml:space="preserve">^b3(…, %v32: ptr&lt;generic&gt;, …, %v34: mem&lt;all&gt;, %v35: world):</text>
-<text x="186" y="298" fill="#1f2328" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" xml:space="preserve">    %v36 = const.bits&lt;32&gt; 1</text>
-<text x="186" y="319" fill="#1f2328" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" xml:space="preserve">    %v37 = access_in_bounds %v34, %v32 [size=4, align=4]</text>
-<text x="186" y="340" fill="#1f2328" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" xml:space="preserve">    (%v38, %v39, %v40) = load %v37, %v35, %v32 : bits&lt;32&gt;</text>
-<rect x="178" y="347" width="676" height="19" rx="4" fill="#fff8c5" stroke="#d4a72c"/>
-<text x="186" y="361" fill="#1f2328" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" xml:space="preserve" font-weight="700">    %v41 = signed_add_defined %v38, %v36</text>
-<rect x="178" y="368" width="676" height="19" rx="4" fill="#fff8c5" stroke="#d4a72c"/>
-<text x="186" y="382" fill="#1f2328" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" xml:space="preserve" font-weight="700">    ub.assume.signed_overflow %v41</text>
-<text x="186" y="403" fill="#1f2328" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" xml:space="preserve">    %v42 = add.bits&lt;32&gt; %v38, %v36</text>
-<text x="186" y="424" fill="#1f2328" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" xml:space="preserve">    %v43 = access_in_bounds %v39, %v32 [size=4, align=4]</text>
-<text x="186" y="445" fill="#1f2328" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" xml:space="preserve">    (%v44, %v45) = store %v43, %v40, %v32, %v42</text>
+<path d="M516 195 V213" stroke="#8c959f" stroke-width="2"/><path d="M516 221 l-6 -10 h12 z" fill="#8c959f"/>
+<text x="0" y="253" fill="#1f2328" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="17" font-weight="700">EvoIR</text>
+<text x="0" y="275" fill="#59636e" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14">typed SSA</text>
+<rect x="172.5" y="233.5" width="687" height="204" rx="10" fill="#f6f8fa" stroke="#d0d7de"/>
+<text x="186" y="255" fill="#1f2328" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" xml:space="preserve">^b3(…, %v32: ptr&lt;generic&gt;, …, %v34: mem&lt;all&gt;, %v35: world):</text>
+<text x="186" y="276" fill="#1f2328" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" xml:space="preserve">    %v36 = const.bits&lt;32&gt; 1</text>
+<text x="186" y="297" fill="#1f2328" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" xml:space="preserve">    %v37 = access_in_bounds %v34, %v32 [size=4, align=4]</text>
+<text x="186" y="318" fill="#1f2328" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" xml:space="preserve">    (%v38, %v39, %v40) = load %v37, %v35, %v32 : bits&lt;32&gt;</text>
+<rect x="178" y="325" width="676" height="19" rx="4" fill="#fff8c5" stroke="#d4a72c"/>
+<text x="186" y="339" fill="#1f2328" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" xml:space="preserve" font-weight="700">    %v41 = signed_add_defined %v38, %v36</text>
+<rect x="178" y="346" width="676" height="19" rx="4" fill="#fff8c5" stroke="#d4a72c"/>
+<text x="186" y="360" fill="#1f2328" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" xml:space="preserve" font-weight="700">    ub.assume.signed_overflow %v41</text>
+<text x="186" y="381" fill="#1f2328" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" xml:space="preserve">    %v42 = add.bits&lt;32&gt; %v38, %v36</text>
+<text x="186" y="402" fill="#1f2328" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" xml:space="preserve">    %v43 = access_in_bounds %v39, %v32 [size=4, align=4]</text>
+<text x="186" y="423" fill="#1f2328" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" xml:space="preserve">    (%v44, %v45) = store %v43, %v40, %v32, %v42</text>
+<text x="172" y="460" fill="#1a7f37" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" font-weight="600">evo check stops here: E3001 read-of-uninitialized-object at mean.c:7:9</text>
 <text x="172" y="482" fill="#8250df" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" font-weight="600">Each rule of C is a predicate and an obligation that no pass may delete.</text>
 <text x="172" y="504" fill="#8250df" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" font-weight="600">Lean proves the rewrite rules on bits&lt;N&gt; values, for every N.</text>
 <path d="M516 516 V534" stroke="#8c959f" stroke-width="2"/><path d="M516 542 l-6 -10 h12 z" fill="#8c959f"/>
