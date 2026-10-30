@@ -23,6 +23,8 @@ All notable changes to EvoCC are listed in this file. The format follows
 
 - The task tracker keeps active work and one-line references to closed work. The full closed
   history is in `docs/archive/todo-0.1.0.md`.
+- Cargo builds into its default `target/` directory, so the binaries are in `target/release/`.
+  `tools/release.sh` writes the archives to `target/distrib/`.
 - The book chapter on the agent experiments is now "Agent Experiments", and it reports
   experiment 8.
 - The README section "Built for agents" shows the record that an agent gets from GCC and from

@@ -27,7 +27,7 @@ fn evocc() -> &'static str {
 }
 
 fn temp_file(source: &str) -> PathBuf {
-    let directory = root().join("target/frontend/tmp").join(format!(
+    let directory = Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!(
         "d28c-{}-{}",
         std::process::id(),
         NEXT_FILE.fetch_add(1, Ordering::Relaxed)

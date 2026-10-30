@@ -68,7 +68,7 @@ fn text(o: &Output) -> String {
     )
 }
 fn assembly(source: &str, target: &str, flags: &[&str]) -> Output {
-    let dir = root().join("target/frontend/tmp").join(format!(
+    let dir = Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!(
         "n09c-{}-{}",
         std::process::id(),
         NEXT.fetch_add(1, Ordering::Relaxed)
@@ -90,7 +90,7 @@ fn assembly(source: &str, target: &str, flags: &[&str]) -> Output {
     result
 }
 fn run(source: &str, target: &str, mode: &str, level: &str) -> Output {
-    let dir = root().join("target/frontend/tmp").join(format!(
+    let dir = Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!(
         "n09c-run-{}-{}",
         std::process::id(),
         NEXT.fetch_add(1, Ordering::Relaxed)
@@ -185,9 +185,8 @@ fn invalid_constant_counts_keep_e3005() {
 
 #[test]
 fn constant_shift_program_passes_the_proof_path() {
-    let dir = root()
-        .join("target/frontend/tmp")
-        .join(format!("n09c-prove-{}", std::process::id()));
+    let dir =
+        Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!("n09c-prove-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let source = dir.join("shift.c");
     let output = dir.join("shift.s");
@@ -212,9 +211,8 @@ fn constant_shift_program_passes_the_proof_path() {
 #[test]
 #[ignore = "host native values; run explicitly"]
 fn constant_shift_values_match_native_references() {
-    let dir = root()
-        .join("target/frontend/tmp")
-        .join(format!("n09c-native-{}", std::process::id()));
+    let dir =
+        Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!("n09c-native-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let source = dir.join("shift.c");
     std::fs::write(&source, SHIFT_VALUES).unwrap();

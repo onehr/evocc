@@ -16,7 +16,7 @@ your absolute `evo` path and keep the matching `evocc` executable beside it.
   "lsp": {
     "clangd": {
       "binary": {
-        "path": "/absolute/path/to/c30/target/frontend/debug/evo",
+        "path": "/absolute/path/to/evocc/target/debug/evo",
         "arguments": ["lsp"]
       }
     }
@@ -53,7 +53,7 @@ This launches an Extension Development Host, not a Marketplace installation.
 
 In that window, set **Evo: Path** (`evo.path`) to the absolute path of the `evo`
 executable. For the repository's usual build directory, use
-`/absolute/path/to/c30/target/frontend/debug/evo`. Keep its sibling `evocc`
+`/absolute/path/to/evocc/target/debug/evo`. Keep its sibling `evocc`
 executable available. Reload the window after changing this setting. The default
 is `evo` from the extension host's `PATH`, which can differ from a terminal's.
 The extension runs only in trusted workspaces and handles local `file:` C

@@ -7,12 +7,12 @@
 #                    aarch64-unknown-linux-gnu. The default is the host. A build
 #                    must run on its target, because the script runs evocc and
 #                    builds evoir-sem there.
-#   --out DIR        The output directory. The default is target/dist.
+#   --out DIR        The output directory. The default is target/distrib.
 #   --with-lean      Rebuild evoir-sem even if lean/.lake/build/bin/evoir-sem exists.
 #   --skip-build     Build nothing. Package the binaries that exist.
 #
 # The script builds evo, evocc and evocc-checker with Cargo, offline, in
-# target/frontend using the dist profile. The dist profile removes the debug map
+# target/ using the dist profile. The dist profile removes the debug map
 # and remaps the checkout, the Rust sysroot and the target directory. On Linux
 # it builds them for aarch64-unknown-linux-musl, so they are static. That needs
 # `rustup target add aarch64-unknown-linux-musl`. Without it the script builds
@@ -44,7 +44,7 @@ die() { echo "release: $*" >&2; exit 2; }
 warn() { echo "release: warning: $*" >&2; }
 
 target=""
-out="target/dist"
+out="target/distrib"
 with_lean=false
 skip_build=false
 while [ $# -gt 0 ]; do
@@ -81,7 +81,7 @@ if [ "$target" != "$host" ] && [ "$skip_build" = false ]; then
     die "the host is $host; build $target on its own host, or give --skip-build"
 fi
 
-CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-target/frontend}"
+CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-target}"
 case "$CARGO_TARGET_DIR" in
     /*) ;;
     *) CARGO_TARGET_DIR="$ROOT/$CARGO_TARGET_DIR" ;;

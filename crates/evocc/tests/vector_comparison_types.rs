@@ -96,7 +96,7 @@ fn text(output: &Output) -> String {
 }
 
 fn temporary_directory(name: &str) -> PathBuf {
-    root().join("target/frontend/tmp").join(format!(
+    Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!(
         "vector-type-{name}-{}-{}",
         std::process::id(),
         NEXT_FILE.fetch_add(1, Ordering::Relaxed)

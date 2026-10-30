@@ -68,7 +68,7 @@ def run(root, plan, updates, *, execute=True):
     if execute and head in missing:
         require(shutil.disk_usage(root).free >= 25 * 1024**3, 'pre-push build requires 25 GiB free')
         require(not git(root, 'status', '--porcelain'), 'pre-push measurement requires a clean worktree')
-        env = dict(os.environ, CARGO_TARGET_DIR='target/frontend', CARGO_BUILD_JOBS='2')
+        env = dict(os.environ, CARGO_TARGET_DIR='target', CARGO_BUILD_JOBS='2')
         # Cargo's own target lock serializes this single invocation; the bench
         # adapter additionally serializes the VM lane using .build/bench.lock.
         subprocess.run(['cargo', 'build', '--release', '--offline', '-p', 'evocc', '-p', 'evocc-proofcheck',

@@ -874,7 +874,7 @@ def main(argv=None):
     if args.survey_only and (selected != ["kernel"] or args.reuse_kernel_survey):
         print("--survey-only requires kernel alone and cannot reuse a prior survey", file=sys.stderr)
         return 2
-    target = Path(os.environ.get("CARGO_TARGET_DIR", ROOT / "target/frontend")).resolve()
+    target = Path(os.environ.get("CARGO_TARGET_DIR", ROOT / "target")).resolve()
     binary = (args.evocc or target / "release/evocc").resolve()
     needs_compiler = any(name not in ('kernel-selftest', 'kernel-selftest-all', 'kernel-kunit') and CATALOG[name][1] for name in selected)
     if args.dry_run:

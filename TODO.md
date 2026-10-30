@@ -59,7 +59,7 @@ commands and measurements stay in the [kernel ledger][kernel],
 - Step zero, before any build or rerun: inspect free space and retention. Do not
   start below **25 GiB** free; stop active work and clean up below **15 GiB**.
   This cleanup checkpoint must reach at least **80 GiB** before new work.
-- Use only `CARGO_TARGET_DIR=target/frontend CARGO_BUILD_JOBS=2`; serialize Cargo
+- Use only the default `target/` tree with two jobs; serialize Cargo
   invocations in that tree. The repository Cargo defaults match this policy.
   No extra target trees, workspace clones, kernel trees or large VM disks.
 - Freeze each capture's retention cap in its plan: **500 MiB by default**.
@@ -90,7 +90,7 @@ or kernel PASS. [Retained artifacts and measurements][kernel].
 
 October 4 owner follow-up supersedes that temporary block: bounded V00–V06
 verification may resume below 80 GiB, retaining the 25/15 GiB start/stop lines,
-500 MiB capture cap and single two-job `target/frontend` tree. No new kernel
+500 MiB capture cap and single two-job `target/` tree. No new kernel
 build, runtime retirement or large disk is authorized by this exception.
 
 October 11 cleanup: remove only unused Cargo dev intermediates (`incremental`,

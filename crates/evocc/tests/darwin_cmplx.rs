@@ -67,7 +67,7 @@ fn command(target: &str) -> Command {
 
 #[cfg(target_os = "macos")]
 fn compile(source: &str, target: &str, level: &str, _mode: &str) -> Output {
-    let directory = root().join("target/frontend/tmp").join(format!(
+    let directory = Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!(
         "d27b-{}-{}",
         std::process::id(),
         NEXT_FILE.fetch_add(1, Ordering::Relaxed)

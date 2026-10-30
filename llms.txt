@@ -42,8 +42,8 @@ Do not change emitted assembly, IR or certificates to repair presentation.
 
 ## Repository checks
 
-Use `CARGO_TARGET_DIR=target/frontend CARGO_BUILD_JOBS=2` for Cargo commands.
-Run Cargo commands serially and offline. Use only this target tree of the worktree.
+Cargo builds into `target/` with two jobs, as `.cargo/config.toml` sets.
+Run Cargo commands serially and offline. Do not set another target directory.
 Check free disk space first: do not start below 25 GiB; stop below 15 GiB.
 Keep captures below 500 MiB. Do not commit raw captures or generated binaries.
 Preserve `tests/contracts/`, sealed fixtures, required evidence and `.lake`.

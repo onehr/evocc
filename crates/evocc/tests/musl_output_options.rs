@@ -12,7 +12,7 @@ fn root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
 }
 fn work(label: &str) -> PathBuf {
-    let path = root().join("target/frontend/tmp").join(format!(
+    let path = Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!(
         "musl-output-{label}-{}-{}",
         std::process::id(),
         NEXT.fetch_add(1, Ordering::Relaxed)

@@ -177,7 +177,7 @@ def run_codegen_measurement(plan, root):
             'N05 current-commit measurement requires a clean worktree')
     head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=root, text=True).strip()
     tools = {name: (root / path).resolve() for name, path in m['tools'].items()}
-    require(all(tools[name].is_relative_to(root / 'target/frontend/release')
+    require(all(tools[name].is_relative_to(root / 'target/release')
                 for name in ('compiler', 'checker')), 'N05 requires the shared release target')
     tool_hashes = {name: digest(path.read_bytes()) for name, path in tools.items()}
     for path, expected in m['inputs'].items():

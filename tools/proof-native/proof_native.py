@@ -15,7 +15,7 @@ Steps (each takes WORK_DIR [CASE ...]): freeze, produce, prepare, run,
 compare, scan, report. WORK_DIR must be outside the repository. The binaries
 come from --evocc, --evocc-checker and --evoir-sem, or from the environment
 variables EVOCC, EVOCC_CHECKER and EVOIR_SEM. The defaults are
-target/frontend/debug/evocc, target/frontend/debug/evocc-checker and
+target/debug/evocc, target/debug/evocc-checker and
 lean/.lake/build/bin/evoir-sem. `freeze` copies them into WORK_DIR/bin; the
 other steps use only these copies.
 """
@@ -36,8 +36,8 @@ HERE = Path(__file__).resolve().parent
 REPO = HERE.parent.parent
 FIX = REPO / "tests/fixtures/verification"
 DEFAULT_BINARIES = {
-    "evocc": ("EVOCC", REPO / "target/frontend/debug/evocc"),
-    "evocc-checker": ("EVOCC_CHECKER", REPO / "target/frontend/debug/evocc-checker"),
+    "evocc": ("EVOCC", REPO / "target/debug/evocc"),
+    "evocc-checker": ("EVOCC_CHECKER", REPO / "target/debug/evocc-checker"),
     "evoir-sem": ("EVOIR_SEM", REPO / "lean/.lake/build/bin/evoir-sem"),
 }
 STEP_LIMIT = 10_000_000

@@ -7,6 +7,5 @@ replace-with = "vendored-sources"
 directory = "vendor"
 
 [build]
-# One shared build tree; concurrent Cargo invocations must be serialized.
-target-dir = "target/frontend"
+# Cargo builds into the default target/. Run one Cargo command at a time.
 jobs = 2

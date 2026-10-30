@@ -11,7 +11,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[3]
 ITEMS = ROOT / "tests/fixtures/agent-repair"
-EVO = ROOT / "target/frontend/release/evo"
+EVO = ROOT / "target/release/evo"
 FIELDS = {"program.c", "fixed.c", "reference_main.c", "expected.txt", "origin.md", "class"}
 UB_MESSAGES = {
     "addition-overflow": ("E3004", "signed integer overflow"),

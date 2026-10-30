@@ -8,13 +8,11 @@ static NEXT: AtomicU64 = AtomicU64::new(0);
 struct Fixture(PathBuf);
 impl Fixture {
     fn new() -> Self {
-        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../../target/frontend/tmp")
-            .join(format!(
-                "system-header-{}-{}",
-                std::process::id(),
-                NEXT.fetch_add(1, Ordering::Relaxed)
-            ));
+        let root = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join(format!(
+            "system-header-{}-{}",
+            std::process::id(),
+            NEXT.fetch_add(1, Ordering::Relaxed)
+        ));
         std::fs::create_dir_all(&root).unwrap();
         std::fs::write(
             root.join("header.h"),

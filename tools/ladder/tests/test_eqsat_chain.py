@@ -23,7 +23,7 @@ class IdentityArchive(unittest.TestCase):
     def setUpClass(cls):
         cls.temp = tempfile.TemporaryDirectory(prefix='evocc-identity-contract-')
         cls.root = Path(cls.temp.name)
-        target = Path(os.environ.get('CARGO_TARGET_DIR', ROOT / 'target/frontend'))
+        target = Path(os.environ.get('CARGO_TARGET_DIR', ROOT / 'target'))
         cls.driver = target / 'debug/evocc'
         cls.source = ROOT / 'tests/fixtures/verified-eqsat-chain.c'
         cls.bundle = cls.root / 'identity'
@@ -120,7 +120,7 @@ class ChainArchive(unittest.TestCase):
     def setUpClass(cls):
         cls.temp = tempfile.TemporaryDirectory(prefix='evocc-chain-contract-')
         cls.root = Path(cls.temp.name)
-        target = Path(os.environ.get('CARGO_TARGET_DIR', ROOT / 'target/frontend'))
+        target = Path(os.environ.get('CARGO_TARGET_DIR', ROOT / 'target'))
         cls.driver, cls.checker = target / 'debug/evocc', target / 'debug/evo-proofcheck'
         cls.bundle = cls.root / 'original'
         cls.source = ROOT / 'tests/fixtures/verified-eqsat-chain.c'

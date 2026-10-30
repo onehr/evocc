@@ -6,7 +6,7 @@ The proof record covers the admitted typed Core source through final assembly te
 
 ## Scripted run
 
-Build the release binaries and Lean checker, then prepend `target/frontend/release`
+Build the release binaries and Lean checker, then prepend `target/release`
 to `PATH`. No checker override is needed. From the repository root, run
 `sh tools/demo/agent-loop.sh`. The source fixture stays unchanged; the fixed
 source and proof remain in the printed temporary directories.

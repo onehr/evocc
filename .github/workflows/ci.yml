@@ -14,7 +14,6 @@ concurrency:
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 env:
-  CARGO_TARGET_DIR: target/frontend
   CARGO_BUILD_JOBS: "2"
   CARGO_INCREMENTAL: "0"
   CARGO_TERM_COLOR: always
@@ -68,7 +67,7 @@ jobs:
       # A fresh checkout rebuilds the workspace crates. The cache keeps the rest.
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: ". -> target/frontend"
+          workspaces: ". -> target"
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: cargo fmt
         run: cargo fmt --all -- --check

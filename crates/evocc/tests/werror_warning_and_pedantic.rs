@@ -61,7 +61,7 @@ fn has_code(output: &Output, code: &str) -> bool {
 }
 
 fn temp_source(source: &str) -> PathBuf {
-    let directory = root().join("target/frontend/tmp").join(format!(
+    let directory = Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!(
         "werror-warning-{}-{}",
         std::process::id(),
         NEXT_FILE.fetch_add(1, Ordering::Relaxed)

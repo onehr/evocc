@@ -375,8 +375,8 @@ stay trusted: the native run tests them but does not prove them. Receipt:
 The script also cross-checks each entry with gcc-14 `-O0` and scans the output statically for reads
 of the upper 32 bits of 32-bit arguments. `WORK_DIR` must be outside the repository. The run needs
 the sealed image `evo-nexlab:sealed` and the Apple Container runtime. Without `--evocc` and
-`--evocc-checker`, it uses the debug builds `target/frontend/debug/evocc` and
-`target/frontend/debug/evocc-checker`.
+`--evocc-checker`, it uses the debug builds `target/debug/evocc` and
+`target/debug/evocc-checker`.
 
 ## Verification details and limits
 
@@ -637,7 +637,7 @@ configuration with `TEST_FPU=m`. Its exact commands and identities are in
 [`fpu-worker-verdict.out`](../tests/fixtures/fpu-worker-verdict.out) and
 [`kernel-uniform-module-runtime.out`](../tests/fixtures/kernel-uniform-module-runtime.out). The
 evidence command of the Doom lane above uses `--evocc target/pinned-check/release/evocc`; the README
-row builds the default release binary in `target/frontend`. The game rows give the EvoCC emission
+row builds the default release binary in `target/`. The game rows give the EvoCC emission
 step; the link and capture steps run in the container
 ([game reproduction](images/showcase/README.md#game-reproduction)).
 
@@ -716,7 +716,7 @@ To keep the ordered proof bundles, add `--eq-proof-dir=NEW_DIR`. To check them a
 never overwritten. Without `-Oeq-scalar`, the same option records an explicit identity chain (zero
 rewrite transactions). Audit it with `--verify-eqsat-chain NEW_DIR` and no checker; the byte
 identity is reported separately from the proof replay. The standalone
-`target/frontend/release/evo-proofcheck before.evoir after.evoir proof.evp2` checks one scalar
+`target/release/evo-proofcheck before.evoir after.evoir proof.evp2` checks one scalar
 rewrite certificate. An optimization can remove work, but it cannot discard the original
 undefined-behavior obligations. See the
 [implementation receipt](archive/notebook/verified-eqsat-implementation-20260929.md) for the tested scope.

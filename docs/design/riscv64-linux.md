@@ -691,7 +691,7 @@ FP probes use explicit operations, `-O0 -frounding-math -ffp-contract=off`.
 Future backend gates use the existing target directory, serially and offline:
 
 ```sh
-CARGO_TARGET_DIR=target/frontend CARGO_BUILD_JOBS=2 CARGO_INCREMENTAL=0 \
+CARGO_INCREMENTAL=0 \
   tools/gate-changed.sh --full-workspace --offline
 python3 tools/generate-target.py --check
 python3 tools/check-spec-pins.py

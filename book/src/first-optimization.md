@@ -117,10 +117,10 @@ optimizations off so this comparison isolates EqSat. Set `target` to
 `aarch64-unknown-linux-gnu` on Linux. Run from the repository root after the source build:
 
 ```sh
-export PATH="$PWD/target/frontend/release:$PATH"
+export PATH="$PWD/target/release:$PATH"
 target=aarch64-apple-darwin
 out=$(mktemp -d)
-checker="$PWD/target/frontend/release/evocc-checker"
+checker="$PWD/target/release/evocc-checker"
 checker_sha=$(shasum -a 256 "$checker" | awk '{print $1}')
 evo check examples/add_zero.c
 evocc --target="$target" -O0 --emit=evoir examples/add_zero.c > "$out/before.evo"

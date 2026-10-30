@@ -124,12 +124,12 @@ Clone the repository and build the command program, the compiler and the certifi
 ```console
 $ git clone https://github.com/onehr/evocc.git
 $ cd evocc
-$ CARGO_TARGET_DIR=target/frontend cargo build --release --offline --locked -j 2 -p evocc -p evocc-proofcheck
+$ cargo build --release --offline --locked -p evocc -p evocc-proofcheck
 ```
 
 The build is offline: the three Rust libraries that EvoCC uses are in the repository, in `vendor/`.
 `--locked` makes Cargo use the versions in `Cargo.lock`, as the release build does. Cargo writes
-`evo`, `evocc` and `evocc-checker` to `target/frontend/release/`.
+`evo`, `evocc` and `evocc-checker` to `target/release/`.
 
 Then build the Lean checker. Run Lake from inside the `lean` directory. The first build takes a
 long time:
@@ -142,7 +142,7 @@ Build completed successfully (728 jobs).
 Lake writes `evoir-sem` to `lean/.lake/build/bin/`. Add both directories to your `PATH`:
 
 ```console
-$ export PATH="$PWD/target/frontend/release:$PWD/lean/.lake/build/bin:$PATH"
+$ export PATH="$PWD/target/release:$PWD/lean/.lake/build/bin:$PATH"
 ```
 
 Now `evocc --version` works as in the release. A build of commit `08bf09bd7631` on macOS prints:

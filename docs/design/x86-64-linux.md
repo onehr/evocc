@@ -873,11 +873,11 @@ as BSR and BSF on an older CPU, so the audit is the primary check.
 
 ```sh
 # Unit, ABI and corpus lanes (serial, offline, the shared target tree).
-CARGO_TARGET_DIR=target/frontend CARGO_BUILD_JOBS=2 cargo test --offline -p evocc-mir --test x86_64_expansions
-CARGO_TARGET_DIR=target/frontend CARGO_BUILD_JOBS=2 cargo test --offline -p evocc-mir --test x86_64_abi_calls
-CARGO_TARGET_DIR=target/frontend CARGO_BUILD_JOBS=2 cargo test --offline -p evocc-mir --test x86_64_native_corpus
-CARGO_TARGET_DIR=target/frontend CARGO_BUILD_JOBS=2 cargo test --offline -p evocc --test x86_64_driver
-CARGO_TARGET_DIR=target/frontend CARGO_BUILD_JOBS=2 cargo test --offline -p evocc --test proof_required
+cargo test --offline -p evocc-mir --test x86_64_expansions
+cargo test --offline -p evocc-mir --test x86_64_abi_calls
+cargo test --offline -p evocc-mir --test x86_64_native_corpus
+cargo test --offline -p evocc --test x86_64_driver
+cargo test --offline -p evocc --test proof_required
 
 # One program by hand.
 evocc --target=x86_64-unknown-linux-gnu --emit=asm prog.c > prog.s

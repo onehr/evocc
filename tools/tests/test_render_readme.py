@@ -163,7 +163,7 @@ class ExplicitCheckFigureTests(unittest.TestCase):
 
     def test_committed_figure_is_the_output_of_the_release_compiler(self):
         if not (render.BIN / "evocc").is_file():
-            self.skipTest("needs the release build in target/frontend/release")
+            self.skipTest("needs the release build in target/release")
         data = render.ub_data()
         for theme in render.THEMES:
             with self.subTest(theme=theme):
@@ -277,7 +277,7 @@ class StagesFigureTests(unittest.TestCase):
 
     def test_committed_figure_is_the_output_of_the_release_compiler(self):
         if not all((render.BIN / tool).is_file() for tool in ("evocc", "evo")):
-            self.skipTest("needs the release build in target/frontend/release")
+            self.skipTest("needs the release build in target/release")
         data = render.stages_data()
         for theme in render.THEMES:
             with self.subTest(theme=theme):

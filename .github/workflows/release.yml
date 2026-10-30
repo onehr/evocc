@@ -14,7 +14,6 @@ permissions:
   contents: read
 
 env:
-  CARGO_TARGET_DIR: target/frontend
   CARGO_BUILD_JOBS: "2"
   CARGO_TERM_COLOR: always
   RELEASE_CHANNEL: ${{ inputs.channel || 'stable' }}

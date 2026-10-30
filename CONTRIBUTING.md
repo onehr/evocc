@@ -18,10 +18,10 @@ EvoCC builds offline. The three Rust dependencies are in `vendor/`, and
 [`.cargo/config.toml`](.cargo/config.toml) points Cargo at them.
 
 ```sh
-CARGO_TARGET_DIR=target/frontend cargo build --release --offline -j 2 -p evocc -p evocc-proofcheck
+cargo build --release --offline -p evocc -p evocc-proofcheck
 ```
 
-- Use the one build tree, `target/frontend`, with two jobs. Do not make a second tree.
+- Use the one build tree, `target/`. `.cargo/config.toml` sets two jobs. Do not make a second tree.
 - Check the free disk space with `df -h .` first. Do not start a build below 25 GiB free.
 - [`rust-toolchain.toml`](rust-toolchain.toml) pins Rust. [`lean/lean-toolchain`](lean/lean-toolchain)
   pins Lean.

@@ -37,7 +37,7 @@ PAPER = ROOT / "docs" / "images" / "paper"
 BOOK = ROOT / "book" / "src" / "images"
 TRANSCRIPT = OUT / "highlights.json"
 EXAMPLES = ROOT / "examples"
-BIN = ROOT / "target" / "frontend" / "release"
+BIN = ROOT / "target" / "release"
 ZLIB = ROOT / ".build" / "ladder" / "zlib" / "zlib-1.3.2.tar.gz"
 GCC_IMAGE = "evo-nexlab:sealed"
 # The lines that `grep -E 'subs|b\.vs|brk'` prints from the checked abs.s. The README and the

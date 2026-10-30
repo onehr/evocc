@@ -116,7 +116,7 @@ fn has_code(output: &Output, code: &str) -> bool {
 }
 
 fn compile_assembly(source: &str, target: &str, args: &[&str]) -> Output {
-    let directory = root().join("target/frontend/tmp").join(format!(
+    let directory = Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!(
         "pointer-lint-{}-{}",
         std::process::id(),
         NEXT_FILE.fetch_add(1, Ordering::Relaxed)
@@ -229,8 +229,7 @@ fn discarded_qualifier_lints_match_the_option_levels() {
 #[test]
 #[ignore = "sealed Linux lane; needs evo-nexlab:sealed; run explicitly and serially"]
 fn linux_sealed_warning_sets_match_gcc() {
-    let directory = root()
-        .join("target/frontend/tmp")
+    let directory = Path::new(env!("CARGO_TARGET_TMPDIR"))
         .join(format!("pointer-lint-gcc-{}", std::process::id()));
     std::fs::create_dir_all(&directory).unwrap();
     let cases = [

@@ -5,11 +5,11 @@ existing EvoIR program interpreter. It does not invoke a native compiler or
 produce an executable.
 
 ```sh
-target/frontend/debug/evocc --check tests/ui/check/division.c
+target/debug/evocc --check tests/ui/check/division.c
 # tests/ui/check/division.c: error[E3002]: integer-division-by-zero
 
-target/frontend/debug/evocc --explain E3002
-target/frontend/debug/evocc --check --error-format=json tests/ui/check/division.c
+target/debug/evocc --explain E3002
+target/debug/evocc --check --error-format=json tests/ui/check/division.c
 ```
 
 The entry is the existing zero-source-argument `main` interface. Constructors,

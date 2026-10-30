@@ -57,7 +57,7 @@ impl Work {
         let root = self.0.join("checkout");
         std::fs::create_dir_all(root.join("lean")).unwrap();
         std::fs::write(root.join("Cargo.toml"), "[workspace]\n").unwrap();
-        let executable = root.join("target/frontend/release/evocc");
+        let executable = root.join("target/release/evocc");
         std::fs::create_dir_all(executable.parent().unwrap()).unwrap();
         std::fs::copy(env!("CARGO_BIN_EXE_evocc"), &executable).unwrap();
         self.command_at(&executable)
@@ -176,7 +176,7 @@ fn source_checkout_headers_ignore_working_directory() {
 fn source_checkout_headers_follow_explicit_environment_and_bundled_roots() {
     let work = Work::new();
     work.headers(&format!("checkout/sysroot/{TARGET}"), 44);
-    let bundled = work.headers(&format!("checkout/target/frontend/sysroot/{TARGET}"), 11);
+    let bundled = work.headers(&format!("checkout/target/sysroot/{TARGET}"), 11);
     let environment = work.headers("environment", 22);
     let explicit = work.headers("explicit", 33);
     work.selected(
