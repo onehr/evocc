@@ -7,7 +7,7 @@ For the separately tracked execution schedule, run `python3 tools/render-status.
 Benchmark orchestrator run: `20261027T122636.393196Z`; checkout `4975fc5818bb`; dirty tree: `False`. Each application row retains its own measurement and compiler identity; the current kernel run does not remeasure applications.
 
 ```text
-EvoCC roadmap checkpoint | EvoIR 2.39.0 | EvoMIR 1.16.0
+EvoCC roadmap checkpoint | EvoIR 2.39.0 | EvoMIR 1.16.1
 =========================================================================================================
 APPLICATIONS - each lane keeps its own frozen measurement
   3 INCOMPLETE | 10 PASS | 2 PROFILE_CLEAN

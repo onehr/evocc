@@ -1,6 +1,6 @@
 # EvoCC Target Description
 
-**Revision 1.1.1** | **Pinned ground truth** | Corrections on 2026-10-30
+**Revision 2.0.0** | **Pinned ground truth** | Corrections on 2026-10-30
 
 ## Status and scope
 
@@ -256,7 +256,7 @@ constant names are the anchors.
 
 ## Revision
 
-**Revision 1.1.1, 2026-10-30.** Appendix A and the change procedure are
+**Revision 2.0.0, 2026-10-30.** Rule 6 no longer requires a pattern verdict, which no check produces; dropping a requirement makes this a major revision. Appendix A and the change procedure are
 corrected, and redundant text is removed. Sections 1 and 5, Rule 6 and
 Appendix A state what the code does: the generator outputs, the two generated
 pattern artifacts, the checks of Rule 6 without the pattern verdict that no

@@ -14,8 +14,8 @@
       "sha256": "e8820d942778e737769e1f34c74335aff048b10872312b515519972541e5fdac"
     },
     "spec/target.md": {
-      "revision": "1.1.1",
-      "sha256": "c2c4e901c4236ffad39f0b4b72d104fae977924126647b550de918ad8b6e0ddd"
+      "revision": "2.0.0",
+      "sha256": "539ead715f4821895626dc31e1fcf961b4ddea91ae0abfc5960ed613536e9262"
     },
     "spec/verification.md": {
       "revision": "2.0.0",
