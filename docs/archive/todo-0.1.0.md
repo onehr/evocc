@@ -6502,4 +6502,4 @@ Limits of the accepted result:
 [strlen-out]: ../../tests/fixtures/fortify-nonliteral-strlen-ice.out
 [closure-batch]: ../../docs/archive/notebook/todo-closure-batch-20260927.md
 [complex-prompt]: ../../docs/archive/notebook/remaining-complex-research-prompt-20260927.md
-[eqsat-plan]: ../../docs/verified-optimization-design.md
+[eqsat-plan]: verified-optimization-design.md

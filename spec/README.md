@@ -49,7 +49,6 @@ A generator that writes into a document also changes its digest. After
 A specification states what must hold. It does not state what is done, planned or measured. These
 belong elsewhere:
 
-- the design of verified optimization: `docs/verified-optimization-design.md`;
 - status, evidence and receipts: `docs/status.md`, `docs/evidence.md`, `tests/contracts/`;
 - open work and task codes: `TODO.md`;
 - superseded plans, dated notes and reviews (history, not maintained): `docs/archive/`.

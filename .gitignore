@@ -1,13 +1,12 @@
 # Research notes are internal working material. The tracked exceptions are the
-# current documents (evidence, generated status, checker workflow, verified
-# optimization design, paper, release checklist), the target designs in
+# current documents (evidence, generated status, checker workflow, paper,
+# release checklist), the target designs in
 # docs/design/, the figures and the archive of superseded plans and dated lab
 # notes. The reader-facing book is in book/.
 docs/*
 !docs/checker.md
 !docs/evidence.md
 !docs/status.md
-!docs/verified-optimization-design.md
 !docs/paper.md
 !docs/release-checklist.md
 !docs/design/

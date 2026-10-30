@@ -12,7 +12,7 @@ bytes enter the verified-EqSat numerator. No cross-family averages.
 
 | Package | Contract / input | State and claim ceiling |
 | --- | --- | --- |
-| S1 | [framing revision 7 §5.5](../../verified-optimization-design.md#v1-size-contract-s1-revision-7); `tools/ladder/eqsat_elf.py` | DONE, `04fec0d7`. Object layout metrics only, not dynamic instruction counts or a new Q2 acceptance result. |
+| S1 | [framing revision 7 §5.5](../verified-optimization-design.md#v1-size-contract-s1-revision-7); `tools/ladder/eqsat_elf.py` | DONE, `04fec0d7`. Object layout metrics only, not dynamic instruction counts or a new Q2 acceptance result. |
 | S2 | [DCE attribution plan](../../../tests/contracts/eqsat-size-dce-20261001.json), same A/B verified IR; common backend DCE | DONE. Implementation `e625b89c`; measurement closeout is this record's commit. Existing baseline confirmed, not newly credited to EqSat. Final allocated MIR retains the separately disclosed unused-parameter copies. |
 | S3 | [Existing-capture size ranking](../../../tests/contracts/eqsat-size-policy-ranking-20261001.json), no new evaluation | DONE, this ranking record's commit. Size verdict only FINITE_ENUMERATION_SUFFICIENT or NO_OBSERVABLE_EFFECT; does not reopen R03a. |
 | S4 | Existing guard forms / known bits, MIR diagnostic first | First slice DONE (`595272a2`); [certified result](eqsat-certified-guards-20261001.md). Diagnostic remains UNVERIFIED_DIAGNOSTIC and never PASS. No second slice is open. |

@@ -1041,7 +1041,7 @@ remain the P0 subset, rather than the combined receipt total.
 **September 29 integration note, revision 5 (design only).** The existing L0–L4 plan and its
 historical evidence below remain scoped to the reviewed scalar semantics,
 registry and analysis modules. The maintained
-[Q2/Q3 implementation architecture](../verified-optimization-design.md#4-rule-soundness-and-admission)
+[Q2/Q3 implementation architecture](verified-optimization-design.md#4-rule-soundness-and-admission)
 adds a proposed consumer of this proof boundary: offline AI rule candidates.
 V1 accepts typed candidate data only, never AI tactic scripts or imports.
 Trusted fixed templates construct the exact `RuleCovered rule_<id>` statement,

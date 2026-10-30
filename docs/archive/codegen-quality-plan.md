@@ -1,7 +1,7 @@
 # EvoCC Q4: codegen quality and compiler experience
 
 Plan revision 1 — 2026-10-01. **Work plan, not an acceptance receipt.** It
-supersedes the search-oriented part of the [Q2/Q3 design](../verified-optimization-design.md)
+supersedes the search-oriented part of the [Q2/Q3 design](verified-optimization-design.md)
 (revision 7) for the next quarter. That design's verified chain, size contract
 and claim rules stay in force; its discovery tracks are paused, not cancelled.
 

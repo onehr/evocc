@@ -1,6 +1,6 @@
 # Verified EqSat implementation — September 29, 2026
 
-Scope: [design revision 5](../../verified-optimization-design.md), starting with TODO R01a.
+Scope: [design revision 5](../verified-optimization-design.md), starting with TODO R01a.
 This is not G2, R02 performance acceptance, an AI search result, or full
 implementation of the design. The starting checkout was `a4c5209`.
 

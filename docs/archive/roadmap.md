@@ -22,7 +22,7 @@ These decisions supersede the aspirational equality-native/AI narrative below;
 that narrative is not current implementation or release acceptance.
 
 **Q2/Q3 implementation design:** the maintained
-[verified optimization and performance architecture](../verified-optimization-design.md) refines
+[verified optimization and performance architecture](verified-optimization-design.md) refines
 the research intentions below into existing-component interfaces, rule-proof
 admission, native measurement, AI/non-AI ablations and R01–R03 child tasks.
 Separate policy and rule/shortcut effect-ceiling preflights precede AI search;
@@ -729,7 +729,7 @@ The table below is the original architecture taxonomy, not an executable
 admission policy. For the current AI-discovery implementation plan, no model
 proposal becomes an axiom by review alone: new V1 AI rules require the fixed
 semantic proof and registry integration described in
-[rule admission](../verified-optimization-design.md#4-rule-soundness-and-admission). Existing
+[rule admission](verified-optimization-design.md#4-rule-soundness-and-admission). Existing
 registry/analysis trust boundaries remain explicit and unchanged.
 
 | Trust class | Origin | Kernel-mode policy |
@@ -1859,7 +1859,7 @@ all connected by one proof history.
 A fourth is **agent-guided optimizer discovery**. Agents can mine:
 
 The bounded implementation is now specified in the
-[Q2/Q3 design](../verified-optimization-design.md#6-search-data-separation-and-promotion).
+[Q2/Q3 design](verified-optimization-design.md#6-search-data-separation-and-promotion).
 The examples below are research possibilities, not permission to train on a
 protected acceptance corpus: kernel acceptance inputs and final hold-outs do
 not enter candidate prompts or fitness. Use admitted development workloads.
