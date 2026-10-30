@@ -1,6 +1,6 @@
 # Verification Contract
 
-**Revision 1.1.3** | **Pinned ground truth** | **2026-10-27**
+**Revision 1.1.4** | **Pinned ground truth** | **2026-10-30**
 
 ## Status and scope
 
@@ -11,8 +11,8 @@ definition or a theorem statement without its proof; if a copy and the source di
 decides and this document must be corrected. `crates/evocc/src/proof_required.rs` decides the
 command line, the exports and the record. The registry blocks, digests, certificate grammar and
 EvoIR text form are in [`spec/evoir.md`](evoir.md), the EvoMIR rules in
-[`spec/evomir.md`](evomir.md), and plans and status in `docs/archive/lean-plan.md`, `docs/evidence.md` and
-`TODO.md`. Lean names omit the prefix `EvoIR.`; Lean paths are relative to `lean/EvoIR/`.
+[`spec/evomir.md`](evomir.md), and the status in `docs/evidence.md` and `TODO.md`. Lean names
+omit the prefix `EvoIR.`; Lean paths are relative to `lean/EvoIR/`.
 
 ## 1. The claim
 
@@ -242,7 +242,7 @@ lifts the unsigned width changes (`zext`, `trunc`) out of each bitwise operator 
 `lift_casts_sound`) and compares the lifted forms. The pass runs only after the first comparison
 fails, so every pair that the first comparison accepts stays accepted. It accepts, for example, the
 guard of a signed division, a one-bit OR in EvoIR, against the 32-bit OR of two zero-extended `cset`
-results that the backend emits (TODO D06).
+results that the backend emits (Section 10).
 
 ### 4.5 Allocation: `allocation`
 
@@ -273,7 +273,7 @@ entry hint is a subset of the ABI entry state of its entry block (`entryHintsHol
 with that ABI entry state as the hint of each entry block (`entryHints`); the hints of the other
 blocks do not change. The soundness theorems hold for every hint, and `checkHinted_of_accepted` gives
 the hints that an accepted check used, so the retry adds no assumption. It accepts, for example, an
-allocated entry that copies a dead parameter (TODO D06).
+allocated entry that copies a dead parameter (Section 10).
 
 ### 4.6 Frame and emission: `frame-emission`
 
@@ -599,6 +599,8 @@ refresh each receipt that it makes stale.
 
 ## 11. Revision
 
+Revision 1.1.4 of 2026-10-30 drops tracker IDs, archive pointers and repeated text; no rule changes.
+
 Revision 1.1.3 of 2026-10-27 names the modules that now hold the `bv_decide` rows of the
 transfer table: `Proofs/TransferCarry.lean`, `Proofs/TransferMul.lean` and `Proofs/TransferCompare.lean`. `Proofs/Transfer.lean` keeps the
 kernel-only rows. No theorem, rule or check changes.
@@ -613,13 +615,11 @@ EqSat option that the driver admits with `-Oeq-scalar` (Section 2.1), the `zeroM
 callee-saved save slots and the entry structure of `checkAsm` (Section 4.6), the whitespace and
 escapes that the readers accept (Section 6) and the rule of `all_stages_checked` (Section 7.5).
 Section 5.4 names the check that compares the Lean receipt with the `spec/evoir.md` pin. The theorem
-statements and the record do not change; the errata note is
-`docs/archive/notebook/spec-errata-20261014.md`. Revision 1.1.0 of 2026-10-14 stated the second
+statements and the record do not change. Revision 1.1.0 of 2026-10-14 stated the second
 comparison of the selection check (Section 4.4), the entry-hint retry of the allocation check
 (Section 4.5) and the Lean and Rust tests of TODO D06 (Section 10). Revision 1.0.0 of
-2026-10-06 was the first pinned text. If this document and the Lean sources disagree, the Lean sources decide, and
-this document must get a corrected revision. To change it: (1) edit the text; (2) increase the
-revision line (major: the claim, a theorem statement or the record schema; minor: a new stage,
+2026-10-06 was the first pinned text. To change this document: (1) edit the text; (2) increase
+the revision line (major: the claim, a theorem statement or the record schema; minor: a new stage,
 export or field; patch: wording); (3) run `python3 tools/check-spec-pins.py --update`, then `python3
 tools/check-spec-pins.py` and the gate of the change; (4) commit the document and `spec/pins.json`
 together. The history is in git: `git log -- spec/verification.md`.

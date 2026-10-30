@@ -1,6 +1,6 @@
 # EvoCC Target Description
 
-**Revision 1.1.0** | **Pinned ground truth** | Stabilized from revision 2 on 2026-10-06
+**Revision 1.1.1** | **Pinned ground truth** | Editorial corrections on 2026-10-30
 
 ## Status and scope
 
@@ -209,7 +209,7 @@ Section 5.5).
 ## Appendix A. Where the facts live
 
 *Informative.* Paths are relative to `crates/evocc-mir/src/`. Function and
-constant names are the stable anchors; line numbers drift.
+constant names are the anchors.
 
 **Facts generated from the tables.**
 
@@ -218,7 +218,7 @@ constant names are the stable anchors; line numbers drift.
 | `regfile` | `isa/aarch64/regfile.rs` (`CALLER_SAVED`, `CALLEE_SAVED`, `GPR_ALLOCATABLE`, `GPR_CALL_CLOBBERS`, `SIMD_CALLER_SAVED`, `SIMD_ACROSS_CALL`, `SIMD_LOW64_PRESERVED`, `RESERVED`, `FIXED_ASM`, `SCRATCH`, `SCRATCH_UNIT`, `SIMD_SCRATCH`, `FRAME_POINTER`, `LINK_REGISTER`, `PLATFORM_REGISTER`, the views); `crates/evocc-evoir/src/assembly_registers.rs` | `isa/aarch64/allocation.rs` (`candidates`), `linscan.rs` (`physical`, re-exports), `emit.rs` |
 | `insts` | `isa/aarch64/insts.rs` (the `MachInst` and `MachTerm` implementations: `uses`, `defs`, `operand_slots`, `writes_flags`, `discardable`, `edges`; `assembly_uses`) | `generic/ssa.rs`, `generic/allocation.rs`, `generic/allocverify.rs`; `lib.rs` (`inst_defs`, `inst_uses`, `term_uses`, `term_edges`, `writes_flags`, `AsmBody::read` are wrappers) |
 | `encodings` | `isa/aarch64/encodings.rs` (`ADD_SUB_MAX`, `ADD_SUB_DOUBLE_MAX`, `MEMORY_SCALED_MAX`, `PAIR_MAX`, `memory_offset`, `logical_mask`, `has_immediate_form`); the encoding table of EvoMIR Appendix A.1 | `lower.rs` (`memory_address`, `lower_compare`), `validate.rs`, `emit.rs` (`IMM12`, `IMM12_SHIFTED`, `SCALED_LIMIT`, `emit_add_immediate`), `immediate.rs` (re-export), `asm_ast.rs` |
-| `abi-darwin`, `abi-linux`, `profile-kernel` | `isa/aarch64/abi_tables.rs` (`DARWIN`, `LINUX`, `KERNEL` and their digests) | `isa/aarch64/abi.rs` (`Aarch64Abi`, `Target::abi`, `Profile::admits`), `generic/abi.rs` (`AbiFacts`, `ArgumentCursor`), `generic/frame.rs` (`layout`), `generic/allocation.rs` (`pin_boundaries`, `pin_call`), `generic/allocverify.rs` |
+| `abi-darwin`, `abi-linux`, `profile-kernel` | `isa/aarch64/abi_tables.rs` (`DARWIN`, `LINUX`, `KERNEL` and their digests) | `isa/aarch64/abi.rs` (`Aarch64Abi`, `Target::abi`, `Profile::admits`), `generic/abi.rs` (`AbiFacts`, `ArgumentCursor`), `generic/frame.rs` (`layout`), `generic/allocation.rs` (`pin_boundaries`), `generic/allocation/calls.rs` (`pin_call`), `generic/allocverify.rs` |
 | `patterns` | `isa/aarch64/patterns.rs` (`CONSTANT_`, `LOCAL_`, `EXTENSION_`, `CONTROL_PATTERNS`); the pattern table of EvoMIR Section 5.6 | `isa/aarch64/constants.rs`, `local.rs`, `extensions.rs`, `controls.rs` |
 | `costs` | `isa/aarch64/costs.rs` | the same selection modules |
 
@@ -226,9 +226,9 @@ constant names are the stable anchors; line numbers drift.
 
 | Fact | Lives in | Notes for extraction |
 | --- | --- | --- |
-| Pins and constraints | `generic/allocation.rs`: `pin_boundaries`, `pin_call`, `pin_assembly`, `asm_interferences`, `tied_pairs`, `early_clobbers`; `isa/aarch64/allocation.rs`: constraint views and banks | Generic algorithms over `insts` and `regfile` facts |
+| Pins and constraints | `generic/allocation.rs`: `pin_boundaries`, `pin_assembly`, `asm_interferences`, `tied_pairs`, `early_clobbers`; `generic/allocation/calls.rs`: `pin_call`; `isa/aarch64/allocation.rs`: constraint views and banks | Generic algorithms over `insts` and `regfile` facts |
 | Flags adjacency | `validate.rs` (single adjacent consumer) | `writes_flags` and the flags tag are generated |
-| ABI classification | `lower.rs`: `record_plan`, `Passing`, `call_arguments`, `call_record_result`, `named_argument_extent`, `lower_va_start` | The one AArch64 aggregate, HFA, HVA and variadic classifier; it reads `Aarch64Abi` facts |
+| ABI classification | `isa/aarch64/lower/`: `record_plan`, `Passing`, `call_arguments`, `call_record_result`, `named_argument_extent`, `lower_va_start` | The one AArch64 aggregate, HFA, HVA and variadic classifier; it reads `Aarch64Abi` facts |
 | Prologue and epilogue | `emit.rs`: `frame_of_for`, `emit_prologue`, `emit_epilogue`, `emit_frame_access` | Layout comes from `generic/frame.rs`; instruction sequences are hand-written |
 | Codegen options | `emit.rs`: `CodegenOptions`, `StackGuard`, `RelocationModel`, `FrameVariants`; `native.rs` | |
 | OS syntax | `emit.rs`: `impl Target` (prefixes, sections, page and GOT operands) and the remaining `Target` matches (visibility, weak symbols, initializer sections, TLS) | No table yet; EvoMIR Section 8.1 lists the differences |
@@ -240,16 +240,17 @@ constant names are the stable anchors; line numbers drift.
   per-instruction clobber in `insts`. Correctness rests on those registers
   being in `RESERVED`, outside every candidate set.
 - `asm_ast.rs` derives `SCALED_LIMIT` with a literal access size, and its
-  `IMM12` duplicates the one in `emit.rs` (Rule 1). The boundary test does
-  not check immediate literals in hand-written ISA code. It does check copies
-  of the named constants from `costs.rs`, `encodings.rs` and `patterns.rs`;
-  generated owners are identified by their path, not exempted from that check
-  by a first-line comment.
+  `IMM12` duplicates the one in `emit.rs` (Rule 1). The boundary test of
+  Rule 2 finds neither. Its named-constant check identifies a generated owner
+  by its path, not by a first-line comment.
 - The AAPCS64 variadic save areas and the even-register rounding of a
   `bits<128>` argument apply under both ABI profiles without a table fact;
   EvoMIR Sections 6.1 and 6.5 state the resulting Darwin limits.
 
 ## Revision
+
+**Revision 1.1.1, 2026-10-30.** Appendix A and the change procedure are
+corrected, and redundant text is removed. No rule changes.
 
 **Revision 1.1.0, 2026-10-16.** A terminator's `forwarding` fact can name
 `body.fixed`: it prevents forwarding only when its assembly body has a fixed
@@ -266,13 +267,12 @@ unchanged; no target fact or code-generation rule changes.
 the code and the tables do; no component, rule or obligation changes. Section
 3 states the actual first line of each table (`abi.v1`, `profile.v1`), Rule 2
 of Section 4 states what `target_boundary.rs` checks, and the rows B1 and B6
-of Section 5 state that no pattern row has a proof yet. The errata note is
-`docs/archive/notebook/spec-errata-20261014.md`. Revision 1.0.0 of 2026-10-06
-was the pinned ground truth of the target description contract: it kept the
-components, form, rules and obligations of revision 2 of 2026-10-03, removed
-the status preamble and the migration schedule, stated the table header and
-digest form, and updated the extraction map to the generated tables and the
-`generic/` and `isa/aarch64/` modules. The complete history is in git:
+of Section 5 state that no pattern row has a proof yet. Revision 1.0.0 of
+2026-10-06 was the pinned ground truth of the target description contract: it
+kept the components, form, rules and obligations of revision 2 of 2026-10-03,
+removed the status preamble and the migration schedule, stated the table
+header and digest form, and updated the extraction map to the generated tables
+and the `generic/` and `isa/aarch64/` modules. The complete history is in git:
 `git log -- docs/target-spec.md spec/target.md`.
 
 **Change procedure.** A change to this document must follow these steps:
@@ -281,7 +281,7 @@ digest form, and updated the extraction map to the generated tables and the
    `tools/generate-target.py` and its tests.
 2. Bump the revision in the header: the patch number for a correction that
    changes no requirement, the minor number for a compatible addition, the
-   major number for an incompatible change. Replace the paragraph above.
+   major number for an incompatible change. Add its paragraph at the top.
 3. Update the digest of this file in `spec/pins.json` with
    `python3 tools/check-spec-pins.py --update`, and commit both files together.
 4. Run the gate. Every command must pass: `python3 tools/check-spec-pins.py`;
