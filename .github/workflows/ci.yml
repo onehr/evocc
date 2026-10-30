@@ -105,7 +105,7 @@ jobs:
             | sh -s -- -y --default-toolchain none
           echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
       # lean/.lake is about 5 GB, so only main saves it.
-      - uses: actions/cache/restore@v4
+      - uses: actions/cache/restore@v6
         id: lake
         with:
           path: lean/.lake
@@ -115,7 +115,7 @@ jobs:
       - name: tools/gate-lean.sh
         run: tools/gate-lean.sh
       - if: github.ref == 'refs/heads/main' && steps.lake.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: lean/.lake
           key: ${{ steps.lake.outputs.cache-primary-key }}
