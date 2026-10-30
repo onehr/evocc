@@ -38,7 +38,12 @@ func @f(%arg0: bits<32>) -> (bits<32>) cc = target_default
 
 ```console
 $ evocc --emit=evoir -Oeq-scalar times-one.c
-evocc: verified optimization failed: -Oeq-scalar requires --eq-checker-sha256 or EVOCC_CHECKER_SHA256 from a trusted build/release
+error: verified optimization failed: -Oeq-scalar requires --eq-checker-sha256 or EVOCC_CHECKER_SHA256 from a trusted build/release
+  --> <command-line>:1:1
+   |
+ 1 | --emit=evoir -Oeq-scalar times-one.c
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ verified optimization failed: -Oeq-scalar requires --eq-checker-sha256 or EVOCC_CHECKER_SHA256 from a trusted build/release
+   |
 ```
 
 EvoCC refuses to optimize until you tell it which checker to trust.
@@ -71,7 +76,12 @@ A checker with another digest does not run, and EvoCC writes no output:
 
 ```console
 $ EVOCC_CHECKER_SHA256=0000000000000000000000000000000000000000000000000000000000000000 evocc --emit=evoir -Oeq-scalar times-one.c
-evocc: verified optimization failed: checker SHA-256 does not match trusted identity
+error: verified optimization failed: checker SHA-256 does not match trusted identity
+  --> <command-line>:1:1
+   |
+ 1 | --emit=evoir -Oeq-scalar times-one.c
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ verified optimization failed: checker SHA-256 does not match trusted identity
+   |
 ```
 
 ## How the optimizer works
@@ -224,7 +234,7 @@ f:
     brk #3004
 .size f, .-f
 
-.ident "EvoCC 0.0.0 aarch64-unknown-linux-gnu"
+.ident "EvoCC 0.1.0 aarch64-unknown-linux-gnu"
 ```
 
 The `mul` instruction is gone. The overflow check, `smull` to `brk #3004`, is still there, because
@@ -242,9 +252,17 @@ the Lean checker also checks each rewrite step, in the stage `rewrite`. The opti
 $ evocc --target=aarch64-unknown-linux-gnu --emit=asm --proof-required=proof-times-one \
     --proof-checker="$(command -v evoir-sem)" --core-entry=f -O0 -fno-builtin \
     -Oeq-scalar --eq-checker-sha256="$EVOCC_CHECKER_SHA256" times-one.c > times-one-checked.s; echo "exit status $?"
-evocc: proof-required compilation refused: stage rewrite for entry `f` step 0 rejected: STAGE_REJECTED stage=rewrite entry=f rewrite not confirmed or form not supported: registry=p0.scalar.v1 regions=f/entry/3 rules=p0_003_mul_one_rhs; no output was written
+error: proof-required compilation refused: stage rewrite for entry `f` step 0 rejected: STAGE_REJECTED stage=rewrite entry=f rewrite not confirmed or form not supported: registry=p0.scalar.v1 regions=f/entry/3 rules=p0_003_mul_one_rhs; no output was written
+  --> <command-line>:1:1
+   |
+ 1 | --target=aarch64-unknown-linux-gnu --emit=asm --proof-required=proof-times-one --proof-checker=$REPO/lean/.lake/build/bin/evoir-sem --core-entry=f -O0 -fno-builtin -Oeq-scalar --eq-checker-sha256=0dad581f856ff157de7479f56cc5b5c79404a46904a76f1a6516ba231ee772b3 times-one.c
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ proof-required compilation refused: stage rewrite for entry `f` step 0 rejected: STAGE_REJECTED stage=rewrite entry=f rewrite not confirmed or form not supported: registry=p0.scalar.v1 regions=f/entry/3 rules=p0_003_mul_one_rhs; no output was written
+   |
 exit status 3
 ```
+
+`$REPO` stands for the checkout that holds `evoir-sem`. The caret run under the command line is as
+long as the line with its placeholders.
 
 This time the compilation is refused. `evocc-checker` accepted the step, but the Lean `rewrite`
 checker does not confirm this form of it, so the proved path stops. EvoCC does not fall back to the

@@ -72,7 +72,8 @@ without outer whitespace. Diagnostic and repair fields are defined in
 [Hello, World!](hello.md#run-a-program-without-compiling-it) shows a call that the
 interpreter cannot run. A nonzero main return is not a check failure. `check`
 returns 0 when its path completes, even if main returns 7. Its completion object
-keeps `schema`, `kind`, `status`, `main_return` and `claim` from the compiler.
+keeps `schema`, `kind`, `status`, `main_return`, `claim` and `scope` from the
+compiler.
 
 `prove` reads the retained `record.json`. It does not infer success from a log.
 Its stage summary preserves `NOT_CHECKED` rows. When no record exists, `result`

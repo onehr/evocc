@@ -38,7 +38,7 @@ Compile it with proof:
 
 ```console
 $ evo prove abs.c -o abs.s
-checked from typed Core source to final assembly text: $TMPDIR/evo-proof-19627-1791318427250745000/checked/record.json
+checked from typed Core source to final assembly text: $TMPDIR/evo-proof-56160-1793355716758725000/checked/record.json
 ```
 
 `$TMPDIR` stands for the temporary directory of the host. The temporary path changes on each run.
@@ -49,7 +49,7 @@ the order in which it looks for `evoir-sem`. After a failure, it keeps the proof
 prints its path. For the commands below, link `proof-abs` to the `checked` directory of your run:
 
 ```console
-$ ln -s $TMPDIR/evo-proof-19627-1791318427250745000/checked proof-abs
+$ ln -s $TMPDIR/evo-proof-56160-1793355716758725000/checked proof-abs
 ```
 
 The assembly uses `subs` and `b.vs`. For `a` equal to `INT_MIN`, `-a` overflows, so `abs(INT_MIN)`
@@ -135,7 +135,7 @@ $ jq -r '.stages[] | .results[]?.report' proof-abs/record.json
 STAGE_ACCEPTED stage=source-to-evoir entry=abs route=leaf scope=source-to-evoir
 STAGE_ACCEPTED stage=lowering entry=abs scope=evoir-to-post-ssa-mir
 STAGE_ACCEPTED stage=allocation entry=abs functions=1 scope=post-ssa-mir-to-allocated-mir
-STAGE_ACCEPTED stage=frame-emission entry=abs functions=1 bytes=493 scope=allocated-mir-to-assembly-text
+STAGE_ACCEPTED stage=frame-emission entry=abs functions=1 bytes=448 scope=allocated-mir-to-assembly-text
 PIPELINE_ACCEPTED entry=abs rewrites=0 functions=1 scope=source-to-assembly-text
 ```
 
@@ -145,12 +145,12 @@ The record binds the result to exact bytes. Each input has a SHA-256 digest, and
 $ jq '.output' proof-abs/record.json
 {
   "path": "output.s",
-  "sha256": "32635a8b34075e66034e065c731fb31fbb3556d3ba8c451bb9aef453fc1ee368",
+  "sha256": "ce171b91ef53c28f6b955d43f6ea0fc4083f2dfb671fd8d7bcf47d22e65a7b87",
   "checked": true,
   "note": "frame-emission checked these bytes: the printed assembly AST is equal to them."
 }
 $ shasum -a 256 proof-abs/output.s
-32635a8b34075e66034e065c731fb31fbb3556d3ba8c451bb9aef453fc1ee368  proof-abs/output.s
+ce171b91ef53c28f6b955d43f6ea0fc4083f2dfb671fd8d7bcf47d22e65a7b87  proof-abs/output.s
 ```
 
 Your digest can be different, because the version of EvoCC is part of the assembly text. The two
@@ -193,6 +193,8 @@ true
 ## See a refusal
 
 A refusal is a normal result. It means that a check did not succeed, so EvoCC publishes nothing.
+In the outputs below, `$REPO` stands for the checkout that holds `evoir-sem`. The caret run under
+each command line is as long as the line with its placeholders.
 
 A pointer is outside the subset. Make a file `first.c`:
 
@@ -205,7 +207,12 @@ int first(const int *values) {
 ```console
 $ evocc --target=aarch64-unknown-linux-gnu --emit=asm --proof-required=proof-first \
     --proof-checker="$(command -v evoir-sem)" --core-entry=first -O0 -fno-builtin first.c; echo "exit status $?"
-evocc: proof-required compilation refused: entry `first` is outside core-v1: Type; no output was written
+error: proof-required compilation refused: entry `first` is outside core-v1: Type; no output was written
+  --> <command-line>:1:1
+   |
+ 1 | --target=aarch64-unknown-linux-gnu --emit=asm --proof-required=proof-first --proof-checker=$REPO/lean/.lake/build/bin/evoir-sem --core-entry=first -O0 -fno-builtin first.c
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ proof-required compilation refused: entry `first` is outside core-v1: Type; no output was written
+   |
 exit status 6
 $ ls proof-first
 ls: proof-first: No such file or directory
@@ -225,7 +232,12 @@ int sum_to(int n) {
 ```console
 $ evocc --target=aarch64-unknown-linux-gnu --emit=asm --proof-required=proof-loop \
     --proof-checker="$(command -v evoir-sem)" --core-entry=sum_to -O0 -fno-builtin loop.c; echo "exit status $?"
-evocc: proof-required compilation refused: stage source-to-evoir for entry `sum_to` rejected: STAGE_REJECTED stage=source-to-evoir entry=sum_to no checked source-to-EvoIR correspondence; no output was written
+error: proof-required compilation refused: stage source-to-evoir for entry `sum_to` rejected: STAGE_REJECTED stage=source-to-evoir entry=sum_to no checked source-to-EvoIR correspondence; no output was written
+  --> <command-line>:1:1
+   |
+ 1 | --target=aarch64-unknown-linux-gnu --emit=asm --proof-required=proof-loop --proof-checker=$REPO/lean/.lake/build/bin/evoir-sem --core-entry=sum_to -O0 -fno-builtin loop.c
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ proof-required compilation refused: stage source-to-evoir for entry `sum_to` rejected: STAGE_REJECTED stage=source-to-evoir entry=sum_to no checked source-to-EvoIR correspondence; no output was written
+   |
 exit status 3
 $ ls proof-loop proof-loop/checks
 proof-loop:
@@ -251,7 +263,12 @@ A checker with the wrong digest does not run:
 $ evocc --target=aarch64-unknown-linux-gnu --emit=asm --proof-required=proof-wrong \
     --proof-checker="$(command -v evoir-sem)" --proof-checker-sha256=0000000000000000000000000000000000000000000000000000000000000000 \
     --core-entry=abs -O0 -fno-builtin abs.c; echo "exit status $?"
-evocc: proof-required compilation refused: checker digest 7cd984fd9c304c4efc4989adb17eedcd632bc15a4487edb474ade70924e74240 is not the pinned digest 0000000000000000000000000000000000000000000000000000000000000000; no output was written
+error: proof-required compilation refused: checker digest 324e4ced33787de3109468bec4ea5a1429a1456af075b535238386ed21f24e71 is not the pinned digest 0000000000000000000000000000000000000000000000000000000000000000; no output was written
+  --> <command-line>:1:1
+   |
+ 1 | --target=aarch64-unknown-linux-gnu --emit=asm --proof-required=proof-wrong --proof-checker=$REPO/lean/.lake/build/bin/evoir-sem --proof-checker-sha256=0000000000000000000000000000000000000000000000000000000000000000 --core-entry=abs -O0 -fno-builtin abs.c
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ proof-required compilation refused: checker digest 324e4ced33787de3109468bec4ea5a1429a1456af075b535238386ed21f24e71 is not the pinned digest 0000000000000000000000000000000000000000000000000000000000000000; no output was written
+   |
 exit status 5
 ```
 
@@ -260,7 +277,12 @@ EvoCC never writes over an old proof directory:
 ```console
 $ evocc --target=aarch64-unknown-linux-gnu --emit=asm --proof-required=proof-abs \
     --proof-checker="$(command -v evoir-sem)" --core-entry=abs -O0 -fno-builtin abs.c; echo "exit status $?"
-evocc: proof-required compilation refused: cannot create `proof-abs`: File exists (os error 17); no output was written
+error: proof-required compilation refused: cannot create `proof-abs`: File exists (os error 17); no output was written
+  --> <command-line>:1:1
+   |
+ 1 | --target=aarch64-unknown-linux-gnu --emit=asm --proof-required=proof-abs --proof-checker=$REPO/lean/.lake/build/bin/evoir-sem --core-entry=abs -O0 -fno-builtin abs.c
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ proof-required compilation refused: cannot create `proof-abs`: File exists (os error 17); no output was written
+   |
 exit status 4
 ```
 

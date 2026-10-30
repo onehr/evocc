@@ -20,7 +20,14 @@ EvoCC finds the problem before you run a compiled program:
 
 ```console
 $ evocc --check divide.c
-divide.c: error[E3002]: integer-division-by-zero
+error[E3002]: integer-division-by-zero
+  --> divide.c:2:12
+   |
+ 2 |     return total / count;
+   |            ^^^^^^^^^^^^^ integer-division-by-zero
+   |
+   = note: this operation failed on the executed path
+   = help: check the divisor before the division or remainder operation
 ```
 
 One rule runs through EvoCC: an untrusted part proposes, and a small checker decides. You meet it

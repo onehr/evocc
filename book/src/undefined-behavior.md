@@ -138,7 +138,7 @@ Editors and scripts can read diagnostics as JSON. `--error-format=json` writes o
 
 ```console
 $ evocc --check --error-format=json overflow.c
-{"code":"E3004","level":"error","message":"signed-integer-overflow","spans":[{"file":"overflow.c","line_start":2,"column_start":12,"line_end":2,"column_end":20,"label":"signed-integer-overflow","primary":true}],"notes":["this operation failed on the executed path"],"help":[],"rendered":"error[E3004]: signed-integer-overflow\n  --> overflow.c:2:12\n   |\n 2 |     return x * 1000;\n   |            ^^^^^^^^ signed-integer-overflow\n   |\n   = note: this operation failed on the executed path\n"}
+{"code":"E3004","level":"error","message":"signed-integer-overflow","spans":[{"file":"overflow.c","line_start":2,"column_start":12,"line_end":2,"column_end":20,"label":"signed-integer-overflow","primary":true}],"notes":["this operation failed on the executed path"],"help":[],"rendered":"error[E3004]: signed-integer-overflow\n  --> overflow.c:2:12\n   |\n 2 |     return x * 1000;\n   |            ^^^^^^^^ signed-integer-overflow\n   |\n   = note: this operation failed on the executed path\n","repairs":[]}
 ```
 
 The record contains source spans, notes, help and the rendered text. When the run completes with no

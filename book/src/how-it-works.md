@@ -99,7 +99,12 @@ int main(void) {
 
 ```console
 $ evocc -E missing.c; echo "exit status $?"
-missing.c:1:1: error[E0105]: include-not-found: config.h
+error[E0105]: include-not-found: config.h
+  --> missing.c:1:1
+   |
+ 1 | #include "config.h"
+   | ^ include-not-found: config.h
+   |
 exit status 1
 ```
 
@@ -189,9 +194,20 @@ the same code. Here is `uninit.c` from [Undefined Behavior](undefined-behavior.m
 
 ```console
 $ evocc --interpret-c-hir uninit.c
-uninit.c:4:12: error[E3001]: read-of-uninitialized-object: score
+error[E3001]: read-of-uninitialized-object
+  --> uninit.c:4:12
+   |
+ 4 |     return score + bonus;
+   |            ^^^^^ read-of-uninitialized-object
+   |
 $ evocc --interpret-evoir uninit.c
-uninit.c:1:1: error[E3001]: read-of-uninitialized-object
+error[E3001]: read-of-uninitialized-object
+  --> uninit.c:4:12
+   |
+ 4 |     return score + bonus;
+   |            ^^^^^^^^^^^^^ read-of-uninitialized-object
+   |
+   = note: this operation failed on the executed path
 ```
 
 ## EvoMIR
