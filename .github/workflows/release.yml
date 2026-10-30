@@ -30,7 +30,7 @@ jobs:
           docker build --platform linux/arm64 -t evo-nexlab:sealed -f .toolchain/Dockerfile.nexlab .toolchain
           EVOCC_SYSROOT_IMAGE=evo-nexlab:sealed tools/export-sysroot.sh
           tar -czf linux-headers.tar.gz sysroot contracts/sysroot-aarch64-unknown-linux-gnu.json
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with: {name: linux-headers, path: linux-headers.tar.gz, if-no-files-found: error}
   build:
     needs: headers
@@ -108,13 +108,13 @@ jobs:
           if [ "$TARGET" = aarch64-unknown-linux-gnu ]; then
             file bin/evocc bin/evocc-checker | grep -Eq 'static(-pie)? linked|statically linked'
           fi
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: matrix.target == 'aarch64-apple-darwin'
         with: {name: cross-hello, path: cross-hello.o, if-no-files-found: error}
       - name: Give nightly assets stable download names
         if: inputs.channel == 'nightly'
         run: mv "dist/$PACKAGE_NAME.tar.gz" "dist/evocc-nightly-$TARGET.tar.gz"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: evocc-${{ matrix.target }}
           path: dist/*.tar.gz
