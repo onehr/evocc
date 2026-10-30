@@ -28,16 +28,12 @@ args = ["mcp"]
 Restart the client after a configuration change. Approve the local server when
 the client asks. Use it only in a workspace where source and output access is allowed.
 The [EvoCC skill](https://github.com/onehr/evocc/blob/main/skills/evocc/SKILL.md)
-gives the check, repair and proof rules. A review repair still needs a human.
+gives the check, repair and proof rules.
 
-Both clients were installed on October 7, 2026. Claude Code 2.1.292 connected
-and used all five tools in the [recorded model session](agent-loop.md#real-model-session).
-The separate configuration test used `--scope project`; a fresh project correctly
-reported pending approval. That state alone does not establish a connection.
-Run `sh tools/demo/connect-agent.sh` from the repository to test temporary
-client configuration and discovery without a model turn. Its Codex client used
-the same command and arguments through process-local overrides, with other
-servers disabled. This is the actual client-side discovery output:
+Claude Code 2.1.292 used all five tools in the
+[recorded model session](agent-loop.md#real-model-session). To test the client
+configuration and the tool discovery without a model turn, run
+`sh tools/demo/connect-agent.sh` from the repository. Its Codex part prints:
 
 ```text
 codex-cli 0.160.1

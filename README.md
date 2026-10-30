@@ -18,21 +18,18 @@
 </p>
 
 EvoCC is an experimental C compiler for AArch64 Linux and macOS. AI agents wrote it from scratch
-in Rust and Lean 4, in under three months, under the direction of one engineer. By release 0.1.0
-that came to about 2,300 commits, 350,000 lines of Rust and 69,000 lines of Lean. EvoCC has its
-own preprocessor, parser, three intermediate representations, optimizer, register allocator and
-assembly emitter. It builds a Linux kernel that boots, SQLite, Doom and many other de-facto
-standard C bench/programs.
+in Rust and Lean 4, in under three months, under the direction of one engineer: about 2,300
+commits, 350,000 lines of Rust and 69,000 lines of Lean by release 0.1.0. It has its own
+preprocessor, parser, three intermediate representations, optimizer, register allocator and
+assembly emitter. It builds a Linux kernel that boots, SQLite, Doom and other real C programs.
 
 One rule runs through the whole compiler: an untrusted part proposes, and a small checker
-decides. Agents propose code; a test written first, two interpreters and sealed GCC and Clang
-oracles decide whether it lands. The EqSat optimizer proposes rewrites; an independent checker
-replays each one against rules that Lean 4 proves. For a subset of C, each stage proposes its
-output, and Lean checkers decide. When a check fails, nothing is accepted.
+decides.
 
 The same checks serve your programs. EvoCC's typed IRs keep each rule of C as an explicit check,
 so `evo check` names the exact operation that breaks one, also when GCC's warnings and UBSan miss
-it. Use `evocc` in place of `cc`, and give `evo mcp` to your coding agent.
+it ([undefined behavior](book/src/undefined-behavior.md)). Use `evocc` in place of `cc`, and give
+`evo mcp` to your coding agent.
 
 <p align="center">
   <picture>
@@ -50,34 +47,21 @@ it. Use `evocc` in place of `cc`, and give `evo mcp` to your coding agent.
   </picture>
 </p>
 
-- **Written from scratch by AI agents.** [The paper](docs/paper.md#8-how-agents-built-evocc)
-  tells how one engineer directed them, what they got wrong, and which checks caught it.
-- **Typed IRs that keep the rules of C.** C-HIR keeps C's types, which bytes are initialized and
-  which object each pointer may point to. EvoIR is typed SSA: each rule of C is a predicate and
-  an obligation that no pass may delete, and memory and I/O travel on explicit tokens. See
-  [one line through the typed IRs](#one-line-through-the-typed-irs).
-- **`evo check` finds undefined behavior.** It runs your program on the rules of C and stops at
-  the first operation that breaks one, with the line. It finds bugs that GCC's warnings and UBSan
-  miss, such as uninitialized reads. ([Undefined behavior](book/src/undefined-behavior.md))
-- **Rust for the compiler, Lean 4 for the proofs.** The EqSat optimizer (`-Oeq-scalar`) uses only
-  rewrite rules that Lean 4 proves for every bit width. For the `core-v1` subset, `evo prove` has
-  Lean 4 check every stage, from typed Core source to the final assembly text.
-  ([Checked optimization](book/src/optimization.md), [compiling with proof](book/src/proof.md))
-- **Built for agents.** Where GCC's warnings and UBSan are silent, `evo check` gives an agent a
-  stable code and the line in a JSON record, and `evo mcp` serves it. In registered experiments, a
-  coding agent needed about a third fewer steps with EvoCC, and three chat models needed fewer
-  tokens ([Built for agents](#built-for-agents)). Agents can also change it: in EqSat mode a new
-  optimization is an equality with a Lean proof, not a new pass, the target is a set of tables,
-  the specifications are pinned, and each result has a receipt.
-- **Experimental, at real scale.** A Linux kernel built with `make CC=evocc` boots, and 15
-  application lanes and Doom run with no compiler failure. The [scope of 0.1.0](#scope-of-010)
-  lists what is not done yet.
+- AI agents wrote the compiler. [The paper](docs/paper.md#8-how-agents-built-evocc) tells how one
+  engineer directed them, what they got wrong and which checks caught it.
+- The IRs keep the rules of C. C-HIR keeps C's types, which bytes are initialized and which object
+  each pointer may point to. EvoIR is typed SSA: each rule of C is a predicate and an obligation
+  that no pass may delete, and memory and I/O travel on explicit tokens.
+- Lean 4 proves each rewrite rule of the EqSat optimizer (`-Oeq-scalar`) for every bit width. For
+  the `core-v1` subset, `evo prove` has Lean 4 check each stage, from typed Core source to the
+  final assembly text ([checked optimization](book/src/optimization.md),
+  [compiling with proof](book/src/proof.md)).
+- In registered experiments, agents needed fewer steps or tokens with EvoCC on the bugs that GCC's
+  warnings and UBSan miss ([Built for agents](#built-for-agents)).
 
 ### One line through the typed IRs
 
-In C-HIR and EvoIR, the program stays typed, and the types carry the rules of C. So `evo check`
-can name the exact rule that a line breaks, and the optimizer and the Lean proofs work on the same
-rules. Here is one line of [`mean.c`](examples/mean.c) at four stages of the release compiler:
+Line 7 of [`mean.c`](examples/mean.c) at four stages of the release compiler:
 
 <p align="center">
   <picture>
@@ -105,23 +89,16 @@ The release compiler of commit `08bf09bd` measured these results on 2026-10-27. 
 
 ## Built for agents
 
-An agent repairs C in a loop: it builds, runs, reads the output and edits. It can act only on what
-the tools report, and each turn costs tokens and time. When the tools report nothing, the agent
-must find the bug in the source alone. In 18 programs of our experiments, GCC 14's warnings and
-UBSan reported nothing for an uninitialized read, a dangling pointer or an out-of-bounds access.
-The build was clean, and the run gave the same output as the fixed program.
-
-EvoCC is made for that loop. `evo check` runs the program on the rules of C and stops at the first
-operation that breaks one. It checks the path that ran, not all inputs. It gives the agent a stable
-code and the line in a JSON record. `evo explain` gives the rule, and `evo fix --plan` gives the
-repairs.
+An agent repairs C in a loop: build, run, read, edit. It can act only on what the tools report. In
+18 programs of our experiments, GCC 14's warnings and UBSan reported nothing for an uninitialized
+read, a dangling pointer or an out-of-bounds access. `evo check` reports each of them with a stable
+code and the line, in a JSON record.
 
 ### What the agent sees
 
-In this program from the experiments, `prepare()` keeps a pointer to its local array, and
-`byte_at()` reads through it after `prepare()` returns. This is the record that the agent got from
-GCC 14 with `-O0 -Wall -Wextra -fsanitize=undefined`. The fixed program gives the same record, byte
-for byte:
+In this program, `prepare()` keeps a pointer to its local array, and `byte_at()` reads through it
+after `prepare()` returns. GCC 14 with `-O0 -Wall -Wextra -fsanitize=undefined` gave the agent this
+record. The fixed program gives the same record, byte for byte:
 
 ```text
 === build exit 0
@@ -130,8 +107,7 @@ for byte:
 --- stderr
 ```
 
-EvoCC's record adds the `evo check` result as JSON. Its `rendered` field names the rule and the
-line (path shortened):
+EvoCC's record adds the JSON result of `evo check`. Its `rendered` field, with the path shortened:
 
 ```text
 error[E3010]: dangling-pointer-access
@@ -148,23 +124,22 @@ On the six dangling-pointer programs, Qwen3.8 27B repaired 3 of 18 trials with t
 
 ### What an agent gets
 
-- **Stable codes with explanations.** Each finding has a code, such as `E3010`, and a line.
-  `evo explain E3010` gives the rule, with examples that a test runs against the compiler.
-- **JSON records and fixed exit rules.** `evo run`, `check`, `explain`, `fix`, `prove` and `build`
-  each have one exit-status rule. With `--json`, each writes one JSON object per line.
-- **Repairs as data, with a human gate.** `evo fix --plan` lists repairs and edits nothing.
-  `evo fix --apply` applies only safe repairs; a review repair needs a human.
-- **The same bytes for the same input.** A test runs `run`, `check`, `explain`, `fix --plan` and
-  `prove` twice on fixed inputs. It requires the same JSON records, apart from temporary paths.
-- **Ready to connect.** `evo mcp` gives `run`, `check`, `explain`, `prove` and `fix_plan` to an
-  agent ([setup](#give-it-to-your-agent)). [`AGENTS.md`](AGENTS.md), also as
-  [`llms.txt`](llms.txt), and the [EvoCC skill](skills/evocc/SKILL.md) give the commands, the exit
-  codes and the review rule.
+- A stable code for each finding, such as `E3010`, and the line. `evo explain E3010` gives the
+  rule, with examples that a test runs against the compiler.
+- One exit-status rule for each of `evo run`, `check`, `explain`, `fix`, `prove` and `build`. With
+  `--json`, each writes one JSON object per line.
+- Repairs as data. `evo fix --plan` lists repairs and edits nothing. `evo fix --apply` applies only
+  safe repairs; a review repair needs a human.
+- The same records for the same input. A test runs `run`, `check`, `explain`, `fix --plan` and
+  `prove` twice on fixed inputs and compares the JSON, apart from temporary paths.
+- `evo mcp`, which serves `run`, `check`, `explain`, `prove` and `fix_plan`
+  ([setup](#give-it-to-your-agent)). [`AGENTS.md`](AGENTS.md), also as [`llms.txt`](llms.txt), and
+  the [EvoCC skill](skills/evocc/SKILL.md) give the commands, the exit codes and the review rule.
 
 ### What we measured
 
-We gave agents the same bugs with GCC and UBSan or with EvoCC. We registered the predictions before
-each measured run.
+We gave agents the same bugs with GCC and UBSan or with EvoCC, and registered the predictions
+before each measured run.
 
 <p align="center">
   <picture>
@@ -173,13 +148,12 @@ each measured run.
   </picture>
 </p>
 
-- **Kimi K3, 144 sessions:** p < 0.001 for each step saving and for 40% fewer tokens on short programs.
-- **Three chat models, 432 trials of one answer:** p < 0.01 for each token saving.
-- **Repairs:** more with EvoCC for Qwen3.8 27B, p = 0.004. The others repaired nearly all with both.
-- **Control bugs,** which GCC and UBSan report: about the same repairs with both.
+- Kimi K3, 144 sessions: p < 0.001 for each step saving and for 40% fewer tokens on short programs.
+- Three chat models, 432 trials of one answer: p < 0.01 for each token saving.
+- Repairs: more with EvoCC for Qwen3.8 27B, p = 0.004. The others repaired nearly all with both.
+- Control bugs, which GCC and UBSan report: about the same repairs with both.
 
-The gain appears where the usual tools are silent. Not every experiment gave a clear answer. We
-report all six that had a measured run; protocols 6 and 7 have pilots only:
+Not every experiment separated the toolchains:
 
 | # | Model and programs | Result |
 |---|---|---|
@@ -190,15 +164,9 @@ report all six that had a measured run; protocols 6 and 7 have pilots only:
 | 5 | Kimi K3, registered replication; 18 short and 12 longer programs | fewer steps and fewer tokens with EvoCC, p < 0.001 |
 | 8 | DeepSeek V4.1 Flash, MiniMax M3.1 Flash and Qwen3.8 27B, as chat models; the bugs of 4 | fewer tokens with EvoCC for all three, p < 0.01; more repairs with Qwen3.8 27B, 54 against 30 of 54 |
 
-[Agent experiments](book/src/evaluation-agents.md) gives each protocol, receipt and transcript, and
-the commands that reproduce each analysis without a model call.
-
-### Agents can change it, too
-
-Agents wrote EvoCC, and its design keeps their changes checkable. In EqSat mode, a new optimization
-is an equality with a Lean proof, not a new pass. The target is a set of tables, the specifications
-are pinned, and each result has a receipt. [Add a proved optimization](#add-a-proved-optimization)
-shows the steps.
+Protocols 6 and 7 have pilots only. [Agent experiments](book/src/evaluation-agents.md) gives each
+protocol, receipt and transcript, and the commands that reproduce each analysis without a model
+call.
 
 ## Quick start
 
@@ -309,9 +277,6 @@ Claude Code and Codex.
 
 ## What it compiles correctly
 
-EvoCC compiled each program below. Each caption names the check, and each results link opens its
-record.
-
 <table>
   <tr>
     <td width="33%" align="center" valign="top"><a href="docs/images/showcase/doom.png"><img src="docs/images/showcase/doom.png" alt="Real Freedoom demo frame rendered by EvoCC-built Doom" width="320"></a><br><b>Doom / Freedoom</b><br>Headless replay<br><a href="tests/contracts/ladder-doom-receipt.json">results</a></td>
@@ -340,9 +305,9 @@ record.
   </tr>
 </table>
 
-Each image is real program output, a plot of it, or an excerpt of a recorded test log. See the
-[capture notes and credits](docs/images/showcase/README.md) and the
-[compatibility table](book/src/compatibility.md).
+Each image is program output, a plot of it or an excerpt of a recorded test log
+([capture notes and credits](docs/images/showcase/README.md),
+[compatibility table](book/src/compatibility.md)).
 
 ## How it works
 
@@ -362,8 +327,7 @@ Each image is real program output, a plot of it, or an excerpt of a recorded tes
 - **Lean 4** proves the 62 rewrite rules of the optimizer. For `core-v1` on AArch64 Linux, five
   Lean checkers compare the input and output of each stage, and one theorem covers that chain.
 
-Here is one rule of C on its way through the compiler. The release compiler made this EvoIR and
-this assembly from [`abs.c`](examples/abs.c):
+The release compiler made this EvoIR and this assembly from [`abs.c`](examples/abs.c):
 
 <p align="center">
   <picture>
@@ -372,23 +336,17 @@ this assembly from [`abs.c`](examples/abs.c):
   </picture>
 </p>
 
-AI agents wrote EvoCC in under three months, under the direction of one engineer.
-[The paper](docs/paper.md) tells that story and describes the design and the evaluation.
-
 ## Where EvoCC fits
 
-Sanitizers instrument one optimized build. They report a bug when that build reaches it and
-their instrumentation covers it. Verified compilers such as CompCert prove their compilation
-passes correct once, for every program in the C subset that they accept. EvoCC sits between the
-two. It compiles large real programs and keeps the rules of C explicit in every stage.
-`evo check` checks the path that a program runs. Lean 4 proves the rewrite rules of its EqSat
-optimizer and, for a smaller subset, checks whole compilations.
+A sanitizer instruments one optimized build and reports a bug when that build reaches it.
+CompCert proves its passes correct once, for every program in the C subset that it accepts. EvoCC
+sits between the two. It compiles large real programs, keeps the rules of C explicit in every
+stage and checks the path that a program runs. Lean 4 proves the rewrite rules of its optimizer
+and, for a small subset, checks whole compilations.
 
 ## Add a proved optimization
 
-In EqSat mode, a new optimization is an equality, not a new pass. Lean 4 proves the rule once, for every
-bit width. The compiler then proposes each use of the rule with a certificate, and an independent
-checker replays it before the rewrite reaches the output.
+In EqSat mode, a new optimization is an equality with a Lean 4 proof, not a new pass:
 
 <p align="center">
   <picture>
@@ -406,19 +364,16 @@ EvoCC 0.1.0 is experimental.
 
 - It targets AArch64 only, on Linux and macOS. Its code is 1.8 to 2.3 times the size of GCC `-O2`
   output on five library files, and it is not tuned for speed ([evaluation](book/src/evaluate.md)).
-- `evo check` runs programs that do not call the C library
-  ([undefined behavior](book/src/undefined-behavior.md)).
+- `evo check` checks the path that a run takes, not all inputs. It runs programs that do not call
+  the C library ([undefined behavior](book/src/undefined-behavior.md)).
 - Proofs cover `core-v1`: integer functions without pointers, arrays or recursion, from typed Core
   source to assembly text. Parsing, assembly, linking and other C programs are not proved
   ([verification contract](spec/verification.md)).
 - GNU C support is broad but not complete, and full kernel test acceptance is open. The changelog
   lists each [known limit](CHANGELOG.md#known-limits).
-- The agent results use injected bugs in programs adapted from zlib, Zstandard and cJSON. The
-  coding-agent result comes from one model, Kimi K3 at low reasoning effort, with two repetitions.
-  The chat-model result comes from three models, one response for each trial and three
-  repetitions. On bugs that UBSan also reports, DeepSeek V4.1 Flash did not do better with EvoCC.
-  The results do not rank models or toolchains in general
-  ([limits](book/src/evaluation-agents.md)).
+- The agent results use injected bugs in programs adapted from zlib, Zstandard and cJSON: one
+  coding agent at low reasoning effort with two repetitions, and three chat models with three.
+  They do not rank models or toolchains ([limits](book/src/evaluation-agents.md#limits)).
 
 ## Learn more
 

@@ -1,39 +1,7 @@
 # Agent experiments
 
-We asked one question: does EvoCC's feedback help an AI agent repair a bug in
-C? We ran six experiments with a measured run. Each one fixed a flaw of an
-earlier one. This page reports all six, in the order in which we ran them,
-with their receipts. Protocols 6 and 7 have pilots only (see the follow-ups).
-
-**Result.** The fifth experiment, a registered replication, gives a clear
-answer. A coding agent on the Kimi K3 model repaired bugs that GCC 14's
-warnings and UBSan do not report: uninitialized reads, dangling pointers and
-out-of-bounds accesses. With EvoCC, it used 37% fewer steps and 40% fewer
-tokens on 18 short programs, and 35% fewer steps on 12 programs of 722 lines.
-Each of the three registered predictions held with p < 0.001, over 144
-sessions. On control bugs that GCC and UBSan also report, the two toolchains
-cost about the same. The first three experiments did not separate the
-toolchains.
-
-**Chat models.** The eighth experiment gave the same bugs to chat models,
-with the frozen feedback of experiment 4 and one response for each trial.
-Three models completed all 144 trials. With EvoCC's feedback, each one used
-fewer completion tokens on the silent bugs: 76% fewer with DeepSeek V4.1
-Flash, 59% with Qwen3.8 27B and 16% with MiniMax M3.1 Flash (p < 0.01 for
-each). Qwen3.8 27B also repaired more of them: 54 of 54, against 30 of 54
-with GCC and UBSan (p = 0.004). DeepSeek V4.1 Flash and MiniMax M3.1 Flash
-repaired nearly all of them with both records, so their repair counts did
-not differ significantly. On the controls, EvoCC lost at most one trial.
-
-The figure shows the registered results of experiments 5 and 8.
-`tools/render-readme.py` draws it from their receipts and analyses.
-
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="images/agent-results-dark.svg">
-    <img src="images/agent-results-light.svg" alt="The same bugs, with GCC 14's warnings and UBSan or with EvoCC: the effort with EvoCC as a share of the effort with GCC and UBSan, and the share of runs that repaired the bug. Silent bugs: GCC 14's warnings and UBSan report nothing. Kimi K3, coding agent, 18 short programs: 325 to 206 steps (−37%), repaired 33 to 36 of 36. Kimi K3, coding agent, 12 programs of 722 lines: 241 to 156 steps (−35%), repaired 24 of 24 with both. Qwen3.8 27B, chat model, 18 short programs: 2,717 to 1,103 tokens (−59%), repaired 30 to 54 of 54. DeepSeek V4.1 Flash, chat model, 18 short programs: 6,421 to 1,534 tokens (−76%), repaired 50 to 54 of 54. MiniMax M3.1 Flash, chat model, 18 short programs: 1,108 to 932 tokens (−16%), repaired 54 of 54 with both. Control bugs: GCC and UBSan report them. Kimi K3, coding agent, 6 programs: 63 to 60 steps (−5%), repaired 11 of 12 with both. Qwen3.8 27B, chat model, 6 programs: 959 to 886 tokens (−8%), repaired 18 of 18 with both. DeepSeek V4.1 Flash, chat model, 6 programs: 979 to 746 tokens (−24%), repaired 18 to 17 of 18. MiniMax M3.1 Flash, chat model, 6 programs: 701 to 770 tokens (+10%), repaired 15 to 16 of 18. Kimi K3: total agent steps over 2 runs of each program. Chat models: mean output tokens per answer over 3 runs. Each saving on silent bugs is a registered prediction that held, with p < 0.01. Mistral Small 4 stopped after 6 of 144 runs and is not shown." width="862">
-  </picture>
-</p>
+Does EvoCC's feedback help an AI agent repair a bug in C? We ran six experiments with a measured
+run, in this order. Each one fixed a flaw of an earlier one. Protocols 6 and 7 have pilots only.
 
 | # | Model and programs | Result |
 | --- | --- | --- |
@@ -44,33 +12,54 @@ The figure shows the registered results of experiments 5 and 8.
 | [5](#experiment-5-repair-effort-and-program-size) | Kimi K3, registered replication; 18 short and 12 longer programs | fewer steps and fewer tokens with EvoCC, p < 0.001 |
 | [8](#experiment-8-chat-models-and-silent-bugs) | DeepSeek V4.1 Flash, MiniMax M3.1 Flash and Qwen3.8 27B, as chat models; the 24 programs of experiment 4 | fewer tokens with EvoCC for all three, p < 0.01; more repairs with Qwen3.8 27B, 54 against 30 of 54, p = 0.004 |
 
-**By model.** Kimi K3 ran at low reasoning effort in Kimi Code 2.0.2, which
-logs it as `kimi-code/k3`. It gives the registered result for a coding agent.
-DeepSeek V4.1 Flash, MiniMax M3.1 Flash and Qwen3.8 27B give the registered
-results for chat models, in experiment 8. In experiments 1 and 2, UBSan also
-reported each undefined behavior, and DeepSeek V4.1 Flash did not do better
-with EvoCC. In experiment 1 it repaired 87 of 90, against 88 with GCC and 82
-with Clang. In experiment 2 its completion rate was 0.600, against 0.556 with
-GCC and 0.622 with Clang. With Qwen3.5 9B, EvoCC had the highest completion
-rate in experiment 2: 10 of 44, against 6 with GCC, 2 with Clang and 1 with
-no feedback. That run stopped early and registered no test of completion, so
-this is a hint, not a result.
+Experiments 5 and 8 found registered differences. In experiment 5, a coding agent on Kimi K3 repaired bugs
+that GCC 14's warnings and UBSan do not report: uninitialized reads, dangling pointers and
+out-of-bounds accesses. With EvoCC, it used 37% fewer steps and 40% fewer tokens on 18 short
+programs, and 35% fewer steps on 12 programs of 722 lines. Each of the three registered
+predictions held with p < 0.001, over 144 sessions.
 
-**Limits.** The coding-agent result comes from one model at one effort
-setting and two repetitions. The chat-model result comes from three models,
-one response for each trial and three repetitions at temperature 0. Both use
-injected bugs in programs adapted from zlib, Zstandard and cJSON. They do not
-rank models or toolchains in general. A clean check is not a correct repair:
-several repairs removed the undefined behavior and changed the required
-result.
+In experiment 8, chat models got the same bugs
+with the frozen records of experiment 4 and answered once for each trial. Three of four models
+completed all 144 trials. Each used fewer completion tokens with EvoCC: 76% fewer with DeepSeek
+V4.1 Flash, 59% with Qwen3.8 27B and 16% with MiniMax M3.1 Flash (p < 0.01 for each). Qwen3.8 27B
+also repaired 54 of 54, against 30 of 54 with GCC and UBSan (p = 0.004). The other two models
+repaired nearly all bugs with both records, so their repair counts did not differ. On control bugs
+that GCC and UBSan also report, the two toolchains cost about the same, and EvoCC lost at most one
+trial.
 
-**Follow-ups.** Protocols 6 and 7 have pilots but no measured run. Protocol
-6, P17a (DeepSeek V4.1 Flash), tests shorter E3004 guidance and the response
-budget; it is registered, and its pilot of 2026-10-20 met every go criterion.
-Protocol 7, P22 (Kimi K3), tests the concise check record; its pilot of
-2026-10-20 stopped on an escape record, so it is not registered. In
-experiment 8, the Mistral Small 4 run stopped at trial 6 of 144 on a provider
-rate limit, so it tests nothing. Pilot data stay out of every analysis.
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="images/agent-results-dark.svg">
+    <img src="images/agent-results-light.svg" alt="The same bugs, with GCC 14's warnings and UBSan or with EvoCC: the effort with EvoCC as a share of the effort with GCC and UBSan, and the share of runs that repaired the bug. Silent bugs: GCC 14's warnings and UBSan report nothing. Kimi K3, coding agent, 18 short programs: 325 to 206 steps (−37%), repaired 33 to 36 of 36. Kimi K3, coding agent, 12 programs of 722 lines: 241 to 156 steps (−35%), repaired 24 of 24 with both. Qwen3.8 27B, chat model, 18 short programs: 2,717 to 1,103 tokens (−59%), repaired 30 to 54 of 54. DeepSeek V4.1 Flash, chat model, 18 short programs: 6,421 to 1,534 tokens (−76%), repaired 50 to 54 of 54. MiniMax M3.1 Flash, chat model, 18 short programs: 1,108 to 932 tokens (−16%), repaired 54 of 54 with both. Control bugs: GCC and UBSan report them. Kimi K3, coding agent, 6 programs: 63 to 60 steps (−5%), repaired 11 of 12 with both. Qwen3.8 27B, chat model, 6 programs: 959 to 886 tokens (−8%), repaired 18 of 18 with both. DeepSeek V4.1 Flash, chat model, 6 programs: 979 to 746 tokens (−24%), repaired 18 to 17 of 18. MiniMax M3.1 Flash, chat model, 6 programs: 701 to 770 tokens (+10%), repaired 15 to 16 of 18. Kimi K3: total agent steps over 2 runs of each program. Chat models: mean output tokens per answer over 3 runs. Each saving on silent bugs is a registered prediction that held, with p < 0.01. Mistral Small 4 stopped after 6 of 144 runs and is not shown." width="862">
+  </picture>
+</p>
+
+`tools/render-readme.py` draws the figure from the receipts and the registered analyses.
+
+The first experiments did not separate the toolchains. In experiments 1 and 2, UBSan also reported
+each undefined behavior, and DeepSeek V4.1 Flash did not do better with EvoCC. In experiment 1 it
+repaired 87 of 90, against 88 with GCC and 82 with Clang. In experiment 2 its completion rate was
+0.600, against 0.556 with GCC and 0.622 with Clang. With Qwen3.5 9B, EvoCC had the highest
+completion rate in experiment 2: 10 of 44, against 6 with GCC, 2 with Clang and 1 with no feedback.
+That run stopped early and registered no test of completion, so this is a hint, not a result.
+
+Kimi K3 ran at low reasoning effort in Kimi Code 2.0.2, which logs it as `kimi-code/k3`.
+
+## Limits
+
+The coding-agent result comes from one model at one effort setting and two repetitions. The
+chat-model result comes from three models, one response for each trial and three repetitions at
+temperature 0. Both use injected bugs in programs adapted from zlib, Zstandard and cJSON. They do
+not rank models or toolchains. A clean check is not a correct repair: several repairs removed the
+undefined behavior and changed the required result.
+
+## Follow-ups
+
+Protocol 6, P17a (DeepSeek V4.1 Flash), tests shorter E3004 guidance and the response budget. It
+is registered, and its pilot of 2026-10-20 met every go criterion. Protocol 7, P22 (Kimi K3), tests
+the concise check record. Its pilot of 2026-10-20 stopped on an escape record, so it is not
+registered. The Mistral Small 4 run of experiment 8 stopped at trial 6 of 144 on a provider rate
+limit, so it tests nothing. Pilot data stay out of every analysis.
 
 ## Experiment 1: a chat model and 30 short programs
 
@@ -102,9 +91,8 @@ Each registration in this chapter was a local Git tag on the commit that the
 text names. The public repository has the commits, not the tags. To replay a
 run, create the tag on its commit, because the harness checks the tag name
 that its protocol records.
-Registration 1 is retained with zero model calls. Its file query exceeded the
-131,072-byte capture limit with 137,511 bytes. A scoped query fixed that failure
-before registration 2 and the first model request.
+Registration 1 made no model request: its file query exceeded the capture limit.
+Registration 2 fixed the query.
 
 The model is DeepSeek V4.1 Flash, through OpenRouter, model ID
 `deepseek/deepseek-v4.1-flash`. Every response reported that same model ID.
@@ -157,8 +145,6 @@ C3 passed 87/90 (96.7%), compared with 88/90 (97.8%) for C1 and 82/90
 This run did not show an overall repair-rate or successful-round advantage
 for EvoCC over both conventional baselines.
 
-Every successful repair came on the first response, so this corpus did not separate the conditions: the result is a ceiling effect, not evidence that the conditions are equal.
-
 The [receipt](https://github.com/onehr/evocc/blob/main/tests/contracts/agent-repair-20261008.json) preserves the
 per-repetition results. The [full transcript archive](https://github.com/onehr/evocc/raw/refs/heads/main/tests/contracts/agent-repair-transcripts-20261008.tar.gz)
 contains all 270 transcripts, the original receipt, the plan and source licenses.
@@ -186,104 +172,7 @@ from 0 to 1. Each condition has 90 attempted repetitions; each class has 30.
 | deepseek/deepseek-v4.1-flash | c3 | frontend | 30/30 | 1.000 | 1.000 | 1.000 | 1.000 to 1.000 | 1.000 to 1.000 | 10/10, 10/10, 10/10 | 0 | 0 |
 | deepseek/deepseek-v4.1-flash | c3 | logic | 30/30 | 1.000 | 1.000 | 1.000 | 1.000 to 1.000 | 1.000 to 1.000 | 10/10, 10/10, 10/10 | 0 | 0 |
 
-| Item | Origin | Model | Condition | Pass / attempted | Mean rounds |
-| --- | --- | --- | --- | ---: | ---: |
-| frontend-array-type | public source + injected defect | deepseek/deepseek-v4.1-flash | c1 | 2/3 | 1.000 |
-| frontend-array-type | public source + injected defect | deepseek/deepseek-v4.1-flash | c2 | 3/3 | 1.000 |
-| frontend-array-type | public source + injected defect | deepseek/deepseek-v4.1-flash | c3 | 3/3 | 1.000 |
-| frontend-conflicting-prototype | public source + injected defect | deepseek/deepseek-v4.1-flash | c1 | 3/3 | 1.000 |
-| frontend-conflicting-prototype | public source + injected defect | deepseek/deepseek-v4.1-flash | c2 | 3/3 | 1.000 |
-| frontend-conflicting-prototype | public source + injected defect | deepseek/deepseek-v4.1-flash | c3 | 3/3 | 1.000 |
-| frontend-const-local | public source + injected defect | deepseek/deepseek-v4.1-flash | c1 | 3/3 | 1.000 |
-| frontend-const-local | public source + injected defect | deepseek/deepseek-v4.1-flash | c2 | 3/3 | 1.000 |
-| frontend-const-local | public source + injected defect | deepseek/deepseek-v4.1-flash | c3 | 3/3 | 1.000 |
-| frontend-goto-label | public source + injected defect | deepseek/deepseek-v4.1-flash | c1 | 3/3 | 1.000 |
-| frontend-goto-label | public source + injected defect | deepseek/deepseek-v4.1-flash | c2 | 2/3 | 1.333 |
-| frontend-goto-label | public source + injected defect | deepseek/deepseek-v4.1-flash | c3 | 3/3 | 1.000 |
-| frontend-implicit-call | public source + injected defect | deepseek/deepseek-v4.1-flash | c1 | 3/3 | 1.000 |
-| frontend-implicit-call | public source + injected defect | deepseek/deepseek-v4.1-flash | c2 | 3/3 | 1.000 |
-| frontend-implicit-call | public source + injected defect | deepseek/deepseek-v4.1-flash | c3 | 3/3 | 1.000 |
-| frontend-missing-local | public source + injected defect | deepseek/deepseek-v4.1-flash | c1 | 3/3 | 1.000 |
-| frontend-missing-local | public source + injected defect | deepseek/deepseek-v4.1-flash | c2 | 3/3 | 1.000 |
-| frontend-missing-local | public source + injected defect | deepseek/deepseek-v4.1-flash | c3 | 3/3 | 1.000 |
-| frontend-missing-typedef | public source + injected defect | deepseek/deepseek-v4.1-flash | c1 | 3/3 | 1.000 |
-| frontend-missing-typedef | public source + injected defect | deepseek/deepseek-v4.1-flash | c2 | 2/3 | 1.000 |
-| frontend-missing-typedef | public source + injected defect | deepseek/deepseek-v4.1-flash | c3 | 3/3 | 1.000 |
-| frontend-pointer-type | public source + injected defect | deepseek/deepseek-v4.1-flash | c1 | 3/3 | 1.000 |
-| frontend-pointer-type | public source + injected defect | deepseek/deepseek-v4.1-flash | c2 | 3/3 | 1.000 |
-| frontend-pointer-type | public source + injected defect | deepseek/deepseek-v4.1-flash | c3 | 3/3 | 1.000 |
-| frontend-struct-member | public source + injected defect | deepseek/deepseek-v4.1-flash | c1 | 3/3 | 1.000 |
-| frontend-struct-member | public source + injected defect | deepseek/deepseek-v4.1-flash | c2 | 3/3 | 1.000 |
-| frontend-struct-member | public source + injected defect | deepseek/deepseek-v4.1-flash | c3 | 3/3 | 1.000 |
-| frontend-void-result | public source + injected defect | deepseek/deepseek-v4.1-flash | c1 | 3/3 | 1.000 |
-| frontend-void-result | public source + injected defect | deepseek/deepseek-v4.1-flash | c2 | 2/3 | 1.000 |
-| frontend-void-result | public source + injected defect | deepseek/deepseek-v4.1-flash | c3 | 3/3 | 1.000 |
-| logic-factorial | public source + injected defect | deepseek/deepseek-v4.1-flash | c1 | 3/3 | 1.000 |
-| logic-factorial | public source + injected defect | deepseek/deepseek-v4.1-flash | c2 | 3/3 | 1.000 |
-| logic-factorial | public source + injected defect | deepseek/deepseek-v4.1-flash | c3 | 3/3 | 1.000 |
-| logic-fibonacci-limit | public source + injected defect | deepseek/deepseek-v4.1-flash | c1 | 3/3 | 1.000 |
-| logic-fibonacci-limit | public source + injected defect | deepseek/deepseek-v4.1-flash | c2 | 3/3 | 1.000 |
-| logic-fibonacci-limit | public source + injected defect | deepseek/deepseek-v4.1-flash | c3 | 3/3 | 1.000 |
-| logic-for-sum | public source + injected defect | deepseek/deepseek-v4.1-flash | c1 | 3/3 | 1.000 |
-| logic-for-sum | public source + injected defect | deepseek/deepseek-v4.1-flash | c2 | 3/3 | 1.000 |
-| logic-for-sum | public source + injected defect | deepseek/deepseek-v4.1-flash | c3 | 3/3 | 1.000 |
-| logic-nested-count | public source + injected defect | deepseek/deepseek-v4.1-flash | c1 | 3/3 | 1.000 |
-| logic-nested-count | public source + injected defect | deepseek/deepseek-v4.1-flash | c2 | 3/3 | 1.000 |
-| logic-nested-count | public source + injected defect | deepseek/deepseek-v4.1-flash | c3 | 3/3 | 1.000 |
-| logic-piecewise | public source + injected defect | deepseek/deepseek-v4.1-flash | c1 | 3/3 | 1.000 |
-| logic-piecewise | public source + injected defect | deepseek/deepseek-v4.1-flash | c2 | 3/3 | 1.000 |
-| logic-piecewise | public source + injected defect | deepseek/deepseek-v4.1-flash | c3 | 3/3 | 1.000 |
-| logic-precedence | public source + injected defect | deepseek/deepseek-v4.1-flash | c1 | 3/3 | 1.000 |
-| logic-precedence | public source + injected defect | deepseek/deepseek-v4.1-flash | c2 | 3/3 | 1.000 |
-| logic-precedence | public source + injected defect | deepseek/deepseek-v4.1-flash | c3 | 3/3 | 1.000 |
-| logic-square | public source + injected defect | deepseek/deepseek-v4.1-flash | c1 | 3/3 | 1.000 |
-| logic-square | public source + injected defect | deepseek/deepseek-v4.1-flash | c2 | 3/3 | 1.000 |
-| logic-square | public source + injected defect | deepseek/deepseek-v4.1-flash | c3 | 3/3 | 1.000 |
-| logic-switch-exit | public source + injected defect | deepseek/deepseek-v4.1-flash | c1 | 3/3 | 1.000 |
-| logic-switch-exit | public source + injected defect | deepseek/deepseek-v4.1-flash | c2 | 3/3 | 1.000 |
-| logic-switch-exit | public source + injected defect | deepseek/deepseek-v4.1-flash | c3 | 3/3 | 1.000 |
-| logic-switch-value | public source + injected defect | deepseek/deepseek-v4.1-flash | c1 | 2/3 | 1.333 |
-| logic-switch-value | public source + injected defect | deepseek/deepseek-v4.1-flash | c2 | 3/3 | 1.000 |
-| logic-switch-value | public source + injected defect | deepseek/deepseek-v4.1-flash | c3 | 3/3 | 1.000 |
-| logic-truth-value | public source + injected defect | deepseek/deepseek-v4.1-flash | c1 | 3/3 | 1.000 |
-| logic-truth-value | public source + injected defect | deepseek/deepseek-v4.1-flash | c2 | 3/3 | 1.000 |
-| logic-truth-value | public source + injected defect | deepseek/deepseek-v4.1-flash | c3 | 3/3 | 1.000 |
-| ub-addition-overflow | written for this corpus | deepseek/deepseek-v4.1-flash | c1 | 3/3 | 1.000 |
-| ub-addition-overflow | written for this corpus | deepseek/deepseek-v4.1-flash | c2 | 1/3 | 1.000 |
-| ub-addition-overflow | written for this corpus | deepseek/deepseek-v4.1-flash | c3 | 2/3 | 1.000 |
-| ub-array-bound | written for this corpus | deepseek/deepseek-v4.1-flash | c1 | 3/3 | 1.000 |
-| ub-array-bound | written for this corpus | deepseek/deepseek-v4.1-flash | c2 | 3/3 | 1.000 |
-| ub-array-bound | written for this corpus | deepseek/deepseek-v4.1-flash | c3 | 3/3 | 1.000 |
-| ub-multiplication-overflow | written for this corpus | deepseek/deepseek-v4.1-flash | c1 | 3/3 | 1.000 |
-| ub-multiplication-overflow | written for this corpus | deepseek/deepseek-v4.1-flash | c2 | 2/3 | 1.000 |
-| ub-multiplication-overflow | written for this corpus | deepseek/deepseek-v4.1-flash | c3 | 3/3 | 1.000 |
-| ub-negation-overflow | written for this corpus | deepseek/deepseek-v4.1-flash | c1 | 3/3 | 1.000 |
-| ub-negation-overflow | written for this corpus | deepseek/deepseek-v4.1-flash | c2 | 3/3 | 1.000 |
-| ub-negation-overflow | written for this corpus | deepseek/deepseek-v4.1-flash | c3 | 2/3 | 1.000 |
-| ub-negative-shift-count | written for this corpus | deepseek/deepseek-v4.1-flash | c1 | 3/3 | 1.000 |
-| ub-negative-shift-count | written for this corpus | deepseek/deepseek-v4.1-flash | c2 | 3/3 | 1.000 |
-| ub-negative-shift-count | written for this corpus | deepseek/deepseek-v4.1-flash | c3 | 3/3 | 1.000 |
-| ub-quotient-overflow | written for this corpus | deepseek/deepseek-v4.1-flash | c1 | 3/3 | 1.000 |
-| ub-quotient-overflow | written for this corpus | deepseek/deepseek-v4.1-flash | c2 | 2/3 | 1.000 |
-| ub-quotient-overflow | written for this corpus | deepseek/deepseek-v4.1-flash | c3 | 3/3 | 1.000 |
-| ub-quotient-zero | written for this corpus | deepseek/deepseek-v4.1-flash | c1 | 3/3 | 1.000 |
-| ub-quotient-zero | written for this corpus | deepseek/deepseek-v4.1-flash | c2 | 3/3 | 1.000 |
-| ub-quotient-zero | written for this corpus | deepseek/deepseek-v4.1-flash | c3 | 3/3 | 1.000 |
-| ub-remainder-zero | written for this corpus | deepseek/deepseek-v4.1-flash | c1 | 3/3 | 1.000 |
-| ub-remainder-zero | written for this corpus | deepseek/deepseek-v4.1-flash | c2 | 3/3 | 1.000 |
-| ub-remainder-zero | written for this corpus | deepseek/deepseek-v4.1-flash | c3 | 3/3 | 1.000 |
-| ub-subtraction-overflow | written for this corpus | deepseek/deepseek-v4.1-flash | c1 | 3/3 | 1.000 |
-| ub-subtraction-overflow | written for this corpus | deepseek/deepseek-v4.1-flash | c2 | 2/3 | 1.000 |
-| ub-subtraction-overflow | written for this corpus | deepseek/deepseek-v4.1-flash | c3 | 2/3 | 1.000 |
-| ub-wide-shift-count | written for this corpus | deepseek/deepseek-v4.1-flash | c1 | 3/3 | 1.000 |
-| ub-wide-shift-count | written for this corpus | deepseek/deepseek-v4.1-flash | c2 | 3/3 | 1.000 |
-| ub-wide-shift-count | written for this corpus | deepseek/deepseek-v4.1-flash | c3 | 3/3 | 1.000 |
-
-Stop: completed. Unattempted repetitions: 0.
-Reported cost: USD 0.198289.
-Rates include recorded errors in the attempted denominator. A range from incomplete repetitions is not a full-population estimate.
-
-#### Response failures and follow-up
+#### Response failures
 
 All 13 terminal errors returned HTTP 200 with `finish_reason=length` and
 4,096 completion tokens. Eleven had no final content; two had an incomplete
@@ -299,30 +188,10 @@ The three C3 failures were `ub-addition-overflow` (repetition 1),
 4,096-token completion budget. Two returned no final content; the third
 returned a partial fenced response. These are not missing UB findings.
 
-The frozen harness calls missing final content `malformed_response` and a
-nonconforming fenced reply `invalid_candidate:fenced_file`. These labels do
-not mean that the HTTP JSON was malformed. Its `acceptance` field remains
-`false`, since it requires every attempted repetition to have no error.
-Its `stop_reason` is `completed`: the experimental population finished,
-but not every attempted repair succeeded. No field was changed to hide this.
+The receipt keeps `acceptance` false, because acceptance requires every attempted repetition
+to finish without an error.
 
-A [follow-up in TODO](https://github.com/onehr/evocc/blob/main/TODO.md) asks whether concise E3004 guidance or a review-only
-overflow repair plan helps under a separately registered response budget and
-provider policy. That is an untested proposal, not an identified compiler
-defect. Saturation changes behavior and cannot be a generic safe repair.
-This run does not establish that an additional diagnostic or repair would
-have prevented a model response from exhausting its token budget.
-
-#### Validation
-
-The full workspace gate passed 3,228 tests with zero failures and five existing
-ignored campaigns; Clippy and formatting passed. An earlier sandboxed run
-failed two Linux tests because access to Apple Container was denied. The full
-rerun with that access passed both. It started on clean `8f09f06c`; the later
-`7eed5eac` fix changed only the Python query, its test and registration metadata,
-not Rust or specification sources. The final Python checks passed 40 tests:
-32 experiment checks and eight tracker checks. The archive and every external
-transcript passed the credential-prefix scan. No Lean semantics changed.
+#### Measures and limits
 
 Repair rate is passes divided by attempted repetitions, including recorded
 errors and stops. Unattempted cells remain separate. Mean rounds includes all
@@ -1166,12 +1035,6 @@ python3 tools/experiment/report.py \
 This registered experiment puts the question of experiment 4 to chat models.
 A chat model gets the program and one frozen feedback record. It answers once,
 with the complete repaired program. It cannot run a tool or test its answer.
-Three models completed all 144 trials. With EvoCC's record, each of them used
-fewer completion tokens on the silent bugs, so P3 held for each. Qwen3.8 27B
-also repaired more silent bugs, 54 of 54 against 30 of 54, so P1 held for it.
-DeepSeek V4.1 Flash and MiniMax M3.1 Flash repaired nearly every silent bug
-with both records, so P1 did not hold for them. P2 held for all three. The
-Mistral Small 4 run stopped early on a provider rate limit and tests nothing.
 
 ### Registration and method
 
@@ -1242,11 +1105,9 @@ analysis.
 
 ### Measured results
 
-Qwen3.8 27B finished at 10:45 UTC, MiniMax M3.1 Flash at 10:57 and DeepSeek
-V4.1 Flash at 11:32. Each of the three completed all 144 trials. Each request
-received HTTP 200 from the pinned provider with the registered model name,
-and no request needed a retry. Each delivered answer was a valid program and
-was scored on all three builds, with no score error.
+Each of the three models completed all 144 trials. Each request received HTTP
+200 from the pinned provider with the registered model name, with no retry and
+no score error.
 
 DeepSeek V4.1 Flash had one length stop: `adler-byte`, C1, repetition 2. It
 used all 16,384 output tokens, 16,192 of them for reasoning, and it counts as
@@ -1255,8 +1116,7 @@ not repaired. There were no deadlines and no other undelivered answers.
 The Mistral Small 4 run received HTTP 429 from the shared pool of its
 provider. The harness retried once after 2 seconds, as registered. Trials 1
 and 3 passed on the retry. Trial 6 failed twice, and the run stopped after 6
-of 144 trials. A run that stops early tests nothing, so this page gives no
-Mistral result.
+of 144 trials. A run that stops early tests nothing.
 
 | Model | Silent, C1 | Silent, C3 | Controls, C1 | Controls, C3 | Cost |
 | --- | ---: | ---: | ---: | ---: | ---: |
@@ -1264,8 +1124,8 @@ Mistral result.
 | MiniMax M3.1 Flash | 54/54 | 54/54 | 15/18 | 16/18 | $0.095 |
 | Qwen3.8 27B | 30/54 | 54/54 | 18/18 | 18/18 | $0.527 |
 
-The counts are repaired trials. The next table gives them by code, as C1 /
-C3, out of 18 trials for each silent code and 6 for each control code.
+The counts are repaired trials. By code, as C1 / C3, of 18 trials for each
+silent code and 6 for each control code:
 
 | Code | DeepSeek V4.1 Flash | MiniMax M3.1 Flash | Qwen3.8 27B |
 | --- | --- | --- | --- |
@@ -1304,7 +1164,7 @@ EvoCC's record is longer, so a C3 prompt has about 500 more tokens. On the
 silent items, the shorter answers paid for that: C3 cost 75% less than C1
 with DeepSeek V4.1 Flash, 37% less with Qwen3.8 27B and 14% less with
 MiniMax M3.1 Flash. On the controls, the two conditions cost within $0.01 of
-each other. These cost figures are descriptive. The four runs cost $0.887 in
+each other. The four runs cost $0.887 in
 all, $0.009 of it for Mistral Small 4.
 
 ### Registered predictions and limits
@@ -1316,10 +1176,8 @@ all, $0.009 of it for Mistral Small 4.
 | Qwen3.8 27B | 18 / 8 | 1/256 = 0.0039 | Held | 0 | Held | 18 / 18 | 1/262144 = 0.0000038 | Held |
 | Mistral Small 4 | stopped | | Not tested | | Not tested | stopped | | Not tested |
 
-On the silent items, the mean completion tokens fell from 6,421 to 1,534
-(76%) with DeepSeek V4.1 Flash, from 2,717 to 1,103 (59%) with Qwen3.8 27B
-and from 1,108 to 932 (16%) with MiniMax M3.1 Flash. An independent
-dynamic-programming calculation reproduced each exact probability.
+An independent dynamic-programming calculation reproduced each exact
+probability.
 
 P1 could not hold for DeepSeek V4.1 Flash: only four items differed, and
 with four nonzero items the smallest exact p is 1/16. MiniMax M3.1 Flash
@@ -1338,7 +1196,7 @@ that GCC 14's warnings and UBSan miss each silent bug, so the C1 record is
 empty by design. Other tools find some of these bugs: see the detection
 matrix of experiment 4. The experiment compares two frozen records, not two
 complete toolchains. Each model ran with one provider at low reasoning
-effort. Three models do not rank models in general.
+effort.
 
 Sources: [registered analysis](../../tests/contracts/agent-repair-8-20261029.json);
 receipts for [DeepSeek V4.1 Flash](../../tests/contracts/agent-repair-8-deepseek-v4.1-flash-20261029.json),
@@ -1348,11 +1206,9 @@ and [Mistral Small 4](../../tests/contracts/agent-repair-8-mistral-small-2603-20
 [wire logs](../../tests/contracts/agent-repair-8-wire-20261029.tar.gz) and
 [pilot records](../../tests/contracts/agent-repair-8-pilot-20261029.tar.gz).
 The archives leave out the bodies of the HTTP 429 responses, because they
-carry the OpenRouter account ID. The receipts keep their SHA-256 values. The
-18 tests of the harness passed before registration. An exact-value scan
-checked 1,021 capture files against the private credential value and found
-none. This scan does not prove that the transcripts contain no other
-sensitive information.
+carry the OpenRouter account ID. The receipts keep their SHA-256 values. An
+exact-value scan found the private credential in none of the 1,021 capture
+files.
 
 Reproduce the registered analysis without making a model request:
 

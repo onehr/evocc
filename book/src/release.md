@@ -1,7 +1,7 @@
 # Reproducing a Release
 
-A release archive is the output of `tools/release.sh`. This chapter shows how to make an archive
-again from a clean checkout, and how to compare it with a published archive.
+A release archive is the output of `tools/release.sh`. To check a published archive, make it
+again from a clean checkout and compare the two.
 
 ## What the archive holds
 

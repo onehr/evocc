@@ -1,9 +1,7 @@
 # Evaluating EvoCC
 
-How do we know that EvoCC works? Not from a feeling, and not from one green test. The project
-builds real programs with EvoCC, runs their own tests, and writes down each result with the exact
-compiler and inputs that produced it. This chapter shows how to read those results and how to run
-them again. You need a source checkout for it.
+EvoCC builds real programs, runs their own tests and records each result with the exact compiler
+and inputs that produced it. To run the tests again, you need a source checkout.
 
 ## The ladder
 

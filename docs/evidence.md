@@ -1,10 +1,8 @@
 # EvoCC evidence and status
 
-This document collects the measured results of EvoCC. The [README](../README.md) describes the
-design and the use of the compiler. The results below link to their receipts in
-[`tests/contracts/`](../tests/contracts/) and their dated ledgers in [`docs/archive/notebook/`](archive/notebook/). This
-document is not a live status. The generated [status dashboard](status.md) shows the current
-receipt checkpoint, and [TODO.md](../TODO.md) gives the remaining work.
+Each result links to its receipt in [`tests/contracts/`](../tests/contracts/) and to its dated
+ledger in [`docs/archive/notebook/`](archive/notebook/). The generated [status dashboard](status.md)
+shows the current receipt checkpoint, and [TODO.md](../TODO.md) the remaining work.
 
 GCC 14.2 and Clang 19.1 in the sealed AArch64 lab give the reference measurements. Documented
 profile decisions resolve supported disagreements. The remaining unsupported forms have explicit
@@ -14,7 +12,7 @@ beyond kernel boot.
 ## Measurement dates
 
 The dates come from the README text of each block, or from [TODO.md](../TODO.md) where the README
-gave none. No other date is added.
+gave none.
 
 | Block | When the numbers were measured |
 |---|---|
@@ -31,8 +29,6 @@ gave none. No other date is added.
 | [Verification details and limits](#verification-details-and-limits) | Moved from the README of commit `3b0f18fc`; the V00 to V08 state is that of 2026-10-06. The README examples ran again on 2026-10-27 with the release binaries of commit `08bf09bd`. |
 
 ## Showcase notes
-
-The README keeps short captions. These are the full caption facts of each image:
 
 | Image | Caption facts |
 |---|---|

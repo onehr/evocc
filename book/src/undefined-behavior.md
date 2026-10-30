@@ -5,11 +5,11 @@ read a variable that it never wrote, or read past the end of an array. The C sta
 what happens then. A usual compiler may assume that these things never happen, and when they do
 happen, the program can do anything, often with no sign of a problem.
 
-EvoCC records supported undefined-behavior obligations explicitly. Its interpreters stop when an
-implemented check fails and report a diagnostic. Checked native code retains supported scalar
-checks. This is not complete UB detection: `--check` does not check the same-object or exact-element
-obligations of pointer subtraction, or same-object ordering. This chapter shows the checks it does
-implement; a completed execution is not a safety proof.
+EvoCC keeps each supported undefined-behavior obligation as an explicit check. Its interpreters
+stop at the first check that fails and report a diagnostic. Checked native code keeps the
+supported scalar checks. `--check` does not check the same-object or exact-element obligations of
+pointer subtraction, or same-object ordering, and a completed run covers only the path that it
+took.
 
 ## Four mistakes
 

@@ -267,7 +267,7 @@ class StagesFigureTests(unittest.TestCase):
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
         section = readme.split("## Why EvoCC\n", 1)[1].split("\n## ", 1)[0]
         self.assertLess(section.index("propose-check-light.svg"), section.index("\n### "))
-        self.assertLess(section.index("- **Built for agents.**"), section.index("\n### "))
+        self.assertLess(section.index("(#built-for-agents)"), section.index("\n### "))
         self.assertIn('srcset="docs/images/readme/stages-dark.svg"', section)
         alt = re.search(r'stages-light\.svg" alt="([^"]+)"', section).group(1)
         for value in ("s->count += 1;", "E3001 read-of-uninitialized-object at mean.c:7:9",
