@@ -136,7 +136,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                         ) {
                             self.report(
                                 "E2205",
-                                "not-covered-day5: wide-string-initializer",
+                                "not-covered: utf16-utf32-string-initializer",
                                 *span,
                             );
                             return None;
@@ -171,7 +171,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                             ) {
                                 self.report(
                                     "E2205",
-                                    "not-covered-day5: wide-string-initializer",
+                                    "not-covered: utf16-utf32-string-initializer",
                                     *literal_span,
                                 );
                                 return None;

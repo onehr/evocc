@@ -893,7 +893,7 @@ pub(super) fn canonical_integer(
             return Err(LowerError::UnsupportedType {
                 ty,
                 span,
-                feature: "non-integer scalar type is outside Day 6",
+                feature: "non-integer type where an integer is required",
             });
         }
     };

@@ -2522,7 +2522,7 @@ impl<'a> Cursor<'a> {
         if region == Region::All {
             Ok(true)
         } else {
-            Err("Day 8 effect sets may contain only region all".into())
+            Err("effect sets may contain only region all; other region names are reserved".into())
         }
     }
 

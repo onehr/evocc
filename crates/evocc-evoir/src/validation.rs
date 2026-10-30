@@ -449,7 +449,7 @@ pub fn evoir_access_layout(ty: &EvoIRType) -> Result<Option<AccessLayout>, Strin
         EvoIRType::Ptr(_) | EvoIRType::FnPtr { .. } => 8,
         _ => {
             return Err(format!(
-                "Day 7 memory type {ty:?} has no scalar access layout"
+                "type {ty:?} has no scalar access layout: it is not a value that memory holds"
             ))
         }
     };

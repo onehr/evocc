@@ -115,7 +115,7 @@ pub fn ingest_scalar_inst(inst: &Inst) -> Result<ScalarOperator, ScalarBridgeErr
         _ => {
             return Err(ScalarBridgeError {
                 code: "EQ_OPERATOR_EXCLUDED",
-                message: "instruction-is-not-total-day7-p0-scalar",
+                message: "instruction-is-not-total-p0-scalar",
             });
         }
     };

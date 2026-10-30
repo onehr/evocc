@@ -305,7 +305,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
                 | StringPrefix::L16
                 | StringPrefix::LInt
         ) {
-            self.report("E2205", "not-covered-day5: wide-string-initializer", span);
+            self.report("E2205", "not-covered: utf16-utf32-string-initializer", span);
             return None;
         }
         let canonical = self.types.get(target)?;

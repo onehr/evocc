@@ -250,7 +250,7 @@ pub(super) fn cast_machine_value(
         )
         | (CValue::Aggregate { .. }, ValueType::Aggregate(_)) => {
             Err(InterpreterError::UnsupportedExpression {
-                feature: "pointer cast execution before Day 7 memory bindings",
+                feature: "conversion to or from an incompatible aggregate or pointer type",
                 span,
             })
         }

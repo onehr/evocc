@@ -547,7 +547,7 @@ pub(super) fn validate_object_declaration_for_lowering(
     ) {
         return Err(LowerError::UnsupportedStatement {
             span: object.span,
-            feature: "non-automatic scalar object is outside Day 6 lowering",
+            feature: "object declaration with the typedef storage class",
         });
     }
     if symbol.kind() != SymbolKind::Object

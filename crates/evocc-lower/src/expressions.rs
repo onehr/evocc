@@ -131,7 +131,7 @@ impl<'a> FunctionLowerer<'a> {
                 let integer = integer_literal_value(*literal).map_err(|_| {
                     LowerError::UnsupportedExpression {
                         span: expression.span(),
-                        feature: "integer literal has no Day-6 target representation",
+                        feature: "integer literal too large for any permitted type",
                     }
                 })?;
                 self.wide_constant(state, integer.ty(), integer.raw_bits())
@@ -596,7 +596,7 @@ impl<'a> FunctionLowerer<'a> {
             CHirExpr::PtrMember(_, _, span) | CHirExpr::Index(_, _, span) => {
                 Err(LowerError::UnsupportedExpression {
                     span: *span,
-                    feature: "expression requires the Day-7 object or non-integer model",
+                    feature: "subscript or -> member access without a resolved memory place",
                 })
             }
             CHirExpr::MemoryRead {

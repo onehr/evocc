@@ -566,7 +566,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             | CHirExpr::MemoryRead { .. }
             | CHirExpr::Update { .. }
             | CHirExpr::MemoryUpdate { .. } => Err(InterpreterError::UnsupportedExpression {
-                feature: "outside scalar Day-5 expression subset",
+                feature: "expression outside integer-only evaluation",
                 span,
             }),
         }
