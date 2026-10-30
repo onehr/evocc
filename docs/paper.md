@@ -11,9 +11,9 @@ compiler and its construction, an untrusted component proposes, and a smaller ch
 advance, decides. Tests written first, sealed GCC and Clang oracles and fail-closed gates decide
 which agent changes land. A separate checker replays each optimization certificate against 62 rules
 that Lean proves for every bit width. For a subset of integer C, five Lean checkers and one theorem
-cover each compilation from typed source to assembly text. The IRs keep each undefined-behavior rule of C as an obligation. The release compiler
-compiles all 2,799 target C files of a Linux 6.18 kernel that boots, and 10 of 15 application test
-lanes pass. Its code is 1.8 to 2.3 times the size of GCC `-O2` code, and the proved rewrites save
+cover each compilation from typed source to assembly text. The IRs keep each undefined-behavior
+rule of C as an obligation. The release compiler compiles all 2,799 target C files of a Linux 6.18
+kernel that boots, and 10 of 15 application test lanes pass. Its code is 1.8 to 2.3 times the size of GCC `-O2` code, and the proved rewrites save
 0.03% of it. With EvoCC's diagnostics, a coding agent repaired bugs that GCC's warnings and UBSan
 miss in 37% fewer steps (p < 0.001). We report the agents' failures and the checks that caught them.
 
