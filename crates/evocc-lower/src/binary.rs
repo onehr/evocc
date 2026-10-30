@@ -8,16 +8,12 @@ impl<'a> FunctionLowerer<'a> {
         expression: &CHirExpr<'_>,
         span: SourceSpan,
     ) -> Result<TypeId, LowerError> {
-        evocc_chir::PointerTypeDesc::from_expression(
-            self.unit.symbols(),
-            self.unit.types(),
-            expression,
-        )
-        .map(|pointer| pointer.pointee())
-        .map_err(|_| LowerError::UnsupportedExpression {
-            span,
-            feature: "pointer expression type is unavailable",
-        })
+        self.pointer_descriptor(expression)
+            .map(|pointer| pointer.pointee())
+            .map_err(|_| LowerError::UnsupportedExpression {
+                span,
+                feature: "pointer expression type is unavailable",
+            })
     }
 
     pub(super) fn lower_binary(
@@ -351,27 +347,17 @@ impl<'a> FunctionLowerer<'a> {
                     (null, right.value)
                 }
                 (true, true)
-                    if evocc_chir::PointerTypeDesc::from_expression(
-                        self.unit.symbols(),
-                        self.unit.types(),
-                        left_expression,
-                    )
-                    .ok()
-                    .zip(
-                        evocc_chir::PointerTypeDesc::from_expression(
-                            self.unit.symbols(),
-                            self.unit.types(),
-                            right_expression,
-                        )
-                        .ok(),
-                    )
-                    .is_some_and(|(left, right)| {
-                        evocc_chir::PointerTypeDesc::equality_compatible(
-                            self.unit.types(),
-                            left,
-                            right,
-                        )
-                    }) =>
+                    if self
+                        .pointer_descriptor(left_expression)
+                        .ok()
+                        .zip(self.pointer_descriptor(right_expression).ok())
+                        .is_some_and(|(left, right)| {
+                            evocc_chir::PointerTypeDesc::equality_compatible(
+                                self.unit.types(),
+                                left,
+                                right,
+                            )
+                        }) =>
                 {
                     // The source comparison is valid even when its operands
                     // use different object/function pointer representations.

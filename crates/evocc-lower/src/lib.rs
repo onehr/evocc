@@ -634,10 +634,11 @@ fn lower_unit_with_origins<R>(
     unit.symbol_linkage().map_err(LowerError::Linkage)?;
     // Check the entire source inventory before selecting emitted bodies. Its
     // allocation identities must remain stable for cross-interpreter traces.
-    let source_manifest =
-        AllocationSiteManifest::derive(unit).map_err(|error| LowerError::InvalidGeneratedSsa {
+    let source_manifest = AllocationSiteManifest::for_target(unit, target).map_err(|error| {
+        LowerError::InvalidGeneratedSsa {
             message: error.to_string(),
-        })?;
+        }
+    })?;
     let retained = evocc_chir::inline::without_unreferenced_functions_with_entries(unit, entries)
         .map_err(LowerError::Linkage)?;
     let unit = retained.as_ref();

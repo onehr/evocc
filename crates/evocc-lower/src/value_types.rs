@@ -145,13 +145,7 @@ impl<'a> FunctionLowerer<'a> {
     }
 
     pub(super) fn call_designator_function_type(&self, callee: &CHirExpr<'_>) -> Option<TypeId> {
-        let candidate = evocc_chir::PointerTypeDesc::from_expression(
-            self.unit.symbols(),
-            self.unit.types(),
-            callee,
-        )
-        .ok()?
-        .pointee();
+        let candidate = self.pointer_descriptor(callee).ok()?.pointee();
         match self.unit.types().get(candidate).map(|ty| &ty.kind) {
             Some(TypeKind::Function { .. }) => Some(candidate),
             _ => None,
@@ -587,5 +581,38 @@ impl<'a> FunctionLowerer<'a> {
             value: result,
             integer,
         })
+    }
+}
+
+impl FunctionLowerer<'_> {
+    pub(super) fn pointer_descriptor(
+        &self,
+        expression: &CHirExpr<'_>,
+    ) -> Result<evocc_chir::PointerTypeDesc, evocc_chir::place::MemoryPlaceError> {
+        evocc_chir::PointerTypeDesc::from_expression_with_target(
+            self.unit.symbols(),
+            self.unit.types(),
+            expression,
+            self.target,
+        )
+    }
+    pub(super) fn expression_is_void(&self, expression: &CHirExpr<'_>) -> bool {
+        evocc_chir::expression_is_void(
+            expression,
+            self.unit.symbols(),
+            self.unit.types(),
+            self.target,
+        )
+    }
+    pub(super) fn integer_expression_type(
+        &self,
+        expression: &CHirExpr<'_>,
+    ) -> Option<CIntegerType> {
+        evocc_chir::constant::integer_expression_type_with_target(
+            expression,
+            self.unit.types(),
+            self.unit.symbols(),
+            self.target,
+        )
     }
 }

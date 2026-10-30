@@ -70,7 +70,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             body, value, span, ..
         } = expression
         {
-            if crate::expression_is_void(expression, self.unit.symbols(), self.unit.types()) {
+            if self.expression_is_void(expression) {
                 self.schedule_statement_expression(body, *value, None, *span, tasks)?;
                 return Ok(());
             }
@@ -120,9 +120,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         if let Some(exit) = self.enter_memory_scope(body.span())? {
             let parent = exit.parent;
             tasks.push(MachineTask::ExitMemoryScope(exit));
-            if value.is_some_and(|value| {
-                !crate::expression_is_void(value, self.unit.symbols(), self.unit.types())
-            }) {
+            if value.is_some_and(|value| !self.expression_is_void(value)) {
                 tasks.push(MachineTask::PreserveStatementExpressionValue { parent, span });
             }
         }

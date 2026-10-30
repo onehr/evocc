@@ -458,8 +458,12 @@ fn reachable_memory_requirements_follow_transitive_calls() {
     let arena = Arena::new(64 * 1024);
     let (unit, main, _bump, counter) = transitive_global_program(&arena);
 
-    let requirements =
-        reachable_memory_requirements(&unit, main, &crate::linkage::SymbolLinkage::default());
+    let requirements = reachable_memory_requirements(
+        &unit,
+        main,
+        &crate::linkage::SymbolLinkage::default(),
+        &TargetDataLayout::aarch64_unknown_linux_gnu(),
+    );
 
     assert!(
         requirements.requires_memory,
@@ -478,8 +482,12 @@ fn unreachable_globals_are_not_scheduled_for_allocation() {
 
     // Entering at `bump` still reaches `counter`; entering nowhere else must not
     // invent objects, so the manifest stays exactly one object wide.
-    let requirements =
-        reachable_memory_requirements(&unit, bump, &crate::linkage::SymbolLinkage::default());
+    let requirements = reachable_memory_requirements(
+        &unit,
+        bump,
+        &crate::linkage::SymbolLinkage::default(),
+        &TargetDataLayout::aarch64_unknown_linux_gnu(),
+    );
 
     assert!(requirements.requires_memory);
     assert_eq!(

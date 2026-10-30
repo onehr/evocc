@@ -2,10 +2,10 @@
 
 use super::*;
 
-pub(super) struct BlockCursor {
-    pub(super) id: u32,
-    pub(super) args: Vec<VReg>,
-    pub(super) insts: Vec<MInst>,
+pub(crate) struct BlockCursor {
+    pub(crate) id: u32,
+    pub(crate) args: Vec<VReg>,
+    pub(crate) insts: Vec<MInst>,
     // An icmp fused into this block's conditional terminator.
     fused: Option<(VReg, Cond)>,
     // A checked arithmetic result transported through an explicit block argument.
@@ -15,7 +15,7 @@ pub(super) struct BlockCursor {
 }
 
 impl BlockCursor {
-    pub(super) fn new(
+    pub(crate) fn new(
         lowerer: &mut Lowerer,
         entry: bool,
         id: u32,
@@ -48,7 +48,7 @@ impl BlockCursor {
         }
     }
 
-    pub(super) fn should_skip(&mut self, index: usize) -> bool {
+    pub(crate) fn should_skip(&mut self, index: usize) -> bool {
         if index < self.selected_until {
             return true;
         }
@@ -59,7 +59,7 @@ impl BlockCursor {
         false
     }
 
-    pub(super) fn lower_obligation(
+    pub(crate) fn lower_obligation(
         &mut self,
         lowerer: &mut Lowerer,
         block: &Block,
@@ -152,7 +152,7 @@ impl BlockCursor {
         Ok(false)
     }
 
-    pub(super) fn select_darwin_product(
+    pub(crate) fn select_darwin_product(
         &mut self,
         target: Target,
         lowerer: &mut Lowerer,
@@ -176,7 +176,7 @@ impl BlockCursor {
         Ok(false)
     }
 
-    pub(super) fn fuse_compare(
+    pub(crate) fn fuse_compare(
         &mut self,
         lowerer: &mut Lowerer,
         block: &Block,
@@ -204,7 +204,7 @@ impl BlockCursor {
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub(super) fn lower_selected(
+    pub(crate) fn lower_selected(
         &mut self,
         target: Target,
         signatures: &Signatures<'_>,
@@ -244,7 +244,7 @@ impl BlockCursor {
         Ok(())
     }
 
-    pub(super) fn finish(
+    pub(crate) fn finish(
         mut self,
         lowerer: &mut Lowerer,
         function: &Function,

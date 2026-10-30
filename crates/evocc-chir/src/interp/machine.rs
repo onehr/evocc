@@ -250,11 +250,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                             let expression = item_value.expect(
                                 "the statement-expression value predicate checked this shape",
                             );
-                            if crate::expression_is_void(
-                                expression,
-                                self.unit.symbols(),
-                                self.unit.types(),
-                            ) {
+                            if self.expression_is_void(expression) {
                                 self.schedule_discarded_expression(expression, &mut tasks)?;
                             } else {
                                 tasks.push(MachineTask::EvalExpression {
@@ -1139,14 +1135,11 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                         )
                         .map_err(|error| self.memory_error(error, span))?;
                     self.memory = memory;
-                    let ty = PointerTypeDesc::from_expression(
-                        self.unit.symbols(),
-                        self.unit.types(),
-                        expression,
-                    )
-                    .map_err(|_| InterpreterError::UnsupportedExpression {
-                        feature: "dynamic allocation has no pointer type",
-                        span,
+                    let ty = self.pointer_descriptor(expression).map_err(|_| {
+                        InterpreterError::UnsupportedExpression {
+                            feature: "dynamic allocation has no pointer type",
+                            span,
+                        }
                     })?;
                     values.push(CValue::Pointer { value, ty });
                     None

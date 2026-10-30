@@ -243,14 +243,10 @@ impl<'a> FunctionLowerer<'a> {
                         | BinaryOp::Le
                         | BinaryOp::Gt
                         | BinaryOp::Ge
-                ) && [left, right].iter().all(|operand| {
-                    evocc_chir::PointerTypeDesc::from_expression(
-                        self.unit.symbols(),
-                        self.unit.types(),
-                        operand,
-                    )
-                    .is_ok()
-                }) {
+                ) && [left, right]
+                    .iter()
+                    .all(|operand| self.pointer_descriptor(operand).is_ok())
+                {
                     let address = |expression| {
                         symbolic_address(
                             self.unit,
@@ -287,11 +283,7 @@ impl<'a> FunctionLowerer<'a> {
                 values
             }
             CHirExpr::Ternary(condition, yes, no, _) => {
-                let ty = evocc_chir::constant::integer_expression_type(
-                    expression,
-                    self.unit.types(),
-                    self.unit.symbols(),
-                )?;
+                let ty = self.integer_expression_type(expression)?;
                 let conditions =
                     results(condition).unwrap_or_else(|| vec![CInteger::int(0), CInteger::int(1)]);
                 let mut values = Vec::new();

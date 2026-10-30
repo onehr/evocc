@@ -6,7 +6,6 @@
 //! comparison accesses and UB obligations execute before selection.
 
 use super::*;
-use evocc_chir::{constant::integer_expression_type, PointerTypeDesc};
 
 impl FunctionLowerer<'_> {
     pub(super) fn reuse_compared_selection(
@@ -40,11 +39,9 @@ impl FunctionLowerer<'_> {
         } else {
             return Ok(None);
         };
-        let types = self.unit.types();
-        let symbols = self.unit.symbols();
         let (Some(left_type), Some(right_type)) = (
-            integer_expression_type(left, types, symbols),
-            integer_expression_type(right, types, symbols),
+            self.integer_expression_type(left),
+            self.integer_expression_type(right),
         ) else {
             return Ok(None);
         };
@@ -129,10 +126,7 @@ impl FunctionLowerer<'_> {
             }
             (CHirExpr::Unary(ao, a, _), CHirExpr::Unary(bo, b, _)) if ao == bo => {
                 let ordinary = if *ao == UnaryOp::Deref {
-                    let pointer = |e| {
-                        PointerTypeDesc::from_expression(self.unit.symbols(), self.unit.types(), e)
-                            .ok()
-                    };
+                    let pointer = |e| self.pointer_descriptor(e).ok();
                     match (pointer(a), pointer(b)) {
                         (Some(a), Some(b)) if a == b => {
                             let q = a.pointee_qualifiers();

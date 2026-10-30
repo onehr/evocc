@@ -23,6 +23,7 @@ All notable changes to EvoCC are listed in this file. The format follows
 
 ### Changed
 
+- ABI descriptions use ordered argument and result register lists and optional result registers.
 - The source-size check limits new Rust and Python files to 1,500 lines and functions to 150
   lines. Older exceptions have a baseline that can only shrink. The local gate and CI check it.
 

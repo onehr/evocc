@@ -139,7 +139,7 @@ was found in the read-only process check at this planning checkpoint.
 | REVIEW |  | No rule decision is open. The 2026-10-13 decisions for K07, L03 to L10 and L11a to L11c are in docs/archive/notebook/rules-20261013/DECISIONS.md. |
 | AUDIT | D33 | D24 to D28 closed the follow-ups of D22, D23, L04 and L05; D33 changes the alignment model. D01-D15 are closed in their recorded scope. Keep the T03 audit boundary; kernel/application acceptance and deferred proof domains remain separate. |
 | ACCEPTANCE | T04, T02, K13, K14, R05, R05k | On 2026-10-27 the compiler of `08bf09bd` passed the frozen acceptance (B10 and the direct Kbuild replay), the final gate T05 passed, and both archives were built (R05a). Next: the owner's R05k: the dating commit, the rebuild of both archives from it, the tag and the publication. |
-| RELEASE | Q05, R04, R04a, R07 | Release 0.2.0, foundation: Q01 to Q05 and R04a; R07a's measured design is complete. Then x86-64 (R04b to R04e), RISC-V (R07b to R07e), Lean core-v2 (V09 to V13), the EqSat kit (E01 to E03) and the release (R05m). |
+| RELEASE | Q05, R04, R07 | Release 0.2.0, foundation: Q01 to Q05; R04a and R07a are done. Then x86-64 (R04b to R04e), RISC-V (R07b to R07e), Lean core-v2 (V09 to V13), the EqSat kit (E01 to E03) and the release (R05m). |
 | LATER | R05m, R01, R02, R03, R03a, R03b, R03c, R03d, R03e, R03f, R03g, R03h, R04b, R04c, R04d, R04e, N06, N06a, N06b, N06c, N06d, N06e, R07b, R07c, R07d, R07e, V09, V10, V11, V12, V13, E01, E02, E03 | S1–S5 and R02e first slice are closed; S6 stays with R01's two G2 builds. R03 V1 negative-admission study is frozen; positive Q3 remains unachieved and R03a/b/c/d NOT_ADMITTED, R03e deferred. No VM timing or audit expansion; x86-64 and release stay separate. The bounded N01–N05/N07 batch is dispositioned, not a complete optimizing compiler: N03b/N03e preflights are negative, N07 E3 has zero SMT proofs, and all five library size targets remain missed. N03d C5 has size/correctness evidence but three compile-cost misses; C2/C5 remain outside the admitted cumulative configuration, and T1's misses stay frozen. All new defaults remain OFF. Retain N02's 70 admitted/187 opaque inputs and source-bridge mismatch. Broader inlining, mid-level and allocator work need newly scoped designs; no paused R activity is automatically reopened. |
 <!-- closure-queues:end -->
 
@@ -1197,11 +1197,7 @@ Reopening any of them needs a new owner decision after the N03 slices land.
   floating-point tests must use QEMU, because Rosetta differs from x86 for some
   NaN results. Every milestone keeps the AArch64 output byte-identical.
 
-  - [ ] **R04a — Prepare the shared code for a third target** — `OPEN`, P1.
-    Target predicates, ordered argument and result register lists, the generator
-    and the layout plumbing, about 830 lines and 300 test lines. Exit: the
-    AArch64 output of the workspace tests and the ladder programs is
-    byte-identical.
+  - [x] **R04a — Prepare the shared code for a third target** — `DONE`, P1.
 
   - [ ] **R04b — Compile integer-only functions and calls** — `LATER`, P1.
     About 3,400 lines and 1,800 test lines. Exit: integer unit tests per EvoMIR

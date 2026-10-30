@@ -183,12 +183,12 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     place, target_span, ..
                 } = operand
                 {
-                    place
-                        .validate_against(self.unit.symbols(), self.unit.types())
-                        .map_err(|_| InterpreterError::UnsupportedExpression {
+                    self.validate_memory_place(place).map_err(|_| {
+                        InterpreterError::UnsupportedExpression {
                             feature: "invalid addressed memory place",
                             span,
-                        })?;
+                        }
+                    })?;
                     // A function designator is the pointer itself, not an
                     // object address on which to perform a memory access.
                     if !matches!(
@@ -403,14 +403,11 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                     .expose_pointer(pointer)
                     .map_err(|error| self.memory_error(error, span))?;
                 self.memory = memory;
-                let ty = PointerTypeDesc::from_expression(
-                    self.unit.symbols(),
-                    self.unit.types(),
-                    expression,
-                )
-                .map_err(|_| InterpreterError::UnsupportedExpression {
-                    feature: "activation address has no pointer type",
-                    span,
+                let ty = self.pointer_descriptor(expression).map_err(|_| {
+                    InterpreterError::UnsupportedExpression {
+                        feature: "activation address has no pointer type",
+                        span,
+                    }
                 })?;
                 values.push(CValue::Pointer {
                     value: Pointer::from_address(address),
@@ -421,14 +418,11 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             | CHirExpr::BuiltinFrameAddress { depth, .. }
                 if u16::try_from(*depth).is_ok() =>
             {
-                let ty = PointerTypeDesc::from_expression(
-                    self.unit.symbols(),
-                    self.unit.types(),
-                    expression,
-                )
-                .map_err(|_| InterpreterError::UnsupportedExpression {
-                    feature: "activation address has no pointer type",
-                    span,
+                let ty = self.pointer_descriptor(expression).map_err(|_| {
+                    InterpreterError::UnsupportedExpression {
+                        feature: "activation address has no pointer type",
+                        span,
+                    }
                 })?;
                 values.push(CValue::Pointer {
                     value: Pointer::NULL,
@@ -559,12 +553,12 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 facts,
                 ..
             } if self.memory_mode && self.mutation_allowed(allow_root_mutation) => {
-                place
-                    .validate_against(self.unit.symbols(), self.unit.types())
-                    .map_err(|_| InterpreterError::UnsupportedExpression {
+                self.validate_memory_place(place).map_err(|_| {
+                    InterpreterError::UnsupportedExpression {
                         feature: "invalid typed memory place",
                         span: *target_span,
-                    })?;
+                    }
+                })?;
                 if facts.ty() != place.value_ty()
                     || facts.category() != ExprCategory::Value
                     || !place.is_modifiable()

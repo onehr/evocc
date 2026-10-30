@@ -162,9 +162,7 @@ impl<'a> Substitution<'a, '_> {
             }
             CHirExpr::Binary(op @ (BinaryOp::Add | BinaryOp::Sub), pointer, index, _) => {
                 let (symbol, offset) = self.memory_address(pointer, memory, depth)?;
-                let pointer_type =
-                    PointerTypeDesc::from_expression(&self.unit.symbols, &self.unit.types, pointer)
-                        .ok()?;
+                let pointer_type = self.pointer_descriptor(pointer).ok()?;
                 let (element, _) = memory.objects.get(&symbol)?;
                 if !self
                     .unit
@@ -309,20 +307,17 @@ impl<'a> Substitution<'a, '_> {
                 (self.memory_cell(place, &c.memory)?, place.value_ty())
             }
             CHirExpr::Unary(UnaryOp::Deref, pointer, _) => {
-                let pointer_type =
-                    PointerTypeDesc::from_expression(&self.unit.symbols, &self.unit.types, pointer)
-                        .ok()?;
-                let place = MemoryPlace::derive(
-                    &self.unit.symbols,
-                    &self.unit.types,
-                    PlaceRoot::PointerExpression {
-                        pointer,
-                        pointer_type,
-                    },
-                    Vec::new(),
-                    pointer_type.pointee(),
-                )
-                .ok()?;
+                let pointer_type = self.pointer_descriptor(pointer).ok()?;
+                let place = self
+                    .derive_memory_place(
+                        PlaceRoot::PointerExpression {
+                            pointer,
+                            pointer_type,
+                        },
+                        Vec::new(),
+                        pointer_type.pointee(),
+                    )
+                    .ok()?;
                 (self.memory_cell(&place, &c.memory)?, place.value_ty())
             }
             CHirExpr::Ident { symbol, facts, .. } => ((*symbol, 0), facts.ty()),

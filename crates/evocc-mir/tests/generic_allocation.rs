@@ -11,7 +11,7 @@ use evocc_mir::generic::allocation::{
 };
 use evocc_mir::generic::allocverify::verify_allocation;
 use evocc_mir::generic::machine::{MachInst, MachTerm, MachineBlock, MachineFunction};
-use evocc_mir::generic::register::{RegisterBank, RegisterClass, VirtualReg};
+use evocc_mir::generic::register::{RegisterBank, RegisterClass, RegisterList, VirtualReg};
 use evocc_mir::generic::ssa::{SsaInst, SsaTerm};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -504,20 +504,14 @@ impl AllocTerm for Term {
     }
 }
 
-const TINY_ARGUMENTS: [RegisterBank; 2] = [
-    RegisterBank { first: 0, count: 2 },
-    RegisterBank {
-        first: 16,
-        count: 2,
-    },
-];
+const TINY_ARGUMENTS: [RegisterList; 2] = [RegisterList(&[0, 1]), RegisterList(&[16, 17])];
 
 const TINY_ABI: AbiFacts = AbiFacts {
     name: "tiny",
     argument_banks: &TINY_ARGUMENTS,
     result_banks: &TINY_ARGUMENTS,
-    indirect_result: 7,
-    result_overflow: 2,
+    indirect_result: Some(7),
+    result_overflow: Some(2),
     stack_slot_bytes: 8,
     stack_alignment_bytes: 16,
     stack_arguments: true,
@@ -532,20 +526,14 @@ const TINY_ABI: AbiFacts = AbiFacts {
 };
 
 /// Unequal per-bank counts, four-byte slots and 32-byte stack alignment.
-const TOY_ARGUMENTS: [RegisterBank; 2] = [
-    RegisterBank { first: 0, count: 2 },
-    RegisterBank {
-        first: 16,
-        count: 1,
-    },
-];
+const TOY_ARGUMENTS: [RegisterList; 2] = [RegisterList(&[0, 1]), RegisterList(&[16])];
 
 const TOY_ABI: AbiFacts = AbiFacts {
     name: "toy",
     argument_banks: &TOY_ARGUMENTS,
     result_banks: &TOY_ARGUMENTS,
-    indirect_result: 5,
-    result_overflow: 3,
+    indirect_result: Some(5),
+    result_overflow: Some(3),
     stack_slot_bytes: 4,
     stack_alignment_bytes: 32,
     ..TINY_ABI
@@ -1483,13 +1471,7 @@ fn views_of_one_physical_register_cannot_both_hold_live_values() {
     assert!(verify_allocation(&TINY, &forged).is_err());
 }
 
-const SATURATED_ARGUMENTS: [RegisterBank; 2] = [
-    RegisterBank { first: 0, count: 3 },
-    RegisterBank {
-        first: 16,
-        count: 2,
-    },
-];
+const SATURATED_ARGUMENTS: [RegisterList; 2] = [RegisterList(&[0, 1, 2]), RegisterList(&[16, 17])];
 const SATURATED_ABI: AbiFacts = AbiFacts {
     name: "saturated",
     argument_banks: &SATURATED_ARGUMENTS,

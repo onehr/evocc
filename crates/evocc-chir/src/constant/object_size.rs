@@ -131,17 +131,28 @@ impl Query<'_> {
                 }
             }
             CHirExpr::Binary(op @ (BinaryOp::Add | BinaryOp::Sub), a, b, _) => {
-                let (pointer, index) =
-                    if PointerTypeDesc::from_expression(self.symbols, self.types, a).is_ok() {
-                        (*a, *b)
-                    } else if *op == BinaryOp::Add {
-                        (*b, *a)
-                    } else {
-                        return None;
-                    };
-                let ty = PointerTypeDesc::from_expression(self.symbols, self.types, pointer)
-                    .ok()?
-                    .pointee();
+                let (pointer, index) = if PointerTypeDesc::from_expression_with_target(
+                    self.symbols,
+                    self.types,
+                    a,
+                    self.target,
+                )
+                .is_ok()
+                {
+                    (*a, *b)
+                } else if *op == BinaryOp::Add {
+                    (*b, *a)
+                } else {
+                    return None;
+                };
+                let ty = PointerTypeDesc::from_expression_with_target(
+                    self.symbols,
+                    self.types,
+                    pointer,
+                    self.target,
+                )
+                .ok()?
+                .pointee();
                 let count = eval_integer_constant(index, self.types, self.symbols, self.target)?
                     .try_mathematical_value()?;
                 let delta = count.checked_mul(i128::from(self.size(ty)?))?;
@@ -191,9 +202,14 @@ impl Query<'_> {
             CHirExpr::Member(base, name, _) | CHirExpr::PtrMember(base, name, _) => {
                 let indirect = matches!(e, CHirExpr::PtrMember(..));
                 let ty = if indirect {
-                    PointerTypeDesc::from_expression(self.symbols, self.types, base)
-                        .ok()?
-                        .pointee()
+                    PointerTypeDesc::from_expression_with_target(
+                        self.symbols,
+                        self.types,
+                        base,
+                        self.target,
+                    )
+                    .ok()?
+                    .pointee()
                 } else {
                     attribute_query_expression_type(base, self.types)?
                 };
@@ -231,7 +247,9 @@ impl Query<'_> {
         if depth >= 64 || place.is_bit_field() {
             return None;
         }
-        place.validate_against(self.symbols, self.types).ok()?;
+        place
+            .validate_against_with_target(self.symbols, self.types, self.target)
+            .ok()?;
         let mut bounds = match place.root() {
             PlaceRoot::Object { symbol } => {
                 Bounds::object(self.size(self.symbols.symbol(*symbol).ok()?.ty())?)

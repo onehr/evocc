@@ -65,34 +65,8 @@ enum ParsedAction {
     InterpretEvoIr,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum DriverTarget {
-    Aarch64UnknownLinuxGnu,
-    Aarch64AppleDarwin,
-}
-
-impl DriverTarget {
-    fn triple(self) -> &'static str {
-        match self {
-            Self::Aarch64UnknownLinuxGnu => SUPPORTED_TARGET,
-            Self::Aarch64AppleDarwin => DARWIN_TARGET,
-        }
-    }
-
-    /// The target of the machine that runs the driver. The cc actions use it
-    /// when the command line names no target.
-    fn host() -> Self {
-        if cfg!(target_os = "macos") {
-            Self::Aarch64AppleDarwin
-        } else {
-            Self::Aarch64UnknownLinuxGnu
-        }
-    }
-
-    fn is_darwin(self) -> bool {
-        self == Self::Aarch64AppleDarwin
-    }
-}
+mod target;
+use target::DriverTarget;
 
 #[derive(Clone, Copy)]
 enum PositionIndependence {
@@ -295,12 +269,11 @@ impl DriverOptions {
     }
 
     fn target_layout(&self) -> TargetDataLayout {
-        match self.target {
-            DriverTarget::Aarch64UnknownLinuxGnu => TargetDataLayout::aarch64_unknown_linux_gnu(),
-            DriverTarget::Aarch64AppleDarwin => TargetDataLayout::aarch64_apple_darwin(),
-        }
-        .with_short_wchar(self.short_wchar)
-        .with_signed_char(self.signed_char)
+        self.target
+            .platform()
+            .layout()
+            .with_short_wchar(self.short_wchar)
+            .with_signed_char(self.signed_char)
     }
 
     /// Write the output of the selected action. A cc compilation keeps it for
@@ -736,10 +709,7 @@ fn read_and_lex(options: &DriverOptions) -> Result<(Vec<u8>, Vec<evocc_lex::Toke
 }
 
 fn configured_preprocessor(options: &DriverOptions) -> Result<Preprocessor, String> {
-    // The preprocessor crate has one target profile, AArch64 Linux. The
-    // Darwin profile is that profile with the differences that Apple's
-    // compiler predefines for arm64 macOS applied on top.
-    let mut pp = Preprocessor::for_target(SUPPORTED_TARGET)?;
+    let mut pp = Preprocessor::for_target(options.target.triple())?;
     if options.target.is_darwin() {
         darwin::apply_predefined_profile(
             &mut pp,
@@ -1571,7 +1541,11 @@ fn optimize_scalar_evoir(
     .with_expected_digest(options.eq_checker_digest.clone()
         .or_else(|| std::env::var("EVOCC_CHECKER_SHA256").ok())
         .ok_or("-Oeq-scalar requires --eq-checker-sha256 or EVOCC_CHECKER_SHA256 from a trusted build/release")?);
-    let mut equality = EqualityState::for_target_module(&module, options.target.triple())?;
+    let mut equality = EqualityState::for_target_module_with_layout(
+        &module,
+        options.target.triple(),
+        &options.target_layout(),
+    )?;
     match run_scalar_chain_with_checker(&module, &mut equality, &options.eq_policy, &checker) {
         Ok(run) => {
             if let Some(path) = &options.eq_proof_dir {

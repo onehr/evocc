@@ -186,12 +186,13 @@ pub fn floating_representation_store<'a>(
                 return None;
             }
             (
-                crate::MemoryPlace::derive(
+                crate::MemoryPlace::derive_with_target(
                     symbols,
                     types,
                     PlaceRoot::Object { symbol: *symbol },
                     Vec::new(),
                     place.ty(),
+                    target,
                 )
                 .ok()?,
                 *value,
@@ -207,7 +208,9 @@ pub fn floating_representation_store<'a>(
             target_span,
             ..
         } => {
-            place.validate_against(symbols, types).ok()?;
+            place
+                .validate_against_with_target(symbols, types, target)
+                .ok()?;
             (place.clone(), *value, facts, *target_span)
         }
         _ => return None,
@@ -908,7 +911,10 @@ pub fn eval_absolute_address_constant(
         }
         CHirExpr::Binary(op @ (BinaryOp::Add | BinaryOp::Sub), left, right, _) => {
             let pointer_type = |expression| {
-                crate::PointerTypeDesc::from_expression(symbols, types, expression).ok()
+                crate::PointerTypeDesc::from_expression_with_target(
+                    symbols, types, expression, target,
+                )
+                .ok()
             };
             let (pointer, index, pointer_type) = if let Some(ty) = pointer_type(left) {
                 (*left, *right, ty)
@@ -939,8 +945,12 @@ pub fn eval_absolute_address_constant(
             left,
             right,
             _,
-        ) if crate::PointerTypeDesc::from_expression(symbols, types, left).is_ok()
-            && crate::PointerTypeDesc::from_expression(symbols, types, right).is_ok() =>
+        ) if crate::PointerTypeDesc::from_expression_with_target(symbols, types, left, target)
+            .is_ok()
+            && crate::PointerTypeDesc::from_expression_with_target(
+                symbols, types, right, target,
+            )
+            .is_ok() =>
         {
             // Numeric addresses compare at pointer width, not at the signed
             // source integer's width. Named objects still return None above.
@@ -1020,6 +1030,7 @@ fn eval_integer_constant_in(
     target: &TargetDataLayout,
     context: ConstantContext<'_>,
 ) -> Option<CInteger> {
+    let infer = |value| integer_expression_type_with_target(value, types, symbols, target);
     let evaluate =
         |expression| eval_integer_constant_in(expression, types, symbols, target, context);
     match expression {
@@ -1127,7 +1138,7 @@ fn eval_integer_constant_in(
             } else {
                 when_false
             };
-            Some(evaluate(selected)?.cast(integer_expression_type(expression, types, symbols)?))
+            Some(evaluate(selected)?.cast(infer(expression)?))
         }
         CHirExpr::Elvis(operand, fallback, _) => {
             let operand_value = evaluate(operand)?;
@@ -1136,13 +1147,8 @@ fn eval_integer_constant_in(
             } else {
                 evaluate(fallback)?
             };
-            let operand_type = CInteger::new(0, integer_expression_type(operand, types, symbols)?)
-                .promoted()
-                .ty();
-            let fallback_type =
-                CInteger::new(0, integer_expression_type(fallback, types, symbols)?)
-                    .promoted()
-                    .ty();
+            let operand_type = CInteger::new(0, infer(operand)?).promoted().ty();
+            let fallback_type = CInteger::new(0, infer(fallback)?).promoted().ty();
             Some(selected.cast(usual_arithmetic_type(operand_type, fallback_type)))
         }
         CHirExpr::Cast(ty, operand, _) => {
@@ -1151,7 +1157,10 @@ fn eval_integer_constant_in(
                 return floating_literal_to_integer(*literal, target_ty).ok();
             }
             if matches!(context, ConstantContext::Executable)
-                && crate::PointerTypeDesc::from_expression(symbols, types, operand).is_ok()
+                && crate::PointerTypeDesc::from_expression_with_target(
+                    symbols, types, operand, target,
+                )
+                .is_ok()
             {
                 // Only a numeric address has compile-time representation bits.
                 // Named objects/functions still need relocation and provenance;
@@ -1213,11 +1222,13 @@ pub(crate) fn canonical_integer_type(types: &TypeInterner, ty: TypeId) -> Option
 /// Consumers of constant knowledge must use this type even when only one arm
 /// supplies the value. Unsupported or non-integer forms return `None`.
 #[must_use]
-pub fn integer_expression_type(
+pub fn integer_expression_type_with_target(
     expression: &CHirExpr<'_>,
     types: &TypeInterner,
     symbols: &SymbolTable,
+    target: &TargetDataLayout,
 ) -> Option<CIntegerType> {
+    let infer = |value| integer_expression_type_with_target(value, types, symbols, target);
     match expression {
         CHirExpr::Atomic(access) => canonical_integer_type(types, access.facts.ty()),
         CHirExpr::Floating(access) => canonical_integer_type(types, access.facts.ty()),
@@ -1250,26 +1261,20 @@ pub fn integer_expression_type(
             crate::UnaryOp::Plus
             | crate::UnaryOp::Neg
             | crate::UnaryOp::Abs
-            | crate::UnaryOp::BitNot => Some(
-                CInteger::new(0, integer_expression_type(operand, types, symbols)?)
-                    .promoted()
-                    .ty(),
-            ),
+            | crate::UnaryOp::BitNot => Some(CInteger::new(0, infer(operand)?).promoted().ty()),
             crate::UnaryOp::Deref => {
-                let pointer =
-                    crate::PointerTypeDesc::from_expression(symbols, types, operand).ok()?;
+                let pointer = crate::PointerTypeDesc::from_expression_with_target(
+                    symbols, types, operand, target,
+                )
+                .ok()?;
                 canonical_integer_type(types, pointer.pointee())
             }
             crate::UnaryOp::AddrOf => None,
         },
-        CHirExpr::EvaluateOnce(operand, _) => integer_expression_type(operand, types, symbols),
+        CHirExpr::EvaluateOnce(operand, _) => infer(operand),
         CHirExpr::Binary(operator, left, right, _) => {
-            let left = CInteger::new(0, integer_expression_type(left, types, symbols)?)
-                .promoted()
-                .ty();
-            let right = CInteger::new(0, integer_expression_type(right, types, symbols)?)
-                .promoted()
-                .ty();
+            let left = CInteger::new(0, infer(left)?).promoted().ty();
+            let right = CInteger::new(0, infer(right)?).promoted().ty();
             Some(match operator {
                 BinaryOp::Lt
                 | BinaryOp::Le
@@ -1303,32 +1308,25 @@ pub fn integer_expression_type(
             })
         }
         CHirExpr::Ternary(_, when_true, when_false, _) => {
-            let when_true = CInteger::new(0, integer_expression_type(when_true, types, symbols)?)
-                .promoted()
-                .ty();
-            let when_false = CInteger::new(0, integer_expression_type(when_false, types, symbols)?)
-                .promoted()
-                .ty();
+            let when_true = CInteger::new(0, infer(when_true)?).promoted().ty();
+            let when_false = CInteger::new(0, infer(when_false)?).promoted().ty();
             Some(usual_arithmetic_type(when_true, when_false))
         }
         CHirExpr::Elvis(operand, fallback, _) => {
-            let operand = CInteger::new(0, integer_expression_type(operand, types, symbols)?)
-                .promoted()
-                .ty();
-            let fallback = CInteger::new(0, integer_expression_type(fallback, types, symbols)?)
-                .promoted()
-                .ty();
+            let operand = CInteger::new(0, infer(operand)?).promoted().ty();
+            let fallback = CInteger::new(0, infer(fallback)?).promoted().ty();
             Some(usual_arithmetic_type(operand, fallback))
         }
         CHirExpr::Cast(ty, _, _) => canonical_integer_type(types, *ty),
         CHirExpr::SizeOf(_, _) | CHirExpr::SizeOfExpr(_, _, _) | CHirExpr::AlignOf(_, _) => {
             Some(CIntegerType::ULONG)
         }
-        CHirExpr::Comma(_, right, _) => integer_expression_type(right, types, symbols),
+        CHirExpr::Comma(_, right, _) => infer(right),
         CHirExpr::Call(callee, _, _) => {
-            let function = crate::PointerTypeDesc::from_expression(symbols, types, callee)
-                .ok()?
-                .pointee();
+            let function =
+                crate::PointerTypeDesc::from_expression_with_target(symbols, types, callee, target)
+                    .ok()?
+                    .pointee();
             let TypeKind::Function { return_type, .. } = &types.get(function)?.kind else {
                 return None;
             };
@@ -1347,4 +1345,18 @@ pub fn integer_expression_type(
         | CHirExpr::BuiltinFrameAddress { .. }
         | CHirExpr::BuiltinVarArgs { .. } => None,
     }
+}
+
+#[must_use]
+pub fn integer_expression_type(
+    expression: &CHirExpr<'_>,
+    types: &TypeInterner,
+    symbols: &SymbolTable,
+) -> Option<CIntegerType> {
+    integer_expression_type_with_target(
+        expression,
+        types,
+        symbols,
+        &TargetDataLayout::aarch64_unknown_linux_gnu(),
+    )
 }

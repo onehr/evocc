@@ -427,7 +427,7 @@ impl<'a> VaArgSelection<'a> {
     }
 }
 
-pub(super) fn lower_access(
+pub(crate) fn lower_access(
     lowerer: &mut Lowerer,
     cursor: &mut blocks::BlockCursor,
     block: &Block,
@@ -459,4 +459,338 @@ pub(super) fn lower_access(
         }
     }
     Ok(false)
+}
+
+/// The same placement determines both saved registers and the first
+/// anonymous stack slot, including pair/record alignment padding.
+pub(crate) fn named_argument_extent(
+    target: Target,
+    function: &Function,
+    apple: bool,
+) -> (u8, u8, u64) {
+    // Revision 0.18: a record spends the registers its chunks take, so the
+    // count is the convention's, which is what the plan already answers.
+    let declared: Vec<EvoIRType> = function
+        .params
+        .iter()
+        .map(|param| param.ty.clone())
+        .collect();
+    let plan = record_plan(
+        target,
+        &marked_types(&declared, &function.param_marks),
+        true,
+        None,
+        apple,
+    );
+    // The Apple convention: the anonymous arguments start after the named
+    // stack area, rounded up to eight (Section 6.12).
+    if apple {
+        let mut cursor = target.aarch64_abi().argument_cursor();
+        for (placed, (ty, _)) in plan
+            .items
+            .iter()
+            .zip(marked_types(&declared, &function.param_marks).iter())
+        {
+            if placed.apple_stack.is_some() {
+                continue;
+            }
+            let classes: Vec<RegClass> = match &placed.passing {
+                Passing::Value if is_pair(ty) => vec![RegClass::Gpr64; 2],
+                Passing::Value => vec![class_of(ty).expect("validated argument class")],
+                Passing::Pointer => vec![RegClass::Gpr64],
+                Passing::Chunks(chunks) => vec![RegClass::Gpr64; chunks.len()],
+                Passing::Vectors { shape, .. } => simd_argument_pieces(*shape, false)
+                    .into_iter()
+                    .map(|(_, bytes)| simd_class(bytes))
+                    .collect(),
+                Passing::Destination(_) => Vec::new(),
+            };
+            for class in classes {
+                let _ = place(&mut cursor, class);
+            }
+        }
+        return (
+            cursor.used(general_bank()) as u8,
+            cursor.used(vector_bank()) as u8,
+            plan.apple_stack_bytes.next_multiple_of(8),
+        );
+    }
+    let marked = marked_types(&declared, &function.param_marks);
+    let abi = target.aarch64_abi();
+    let mut cursor = abi.argument_cursor();
+    for ((ty, _), placed) in marked.iter().zip(&plan.items) {
+        let mut classes = vec![RegClass::Gpr64; placed.fillers];
+        match &placed.passing {
+            Passing::Value if is_pair(ty) => classes.extend([RegClass::Gpr64; 2]),
+            Passing::Value => classes.push(class_of(ty).expect("validated argument class")),
+            Passing::Pointer => classes.push(RegClass::Gpr64),
+            Passing::Chunks(chunks) => {
+                classes.extend(std::iter::repeat_n(RegClass::Gpr64, chunks.len()))
+            }
+            Passing::Vectors {
+                shape,
+                skipped,
+                stack,
+            } => {
+                classes.extend(std::iter::repeat_n(RegClass::Simd64, *skipped));
+                classes.extend(
+                    simd_argument_pieces(*shape, *stack)
+                        .into_iter()
+                        .map(|(_, bytes)| simd_class(bytes)),
+                );
+            }
+            Passing::Destination(_) => {}
+        }
+        for class in classes {
+            let _ = place(&mut cursor, class);
+        }
+    }
+    (
+        cursor.used(general_bank()) as u8,
+        cursor.used(vector_bank()) as u8,
+        cursor.stack_bytes(abi),
+    )
+}
+
+/// The size rounded up to eight (`S8`) and the alignment (`A`) of one
+/// `va_arg` type, or nothing when the type has no Section 6 procedure.
+pub(crate) fn variadic_access_slot(op: &VariadicOp) -> Option<(u64, u64)> {
+    match op {
+        VariadicOp::Arg(result) => variadic_slot(&result.ty),
+        VariadicOp::ArgRecord { shape, .. }
+            if shape.size > 16 && shape.simd_members().is_none() =>
+        {
+            Some((8, 8))
+        }
+        VariadicOp::ArgRecord { shape, .. } => Some((
+            shape.size.div_ceil(8) * 8,
+            shape
+                .floating
+                .map_or(u64::from(shape.align).clamp(8, 16), |f| {
+                    u64::from(f.abi_align)
+                }),
+        )),
+        VariadicOp::Start | VariadicOp::End => None,
+    }
+}
+
+pub(crate) fn variadic_slot(ty: &EvoIRType) -> Option<(u64, u64)> {
+    if let Some(bytes) = vector_bytes(ty) {
+        return Some((bytes.max(8), bytes));
+    }
+    match ty {
+        EvoIRType::Ptr(_)
+        | EvoIRType::FnPtr { .. }
+        | EvoIRType::F16
+        | EvoIRType::BF16
+        | EvoIRType::F32
+        | EvoIRType::F64 => Some((8, 8)),
+        EvoIRType::Bits(128) | EvoIRType::F128 => Some((16, 16)),
+        EvoIRType::Bits(width) if *width <= 64 => Some((8, 8)),
+        _ => None,
+    }
+}
+
+/// `va_start`: skips named incoming stack slots, then stores
+/// `gr_top = save area + 64`, `vr_top = gr_top + 128`, `gr_offs =
+/// -8 * (8 - k)` and `vr_offs = -128` (Section 6, revision 0.28). The field
+/// offsets, register counts and save widths are the ABI table's.
+pub(crate) fn lower_va_start(
+    lowerer: &mut Lowerer,
+    insts: &mut Vec<MInst>,
+    list: &Value,
+) -> Result<(), String> {
+    let (named, named_vectors, stack_bytes) = lowerer
+        .named_arguments
+        .ok_or_else(|| "a va_start outside a variadic function".to_owned())?;
+    let ap = lowerer.reg(list)?;
+    let abi = lowerer.abi;
+    let va_list = abi.va_list;
+
+    let stack = lowerer.fresh(RegClass::Gpr64);
+    insts.push(MInst::FrameAddress {
+        dst: stack,
+        place: FramePlace::IncomingStack,
+    });
+    let stack = if stack_bytes == 0 {
+        stack
+    } else {
+        lowerer.binary_imm(insts, BinOp::Add, stack, stack_bytes, Width::X)
+    };
+    insts.push(MInst::Store {
+        align: 0,
+        src: stack,
+        base: ap,
+        offset: va_list.stack,
+        kind: StoreKind::P,
+        volatile: false,
+        mask: None,
+        transport: false,
+    });
+    // The Apple variadic convention: the list is this one pointer.
+    if lowerer.anonymous_on_stack {
+        return Ok(());
+    }
+
+    let top = lowerer.fresh(RegClass::Gpr64);
+    insts.push(MInst::FrameAddress {
+        dst: top,
+        place: FramePlace::RegisterSaveTop,
+    });
+    let vector_top = lowerer.binary_imm(
+        insts,
+        BinOp::Add,
+        top,
+        abi.vector_save_area_bytes(),
+        Width::X,
+    );
+    for (offset, address) in [(va_list.general_top, top), (va_list.vector_top, vector_top)] {
+        insts.push(MInst::Store {
+            align: 0,
+            src: address,
+            base: ap,
+            offset,
+            kind: StoreKind::P,
+            volatile: false,
+            mask: None,
+            transport: false,
+        });
+    }
+
+    let general_save = abi.general_save_bytes() as i64;
+    let offs = -general_save * (abi.general_arguments() as i64 - i64::from(named));
+    let gr_offs = lowerer.fresh(RegClass::Gpr32);
+    insts.push(MInst::MovImm {
+        dst: gr_offs,
+        imm: u64::from(offs as u32),
+    });
+    insts.push(MInst::Store {
+        align: 0,
+        src: gr_offs,
+        base: ap,
+        offset: va_list.general_offset,
+        kind: StoreKind::W,
+        volatile: false,
+        mask: None,
+        transport: false,
+    });
+    let vr_offs = lowerer.fresh(RegClass::Gpr32);
+    let vector_save = abi.vector_save_bytes() as i32;
+    let vector_count = abi.vector_arguments() as i32;
+    insts.push(MInst::MovImm {
+        dst: vr_offs,
+        imm: u64::from((-vector_save * (vector_count - i32::from(named_vectors))) as u32),
+    });
+    insts.push(MInst::Store {
+        align: 0,
+        src: vr_offs,
+        base: ap,
+        offset: va_list.vector_offset,
+        kind: StoreKind::W,
+        volatile: false,
+        mask: None,
+        transport: false,
+    });
+    Ok(())
+}
+
+/// `va_arg` under the Apple variadic convention: the list is one pointer to
+/// the next anonymous argument on the caller's stack. Align it to 16 for a
+/// 16-byte type, read the argument there, and advance the pointer by the slot.
+pub(crate) fn lower_stack_va_arg(
+    lowerer: &mut Lowerer,
+    insts: &mut Vec<MInst>,
+    access: &evocc_evoir::VariadicAccess,
+    slot: u64,
+    alignment: u64,
+) -> Result<(), String> {
+    let field = lowerer.abi.va_list.stack;
+    let ap = lowerer.reg(&access.list)?;
+    let raw = lowerer.fresh(RegClass::Gpr64);
+    insts.push(MInst::Load {
+        align: 0,
+        dst: raw,
+        base: ap,
+        offset: field,
+        kind: LoadKind::P,
+        volatile: false,
+        mask: None,
+        transport: false,
+    });
+    let address = if alignment == 16 {
+        round_to_sixteen(lowerer, insts, raw)
+    } else {
+        raw
+    };
+    let bumped = lowerer.binary_imm(insts, BinOp::Add, address, slot, Width::X);
+    insts.push(MInst::Store {
+        align: 0,
+        src: bumped,
+        base: ap,
+        offset: field,
+        kind: StoreKind::P,
+        volatile: false,
+        mask: None,
+        transport: false,
+    });
+    match &access.op {
+        VariadicOp::ArgRecord { destination, shape } => {
+            let destination = lowerer.reg(destination)?;
+            // A record above sixteen bytes that is not a vector group travels
+            // as a pointer to the caller's copy.
+            let source = if shape.size > 16 && shape.simd_members().is_none() {
+                let source = lowerer.fresh(RegClass::Gpr64);
+                insts.push(MInst::Load {
+                    align: 0,
+                    dst: source,
+                    base: address,
+                    offset: 0,
+                    kind: LoadKind::P,
+                    volatile: false,
+                    mask: None,
+                    transport: false,
+                });
+                source
+            } else {
+                address
+            };
+            insts.push(MInst::MemCopy {
+                dst: destination,
+                src: source,
+                size: shape.size,
+                align: shape.align.min(8),
+                volatile: evocc_memory::CopyVolatility::None,
+            });
+        }
+        VariadicOp::Arg(result) if is_pair(&result.ty) => {
+            let (low, high) = lowerer.fresh_pair();
+            insts.push(MInst::Ldp {
+                rt1: low,
+                rt2: high,
+                base: address,
+                offset: 0,
+                writeback: false,
+                volatile: false,
+            });
+            lowerer.bind_pair(result, low, high);
+        }
+        VariadicOp::Arg(result) => {
+            let kind = load_kind(&result.ty)?;
+            let class = class_of(&result.ty).map_err(|(code, _)| code.to_owned())?;
+            let dst = lowerer.fresh(class);
+            insts.push(MInst::Load {
+                align: 0,
+                dst,
+                base: address,
+                offset: 0,
+                kind,
+                volatile: false,
+                mask: None,
+                transport: false,
+            });
+            lowerer.bind(result, dst);
+        }
+        VariadicOp::Start | VariadicOp::End => {}
+    }
+    Ok(())
 }

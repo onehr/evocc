@@ -29,16 +29,16 @@ pub(super) fn lower_resolved_unit(
         .collect::<BTreeMap<_, _>>();
     let mut memory_symbols = collect_memory_symbols(unit);
     memory_symbols.retain(|symbol| !global_register_symbols.contains(symbol));
-    let manifest =
-        AllocationSiteManifest::derive(unit).map_err(|error| LowerError::InvalidGeneratedSsa {
+    let manifest = AllocationSiteManifest::for_target(unit, target).map_err(|error| {
+        LowerError::InvalidGeneratedSsa {
             message: format!("cannot derive the authoritative allocation-site manifest: {error:?}"),
-        })?;
+        }
+    })?;
     let origin_of = |site: &evocc_chir::AllocationSite<'_>| {
         let Some(source) = source_manifest else {
             return site.ordinal().raw();
         };
-        // Selection clones no syntax nodes and creates no objects; each site
-        // is therefore an exact member of the already validated source unit.
+        // Selection retains allocation sites from the validated source unit.
         let original = match site.kind() {
             evocc_chir::AllocationSiteKind::Object(symbol) => source.object_site(symbol),
             evocc_chir::AllocationSiteKind::StringLiteral(expression) => {
@@ -93,9 +93,9 @@ pub(super) fn lower_resolved_unit(
         || !global_registers.is_empty()
         || !memory_symbols.is_empty()
         || unit.iter().any(|declaration| match declaration {
-            CHirDecl::Function(function) => function
-                .body
-                .is_some_and(|body| evocc_chir::interp::statement_requires_memory(unit, body)),
+            CHirDecl::Function(function) => function.body.is_some_and(|body| {
+                evocc_chir::interp::statement_requires_memory(unit, body, target)
+            }),
             _ => false,
         })
         || manifest.sites().iter().any(|site| {

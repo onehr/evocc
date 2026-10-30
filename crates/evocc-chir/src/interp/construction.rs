@@ -66,7 +66,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
     /// been validated; otherwise a defect anywhere in the unit would mask the
     /// diagnostic that actually describes the function under execution.
     pub(super) fn derive_allocation_manifest(&mut self) -> Result<(), InterpreterError> {
-        let manifest = AllocationSiteManifest::derive(self.unit)
+        let manifest = AllocationSiteManifest::for_target(self.unit, &self.target)
             .map_err(|error| InterpreterError::InvalidAllocationManifest { error })?;
         self.temporary_origin_site = u64::try_from(manifest.sites().len())
             .map_err(|_| InterpreterError::MissingAllocationManifest)?;

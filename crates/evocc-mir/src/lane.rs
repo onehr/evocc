@@ -10,7 +10,7 @@ use evocc_evoir::RuntimeValue;
 use evocc_memory::{MemoryState, WorldState};
 use evocc_types::EvoIRType;
 
-use crate::{interpret_module, MModule, MirError, MirLimits, MirValue, Target};
+use crate::{MModule, MirError, MirLimits, MirValue, Target};
 
 /// One defined EvoMIR execution, shaped so the Section 7 equality criterion
 /// can be applied to it directly.
@@ -103,7 +103,7 @@ pub fn observe_entry_for(
     result_types: &[EvoIRType],
     limits: MirLimits,
 ) -> Result<MirRun, MirError> {
-    let pair_rounding = target.abi().aligned_record_pair_rounding;
+    let pair_rounding = target.aarch64_abi().aligned_record_pair_rounding;
     let mut arguments = Vec::new();
     for (index, value) in entry_args
         .iter()
@@ -133,7 +133,13 @@ pub fn observe_entry_for(
             }
         }
     }
-    let outcome = interpret_module(module, entry, &arguments, limits)?;
+    let outcome = crate::interp::interpret_module_with_target(
+        module,
+        entry,
+        &arguments,
+        &target.platform().layout(),
+        limits,
+    )?;
 
     // Section 6 returns up to eight results in x0 to x7, in order, each a
     // low-N-bit value in a register whose upper bits are unspecified.

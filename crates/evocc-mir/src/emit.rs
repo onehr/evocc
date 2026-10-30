@@ -391,7 +391,7 @@ pub fn frame_of(allocated: &Allocated) -> Frame {
 /// collects the AArch64 frame objects, save request and preserved vectors.
 #[must_use]
 pub fn frame_of_for(target: Target, allocated: &Allocated) -> Frame {
-    let abi = &target.abi().facts;
+    let abi = target.abi_facts();
     let mut objects = Vec::new();
     for block in &allocated.blocks {
         for inst in &block.insts {
@@ -491,19 +491,7 @@ pub fn frame_of_for(target: Target, allocated: &Allocated) -> Frame {
     }
 }
 
-/// The platform an emission targets.
-///
-/// Section 1: the AArch64 scalar subset is "first hosted as Darwin arm64 ...
-/// and then as Linux AArch64 for the kernel. The two targets share every rule
-/// below except the ones the calling convention and the symbol syntax name."
-/// This is those ones: the symbol prefix, the page-relative spelling, the
-/// section names and the local-label prefix.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum Target {
-    #[default]
-    Darwin,
-    Linux,
-}
+pub use crate::isa::target::{Isa, Target};
 
 impl Target {
     /// Section 8: "symbols get the platform prefix (`_` on Darwin)".
@@ -836,7 +824,7 @@ fn emit_unit(
                     .map(|f| f.name.as_str()),
             )
         {
-            let directive = if target == Target::Linux {
+            let directive = if target.is_elf() {
                 ".weak"
             } else {
                 ".weak_reference"
@@ -848,7 +836,7 @@ fn emit_unit(
         // the final linker, not this module, decides interposition/relaxation.
         indirect_addresses.extend(module_symbols(module).filter_map(
             |(name, visibility, linkage, kind, defined)| {
-                ((!defined || target == Target::Linux)
+                ((!defined || target.is_elf())
                     && (linkage == Linkage::Weak
                         || (relocation == RelocationModel::PositionIndependent
                             && !visibility.binds_locally())))
@@ -1046,7 +1034,7 @@ fn emit_unit(
                     global.linkage == Linkage::Weak,
                 );
             }
-            if target == Target::Linux {
+            if target.is_elf() {
                 let _ = writeln!(
                     text,
                     ".type {}, %{}",
@@ -1056,7 +1044,7 @@ fn emit_unit(
             }
             let _ = writeln!(text, "{prefix}{}:", global.symbol);
             emit_initializer(&mut text, target, global, zero_filled);
-            if target == Target::Linux {
+            if target.is_elf() {
                 let _ = writeln!(text, ".size {0}, .-{0}", global.symbol);
             }
             emit_aliases(
@@ -1098,7 +1086,7 @@ fn elf_section(name: &str, flags: &str, kind: &str) -> String {
 
 fn emit_definition_linkage(text: &mut String, target: Target, name: &str, weak: bool) {
     let prefix = target.symbol_prefix();
-    if weak && target == Target::Linux {
+    if weak && target.is_elf() {
         let _ = writeln!(text, ".weak {name}");
     } else {
         let _ = writeln!(text, ".globl {prefix}{name}");
@@ -1119,7 +1107,7 @@ fn emit_aliases(
         if alias.visibility != GlobalVisibility::Internal {
             emit_definition_linkage(text, target, &alias.name, alias.linkage == Linkage::Weak);
         }
-        if target == Target::Linux {
+        if target.is_elf() {
             let _ = writeln!(text, ".type {}, %{kind}", alias.name);
         }
         let _ = writeln!(
@@ -1341,7 +1329,7 @@ fn emit_function(
     options: &CodegenOptions,
     stack_protect: bool,
 ) {
-    let abi = target.abi();
+    let abi = target.aarch64_abi();
     let frame = emission_frame(target, allocated, options, patchable_entry, stack_protect);
     let prefix = target.symbol_prefix();
     // Section 8 (revision 0.16): "An EvoIR function or global whose
@@ -1370,7 +1358,7 @@ fn emit_function(
             text.push_str("    nop\n");
         }
     }
-    if target == Target::Linux {
+    if target.is_elf() {
         let _ = writeln!(text, ".type {}, %function", allocated.name);
     }
     let _ = writeln!(text, "{prefix}{}:", allocated.name);
@@ -1440,7 +1428,7 @@ fn emit_function(
     if frame.unwind_tables {
         let _ = writeln!(text, ".cfi_endproc");
     }
-    if target == Target::Linux {
+    if target.is_elf() {
         let _ = writeln!(text, ".size {0}, .-{0}", allocated.name);
         if total != 0 {
             // SHF_LINK_ORDER associates this entry with its real text section;
@@ -1712,7 +1700,7 @@ fn emit_prologue(text: &mut String, target: Target, frame: &Frame, abi: &Aarch64
     // `8 * k` to `56` in the prologue". Nothing before this point writes an
     // argument register, so the incoming anonymous arguments are still there.
     if let Some((named, base)) = frame.register_save {
-        let general = abi.facts.argument_banks[general_bank()].count;
+        let general = abi.facts.argument_banks[general_bank()].count() as u8;
         for number in named..general {
             emit_frame_access(
                 text,
@@ -1735,7 +1723,7 @@ fn emit_prologue(text: &mut String, target: Target, frame: &Frame, abi: &Aarch64
                 base + abi.general_save_area_bytes(),
             );
             let prefix = regfile::SIMD128_VIEW.prefix;
-            let vectors = abi.facts.argument_banks[vector_bank()].count;
+            let vectors = abi.facts.argument_banks[vector_bank()].count() as u8;
             for number in (0..vectors).step_by(2) {
                 let _ = writeln!(
                     text,

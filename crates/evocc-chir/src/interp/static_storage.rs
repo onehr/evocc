@@ -613,12 +613,9 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                         value: PointerValue::Function(
                             self.function_identity(*symbol).ok_or_else(unsupported)?,
                         ),
-                        ty: PointerTypeDesc::from_expression(
-                            self.unit.symbols(),
-                            self.unit.types(),
-                            expression,
-                        )
-                        .map_err(|_| unsupported())?,
+                        ty: self
+                            .pointer_descriptor(expression)
+                            .map_err(|_| unsupported())?,
                     });
                 }
                 let binding = self.require_memory_binding(*symbol, span)?;
@@ -636,8 +633,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 })
             }
             CHirExpr::MemoryRead { place, .. } => {
-                place
-                    .validate_against(self.unit.symbols(), self.unit.types())
+                self.validate_memory_place(place)
                     .map_err(|_| unsupported())?;
                 let root = match place.root() {
                     PlaceRoot::Object { symbol } => {

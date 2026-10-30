@@ -158,13 +158,7 @@ impl<'a> FunctionLowerer<'a> {
                         }
                     }
                     (None, None) => {}
-                    (None, Some(expression))
-                        if evocc_chir::expression_is_void(
-                            expression,
-                            self.unit.symbols(),
-                            self.unit.types(),
-                        ) =>
-                    {
+                    (None, Some(expression)) if self.expression_is_void(expression) => {
                         let live = state.locals.clone();
                         let flow = self.lower_discarded_flow(expression, state)?;
                         let Some(continued) = self.merge_states(flow.normal, &live)? else {

@@ -234,21 +234,8 @@ struct Frame {
     activation: (u64, u64),
 }
 
-/// Interpret a module's named entry function.
-pub fn interpret_module(
-    module: &MModule,
-    entry: &str,
-    args: &[MirValue],
-    limits: MirLimits,
-) -> Result<MirOutcome, MirError> {
-    interpret_module_with_fp_environment(
-        module,
-        entry,
-        args,
-        limits,
-        evocc_types::floating::FpEnvironment::default(),
-    )
-}
+mod entry;
+pub use entry::{interpret_module, interpret_module_with_target};
 
 pub fn interpret_module_with_fp_environment(
     module: &MModule,
@@ -256,10 +243,10 @@ pub fn interpret_module_with_fp_environment(
     args: &[MirValue],
     limits: MirLimits,
     environment: evocc_types::floating::FpEnvironment,
+    target: &TargetDataLayout,
 ) -> Result<MirOutcome, MirError> {
-    let target = TargetDataLayout::aarch64_unknown_linux_gnu();
     let config = MemoryConfig::for_target(
-        &target,
+        target,
         MemoryLimits {
             max_objects: MAX_MEMORY_OBJECTS,
             max_object_bytes: MAX_MEMORY_OBJECT_BYTES,

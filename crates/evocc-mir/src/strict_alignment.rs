@@ -80,7 +80,7 @@ pub fn verify_strict_alignment(
     frame: &Frame,
     globals: &[GlobalObject],
 ) -> Result<(), VerifierRefusal> {
-    let abi = target.abi();
+    let abi = target.aarch64_abi();
     let stack = abi.facts.stack_alignment_bytes;
     if !frame.alignment.is_power_of_two()
         || frame.alignment < stack

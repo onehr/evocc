@@ -324,7 +324,7 @@ pub(super) fn prevalidate_expr_for_lowering(
         }
         CHirExpr::MemoryRead { place, span, .. } => {
             place
-                .validate_against(unit.symbols(), unit.types())
+                .validate_against_with_target(unit.symbols(), unit.types(), target)
                 .map_err(|_| LowerError::UnsupportedExpression {
                     span: *span,
                     feature: "memory read place is not authoritative in this C-HIR unit",
@@ -342,7 +342,7 @@ pub(super) fn prevalidate_expr_for_lowering(
             ..
         } => {
             place
-                .validate_against(unit.symbols(), unit.types())
+                .validate_against_with_target(unit.symbols(), unit.types(), target)
                 .map_err(|_| LowerError::UnsupportedExpression {
                     span: *span,
                     feature: "memory assignment place is not authoritative in this C-HIR unit",
@@ -362,7 +362,7 @@ pub(super) fn prevalidate_expr_for_lowering(
             place, facts, span, ..
         } => {
             place
-                .validate_against(unit.symbols(), unit.types())
+                .validate_against_with_target(unit.symbols(), unit.types(), target)
                 .map_err(|_| LowerError::UnsupportedExpression {
                     span: *span,
                     feature: "memory update place is not authoritative in this C-HIR unit",

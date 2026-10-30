@@ -61,7 +61,7 @@ fn emit(args: &[String]) -> Result<String, String> {
     if let Some(mode) = machine_mode {
         // This export exposes the existing, always-on native transformations.
         // It must not silently choose a diagnostic or optional optimizer path.
-        if target != evocc_mir::Target::Linux
+        if !target.is_elf()
             || profile != evocc_mir::UbCheckProfile::Checked
             || seen
                 .iter()

@@ -4,13 +4,9 @@
 use std::collections::HashMap;
 
 use evocc_chir::{CHirDecl, CHirUnit};
-use evocc_common::FileId;
 use evocc_cpp::availability::Version;
-use evocc_cpp::{Lexer, Preprocessor, TokenKind};
+use evocc_cpp::Preprocessor;
 use evocc_evoir::{Inst, Module};
-
-/// The macros that differ from the Linux profile.
-const PREDEFINED: &str = include_str!("aarch64-apple-darwin.h");
 
 /// The deployment target that EvoCC assumes when no option and no
 /// `MACOSX_DEPLOYMENT_TARGET` names one: macOS 11.0, the first release for
@@ -42,51 +38,10 @@ const FEATURES: [&str; 10] = [
     "attribute_availability_swift",
 ];
 
-/// The os_log builtins that `__has_builtin` answers 1 for, as Apple clang
-/// does, although each call is refused.
-const OS_LOG_BUILTINS: [&str; 2] = [
-    "__builtin_os_log_format",
-    "__builtin_os_log_format_buffer_size",
-];
-
-/// Turn the Linux profile of `pp` into the Darwin profile for the macOS
-/// deployment target `deployment`.
 pub(crate) fn apply_predefined_profile(
     pp: &mut Preprocessor,
     deployment: Version,
 ) -> Result<(), String> {
-    let mut lexer = Lexer::from_bytes(FileId::DUMMY, PREDEFINED.as_bytes());
-    let mut tokens = Vec::new();
-    while let Some(token) = lexer.next() {
-        if token.kind == TokenKind::Error {
-            return Err("invalid token in the Darwin predefined profile".into());
-        }
-        tokens.push(token);
-    }
-    let output = pp.process_bytes(evocc_cpp::TokenStream::new(tokens), PREDEFINED.as_bytes());
-    if pp.has_errors()
-        || output
-            .into_vec()
-            .iter()
-            .any(|token| token.kind != TokenKind::Eof)
-    {
-        return Err("the Darwin predefined profile is not definitions only".into());
-    }
-    // The SDK's <stdatomic.h> is Clang's, which calls these builtins.
-    pp.add_target_builtins(evocc_parser::builtins::CLANG_ATOMICS.iter().copied());
-    // <os/log.h> requires the os_log builtins; each call of one is a named
-    // refusal, E2965, so a unit that includes the header still compiles
-    // (EvoIR 10.1.14).
-    pp.add_target_builtins(OS_LOG_BUILTINS);
-    pp.add_target_builtins([
-        "__builtin_bit_cast",
-        "__builtin_neon_vld1q_v",
-        "__builtin_neon_vst1q_v",
-        "__builtin_neon_vzipq_v",
-        "__builtin_neon_vuzpq_v",
-    ]);
-    // The SDK marks declarations with Clang's availability attribute only
-    // when the compiler reports it (EvoIR 10.1.9).
     pp.add_target_attributes(ATTRIBUTES);
     pp.add_target_features(FEATURES);
     // Apple guards the rounding declarations with this Armv8 feature macro.

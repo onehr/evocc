@@ -42,6 +42,7 @@ fn strict_hosted_wide_helpers_keep_mode_status_and_total_raw_conversion() {
             &[MirValue::Int(1), MirValue::Int(1)],
             MirLimits::new(1000),
             env,
+            &evocc_types::TargetDataLayout::aarch64_unknown_linux_gnu(),
         )
         .unwrap();
         assert_eq!(
@@ -65,6 +66,7 @@ fn strict_hosted_wide_helpers_keep_mode_status_and_total_raw_conversion() {
                 &[value(input)],
                 MirLimits::new(1000),
                 env,
+                &evocc_types::TargetDataLayout::aarch64_unknown_linux_gnu(),
             )
             .unwrap();
             assert_eq!(result.results, vec![MirValue::Int(lo), MirValue::Int(hi)]);
@@ -100,6 +102,7 @@ fn machine_strictness_survives_text_execution_and_allocation() {
             rounding: FpRounding::Upward,
             flags: FpStatus::DIV_BY_ZERO,
         },
+        &evocc_types::TargetDataLayout::aarch64_unknown_linux_gnu(),
     )
     .unwrap();
     assert_eq!(result.results[0], value(0x3ff0000000000001));
@@ -161,6 +164,7 @@ fn strict_conversion_keeps_semantic_integer_width_and_pure_guard_status() {
             &[value(input)],
             MirLimits::new(100),
             environment,
+            &evocc_types::TargetDataLayout::aarch64_unknown_linux_gnu(),
         )
         .unwrap();
         assert_eq!(result.results[0], MirValue::Int(expected));
@@ -174,6 +178,7 @@ fn strict_conversion_keeps_semantic_integer_width_and_pure_guard_status() {
             &[value(input)],
             MirLimits::new(100),
             environment,
+            &evocc_types::TargetDataLayout::aarch64_unknown_linux_gnu(),
         )
         .unwrap();
         assert_eq!(guard.world.fp_environment(), environment);
@@ -200,6 +205,7 @@ fn dynamic_rounding_admission_is_not_reused_as_a_fixed_environment_check() {
             rounding: FpRounding::Upward,
             flags: FpStatus::NONE,
         },
+        &evocc_types::TargetDataLayout::aarch64_unknown_linux_gnu(),
     )
     .unwrap_err();
     assert!(

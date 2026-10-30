@@ -170,6 +170,7 @@ pub(super) fn symbolic_address(
     strings: &BTreeMap<usize, u64>,
     label_addresses: &BTreeMap<usize, String>,
 ) -> Result<(String, i64, bool), LowerError> {
+    let pointer_type = |value| pointer_descriptor(unit, target, value);
     let span = expression.span();
     let error = || LowerError::StaticRelocation { span };
     let symbol_address = |id: SymbolId| -> Result<(String, i64, bool), LowerError> {
@@ -268,13 +269,9 @@ pub(super) fn symbolic_address(
         CHirExpr::Member(base, name, _) | CHirExpr::PtrMember(base, name, _) => {
             let direct = matches!(expression, CHirExpr::Member(..));
             let addressed = CHirExpr::Unary(UnaryOp::AddrOf, base, span);
-            let record = evocc_chir::PointerTypeDesc::from_expression(
-                unit.symbols(),
-                unit.types(),
-                if direct { &addressed } else { base },
-            )
-            .map_err(|_| error())?
-            .pointee();
+            let record = pointer_type(if direct { &addressed } else { base })
+                .map_err(|_| error())?
+                .pointee();
             let path =
                 evocc_chir::record_member_path(unit.types(), record, name).ok_or_else(error)?;
             let member = path.last().ok_or_else(error)?.field_ty();
@@ -400,11 +397,10 @@ pub(super) fn symbolic_address(
             let value =
                 evocc_chir::interp::interpret_static_integer_expression(unit, index, target)
                     .map_err(|_| error())?;
-            let scale =
-                evocc_chir::PointerTypeDesc::from_expression(unit.symbols(), unit.types(), pointer)
-                    .ok()
-                    .and_then(|ty| target.layout_of(unit.types(), ty.pointee()).ok())
-                    .map_or(1, |layout| layout.size_bytes);
+            let scale = pointer_type(pointer)
+                .ok()
+                .and_then(|ty| target.layout_of(unit.types(), ty.pointee()).ok())
+                .map_or(1, |layout| layout.size_bytes);
             let delta = (value.cast(CIntegerType::LONG).raw_bits() as i64)
                 .checked_mul(i64::try_from(scale).map_err(|_| error())?)
                 .ok_or_else(error)?;
@@ -1000,4 +996,17 @@ pub(super) fn subobject_offset(
         }
     }
     Ok((offset, current, bit_field))
+}
+
+fn pointer_descriptor(
+    unit: &CHirUnit<'_>,
+    target: &TargetDataLayout,
+    expression: &CHirExpr<'_>,
+) -> Result<evocc_chir::PointerTypeDesc, evocc_chir::place::MemoryPlaceError> {
+    evocc_chir::PointerTypeDesc::from_expression_with_target(
+        unit.symbols(),
+        unit.types(),
+        expression,
+        target,
+    )
 }

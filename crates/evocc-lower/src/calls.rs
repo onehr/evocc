@@ -158,7 +158,11 @@ impl<'a> FunctionLowerer<'a> {
                             }
                             // Use the existing opaque, ordered assembly
                             // path: this is a hardware fence, not a call.
-                            self.emit_barrier("dmb ish", span, state)?;
+                            self.emit_barrier(
+                                self.target.isa().memory_barrier(false),
+                                span,
+                                state,
+                            )?;
                             return Ok(None);
                         }
                         "__atomic_thread_fence" | "__atomic_signal_fence" => {
@@ -182,17 +186,13 @@ impl<'a> FunctionLowerer<'a> {
                                     feature: "invalid fence order",
                                 })?;
                             self.lower_discarded_expr(argument, state)?;
-                            // A thread fence is the same opaque, ordered
-                            // barrier as `__sync_synchronize`, `dmb ishld`
-                            // when it only acquires. A signal fence orders the
-                            // compiler only: an empty barrier template.
                             use evocc_evoir::AtomicOrder as O;
                             let template = if spelling == "__atomic_signal_fence" {
                                 ""
-                            } else if matches!(order, O::Consume | O::Acquire) {
-                                "dmb ishld"
                             } else {
-                                "dmb ish"
+                                self.target
+                                    .isa()
+                                    .memory_barrier(matches!(order, O::Consume | O::Acquire))
                             };
                             if order != O::Relaxed {
                                 self.emit_barrier(template, span, state)?;

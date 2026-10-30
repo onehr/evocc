@@ -94,7 +94,7 @@ pub(super) fn emit_simd(
         MInst::Floating { .. } => {
             let label = format!(
                 "{}fp_{}_{}",
-                if target == Target::Linux { ".L" } else { "L" },
+                if target.is_elf() { ".L" } else { "L" },
                 function,
                 *copies
             );
@@ -102,7 +102,7 @@ pub(super) fn emit_simd(
             crate::floating::emit(text, inst, &name, &label);
         }
         MInst::Aes { dst, op, args } => {
-            if target == Target::Linux {
+            if target.is_elf() {
                 let _ = writeln!(text, "    .arch_extension crypto");
             }
             if op.arity() == 2 {
@@ -146,7 +146,7 @@ pub(super) fn emit_simd(
                 let lanes = u16::from(*bytes) * 8 / lane_bits;
                 let label = format!(
                     "{}vector_lane_{}_{}",
-                    if target == Target::Linux { ".L" } else { "L" },
+                    if target.is_elf() { ".L" } else { "L" },
                     function,
                     *copies
                 );
@@ -907,13 +907,13 @@ pub(super) fn emit_frame_addresses(
         // incoming stack slot)" and `gr_top` is "save area + 64".
         MInst::FrameAddress { dst, place } => match place {
             crate::FramePlace::IncomingStack => {
-                let offset = target.abi().facts.incoming_argument_offset(0);
+                let offset = target.abi_facts().incoming_argument_offset(0);
                 emit_add_immediate(text, "add", &name(*dst), FRAME_POINTER_X, offset);
             }
             crate::FramePlace::RegisterSaveTop => {
-                let top = frame
-                    .register_save
-                    .map_or(0, |(_, base)| base + target.abi().general_save_area_bytes());
+                let top = frame.register_save.map_or(0, |(_, base)| {
+                    base + target.aarch64_abi().general_save_area_bytes()
+                });
                 emit_frame_address(text, &name(*dst), top, frame);
             }
             // Section 5's activation-address rows (revision 0.17). The
@@ -1121,7 +1121,7 @@ pub(super) fn emit_boundary_and_assembly(
         // the prologue saves the pair first", and the caller writes its own
         // at increasing addresses from the `sp` it calls with.
         MInst::IncomingArg { dst, slot } => {
-            let offset = target.abi().facts.incoming_argument_offset(*slot);
+            let offset = target.abi_facts().incoming_argument_offset(*slot);
             let _ = writeln!(
                 text,
                 "    ldr {}, [{FRAME_POINTER_X}, #{offset}]",
@@ -1129,7 +1129,7 @@ pub(super) fn emit_boundary_and_assembly(
             );
         }
         MInst::OutgoingArg { src, slot } => {
-            let offset = target.abi().facts.outgoing_argument_offset(*slot);
+            let offset = target.abi_facts().outgoing_argument_offset(*slot);
             let _ = writeln!(text, "    str {}, [{STACK_POINTER}, #{offset}]", name(*src));
         }
         MInst::Asm(body) => emit_assembly(text, target, body, &[], function, spell),

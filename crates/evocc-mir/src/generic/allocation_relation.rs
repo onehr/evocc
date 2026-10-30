@@ -636,7 +636,7 @@ where
         let mut actual = actual.iter();
         for (index, value) in original.iter().enumerate() {
             let location = if indirect && index + 1 == original.len() {
-                Ok(abi.indirect_result)
+                Ok(abi.require_indirect_result()?)
             } else {
                 cursor.place(usize::from(value.class.bank()), value.class.spill_words())
             };
@@ -927,7 +927,7 @@ where
     let mut cursor = ArgumentCursor::new(target.abi().argument_banks);
     for (index, value) in first.args.iter().enumerate() {
         let place = if indirect && index + 1 == first.args.len() {
-            Place::Register(target.abi().indirect_result)
+            Place::Register(target.abi().require_indirect_result()?)
         } else {
             match cursor.place(usize::from(value.class.bank()), value.class.spill_words()) {
                 Ok(n) => Place::Register(n),

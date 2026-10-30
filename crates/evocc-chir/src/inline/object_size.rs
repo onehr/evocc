@@ -325,11 +325,9 @@ impl<'a> Substitution<'a, '_> {
         {
             return Ok(value);
         }
-        let integer =
-            crate::constant::integer_expression_type(value, &self.unit.types, &self.unit.symbols)
-                .ok_or_else(|| {
-                self.error(value.span(), "object extent capture is not integer-valued")
-            })?;
+        let integer = self.integer_expression_type(value).ok_or_else(|| {
+            self.error(value.span(), "object extent capture is not integer-valued")
+        })?;
         let rank = [
             IntRank::Bool,
             IntRank::Char,
@@ -536,12 +534,9 @@ impl<'a> Substitution<'a, '_> {
             CHirExpr::EvaluateOnce(value, _) => self.pointer_bounds(value, c, depth + 1),
             CHirExpr::Unary(UnaryOp::AddrOf, value, _) => self.lvalue_bounds(value, c, depth + 1),
             CHirExpr::Unary(UnaryOp::Deref, pointer, _)
-                if PointerTypeDesc::from_expression(
-                    &self.unit.symbols,
-                    &self.unit.types,
-                    pointer,
-                )
-                .is_ok_and(|ty| self.is_array(ty.pointee())) =>
+                if self
+                    .pointer_descriptor(pointer)
+                    .is_ok_and(|ty| self.is_array(ty.pointee())) =>
             {
                 self.pointer_bounds(pointer, c, depth + 1)
             }
@@ -549,18 +544,10 @@ impl<'a> Substitution<'a, '_> {
                 self.place_bounds(place, c, depth + 1)
             }
             CHirExpr::Binary(op @ (BinaryOp::Add | BinaryOp::Sub), a, b, _) => {
-                let (pointer, index, pointee) = if let Ok(ty) =
-                    PointerTypeDesc::from_expression(&self.unit.symbols, &self.unit.types, a)
-                {
+                let (pointer, index, pointee) = if let Ok(ty) = self.pointer_descriptor(a) {
                     (*a, *b, ty.pointee())
                 } else if *op == BinaryOp::Add {
-                    (
-                        *b,
-                        *a,
-                        PointerTypeDesc::from_expression(&self.unit.symbols, &self.unit.types, b)
-                            .ok()?
-                            .pointee(),
-                    )
+                    (*b, *a, self.pointer_descriptor(b).ok()?.pointee())
                 } else {
                     return None;
                 };
@@ -677,9 +664,7 @@ impl<'a> Substitution<'a, '_> {
         if depth >= 64 || place.is_bit_field() {
             return None;
         }
-        place
-            .validate_against(&self.unit.symbols, &self.unit.types)
-            .ok()?;
+        self.validate_memory_place(place).ok()?;
         let mut bounds = match place.root() {
             PlaceRoot::Object { symbol } => {
                 let object = self.unit.symbols.symbol(*symbol).ok()?;

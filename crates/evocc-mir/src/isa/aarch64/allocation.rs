@@ -20,7 +20,7 @@ impl Aarch64Allocation {
     #[must_use]
     pub const fn for_target(target: Target) -> Self {
         Self {
-            abi: &target.abi().facts,
+            abi: target.abi_facts(),
         }
     }
 }

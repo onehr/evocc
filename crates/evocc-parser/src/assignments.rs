@@ -329,7 +329,15 @@ impl<'src, 'arena> Parser<'src, 'arena> {
         expression: &'arena CHirExpr<'arena>,
     ) -> Option<MemoryPlace<'arena>> {
         let (root, projections, value_ty) = self.resolve_place_chain(expression)?;
-        MemoryPlace::derive(&self.symbols, &self.types, root, projections, value_ty).ok()
+        MemoryPlace::derive_with_target(
+            &self.symbols,
+            &self.types,
+            root,
+            projections,
+            value_ty,
+            &self.target_layout,
+        )
+        .ok()
     }
 
     /// Whether the designated object is rooted in `register` storage.
@@ -587,7 +595,13 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             let element = self.string_element_type(prefix);
             return PointerTypeDesc::to_object(&self.types, element);
         }
-        PointerTypeDesc::from_expression(&self.symbols, &self.types, expression).ok()
+        PointerTypeDesc::from_expression_with_target(
+            &self.symbols,
+            &self.types,
+            expression,
+            &self.target_layout,
+        )
+        .ok()
     }
 
     /// The subscript's type after integer promotion, which is what a backend
@@ -704,7 +718,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             self.report("E2102", "invalid-update-operands", target_span);
             None
         })?;
-        let place = match MemoryPlace::derive(
+        let place = match MemoryPlace::derive_with_target(
             &self.symbols,
             &self.types,
             PlaceRoot::PointerExpression {
@@ -713,6 +727,7 @@ impl<'src, 'arena> Parser<'src, 'arena> {
             },
             Vec::new(),
             pointer_type.pointee(),
+            &self.target_layout,
         ) {
             Ok(place) => place,
             Err(_) => {

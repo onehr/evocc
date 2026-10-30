@@ -34,6 +34,7 @@ pub(super) fn reachable_memory_requirements(
     unit: &CHirUnit<'_>,
     entry: SymbolId,
     linkage: &crate::linkage::SymbolLinkage,
+    target: &TargetDataLayout,
 ) -> MemoryRequirements {
     let mut requires_memory = false;
     let mut visited_functions: BTreeSet<SymbolId> = BTreeSet::new();
@@ -75,7 +76,7 @@ pub(super) fn reachable_memory_requirements(
                         FunctionParameters::Unspecified => false,
                     }
             });
-            if signature_requires_memory || statement_requires_memory(unit, body) {
+            if signature_requires_memory || statement_requires_memory(unit, body, target) {
                 requires_memory = true;
             }
             let mut referenced = ReferencedSymbols::default();
@@ -475,7 +476,11 @@ pub(super) fn collect_place_symbols<'arena>(
     }
 }
 
-pub(super) fn declaration_requires_memory(unit: &CHirUnit<'_>, declaration: &CHirDecl<'_>) -> bool {
+pub(super) fn declaration_requires_memory(
+    unit: &CHirUnit<'_>,
+    declaration: &CHirDecl<'_>,
+    target: &TargetDataLayout,
+) -> bool {
     let CHirDecl::Object(declaration) = declaration else {
         return false;
     };
@@ -489,7 +494,7 @@ pub(super) fn declaration_requires_memory(unit: &CHirUnit<'_>, declaration: &CHi
                 .any(|action| match action {
                     InitAction::StoreScalar { value, .. }
                     | InitAction::CopyAggregate { value, .. } => {
-                        expression_requires_memory(unit, value)
+                        expression_requires_memory(unit, value, target)
                     }
                     InitAction::StoreString { .. } => true,
                     InitAction::ZeroScalar { .. } => false,
@@ -505,7 +510,11 @@ pub(super) fn type_requires_memory(types: &TypeInterner, ty: TypeId) -> bool {
     })
 }
 
-pub(super) fn expression_requires_memory(unit: &CHirUnit<'_>, expression: &CHirExpr<'_>) -> bool {
+pub(super) fn expression_requires_memory(
+    unit: &CHirUnit<'_>,
+    expression: &CHirExpr<'_>,
+    target: &TargetDataLayout,
+) -> bool {
     if unit.stack_allocation_size(expression).is_some() {
         return true;
     }
@@ -551,48 +560,48 @@ pub(super) fn expression_requires_memory(unit: &CHirUnit<'_>, expression: &CHirE
         | CHirExpr::BuiltinFrameAddress { .. } => true,
         CHirExpr::Unary(_, operand, _)
         | CHirExpr::EvaluateOnce(operand, _)
-        | CHirExpr::BitBuiltin { operand, .. } => expression_requires_memory(unit, operand),
+        | CHirExpr::BitBuiltin { operand, .. } => expression_requires_memory(unit, operand, target,),
         CHirExpr::Cast(ty, operand, _) => {
-            type_requires_memory(unit.types(), *ty) || expression_requires_memory(unit, operand)
+            type_requires_memory(unit.types(), *ty) || expression_requires_memory(unit, operand, target,)
         }
         CHirExpr::Binary(_, left, right, _)
         | CHirExpr::Comma(left, right, _)
         | CHirExpr::Elvis(left, right, _)
         | CHirExpr::BuiltinExpect(left, right, _) => {
-            expression_requires_memory(unit, left) || expression_requires_memory(unit, right)
+            expression_requires_memory(unit, left, target,) || expression_requires_memory(unit, right, target,)
         }
         CHirExpr::Ternary(condition, then_expression, else_expression, _) => {
-            expression_requires_memory(unit, condition)
-                || expression_requires_memory(unit, then_expression)
-                || expression_requires_memory(unit, else_expression)
+            expression_requires_memory(unit, condition, target,)
+                || expression_requires_memory(unit, then_expression, target,)
+                || expression_requires_memory(unit, else_expression, target,)
         }
         CHirExpr::Call(callee, arguments, _) => {
             (!matches!(callee, CHirExpr::Ident { facts, .. } if facts.category() == ExprCategory::FunctionDesignator)
-                && PointerTypeDesc::from_expression(unit.symbols(), unit.types(), callee)
+                && PointerTypeDesc::from_expression_with_target(unit.symbols(), unit.types(), callee, target,)
                     .is_ok_and(|p| {
                         matches!(
                             unit.types().get(p.pointee()).map(|t| &t.kind),
                             Some(TypeKind::Function { .. })
                         )
                     })
-                && expression_requires_memory(unit, callee))
+                && expression_requires_memory(unit, callee, target,))
                 || arguments
                     .iter()
-                    .any(|argument| expression_requires_memory(unit, argument))
+                    .any(|argument| expression_requires_memory(unit, argument, target,))
         }
         // The result pointer is written even when the mathematical operation
         // does not overflow, so checked arithmetic always selects the explicit
         // memory task machine.
         CHirExpr::CheckedArithmetic { .. } => true,
         CHirExpr::BuiltinVarArgs { first, second, .. } => {
-            expression_requires_memory(unit, first)
-                || second.is_some_and(|second| expression_requires_memory(unit, second))
+            expression_requires_memory(unit, first, target,)
+                || second.is_some_and(|second| expression_requires_memory(unit, second, target,))
         }
-        CHirExpr::StatementExpr { body, .. } => statement_requires_memory(unit, body),
-        CHirExpr::Assign { target, value, .. } => {
-            expression_requires_memory(unit, target) || expression_requires_memory(unit, value)
+        CHirExpr::StatementExpr { body, .. } => statement_requires_memory(unit, body, target,),
+        CHirExpr::Assign { target: destination, value, .. } => {
+            expression_requires_memory(unit, destination, target,) || expression_requires_memory(unit, value, target,)
         }
-        CHirExpr::Update { target, .. } => expression_requires_memory(unit, target),
+        CHirExpr::Update { target: destination, .. } => expression_requires_memory(unit, destination, target,),
         CHirExpr::Lit(_, _)
         | CHirExpr::CharLit(_, _)
         | CHirExpr::LabelAddress { .. }

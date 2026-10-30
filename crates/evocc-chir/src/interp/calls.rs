@@ -22,10 +22,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         &self,
         callee: &CHirExpr<'arena>,
     ) -> Option<TypeId> {
-        let candidate =
-            PointerTypeDesc::from_expression(self.unit.symbols(), self.unit.types(), callee)
-                .ok()?
-                .pointee();
+        let candidate = self.pointer_descriptor(callee).ok()?.pointee();
         match self.unit.types().get(candidate).map(|ty| &ty.kind) {
             Some(TypeKind::Function { .. }) => Some(candidate),
             _ => None,

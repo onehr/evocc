@@ -222,7 +222,7 @@ impl EntryArguments {
     }
 }
 
-pub(super) fn lower_arguments(
+pub(crate) fn lower_arguments(
     target: Target,
     lowerer: &mut Lowerer,
     function: &Function,

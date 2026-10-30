@@ -1061,7 +1061,7 @@ fn interpret_resolved_function_with_fp_environment(
     environment: evocc_types::floating::FpEnvironment,
 ) -> Result<InterpretOutcome, InterpreterError> {
     let linkage = unit.symbol_linkage().map_err(InterpreterError::Linkage)?;
-    let requirements = reachable_memory_requirements(unit, function, linkage);
+    let requirements = reachable_memory_requirements(unit, function, linkage, target);
     let memory_mode = requirements.requires_memory;
     let mut interpreter = Interpreter::new(unit, target, limits, memory_mode)?;
     // The requested function is validated before any whole-unit work, so a
@@ -1156,49 +1156,60 @@ impl ReferencedSymbols {
 }
 
 /// Whether execution needs object state, including places rooted at integer casts.
-pub fn statement_requires_memory(unit: &CHirUnit<'_>, statement: &CHirStmt<'_>) -> bool {
+pub fn statement_requires_memory(
+    unit: &CHirUnit<'_>,
+    statement: &CHirStmt<'_>,
+    target: &TargetDataLayout,
+) -> bool {
     match statement {
         CHirStmt::Asm(_) => true,
-        CHirStmt::Expr(expression, _) => expression_requires_memory(unit, expression),
+        CHirStmt::Expr(expression, _) => expression_requires_memory(unit, expression, target),
         CHirStmt::ComputedGoto(_, _) => true,
         CHirStmt::If(condition, then_statement, else_statement, _) => {
-            expression_requires_memory(unit, condition)
-                || statement_requires_memory(unit, then_statement)
+            expression_requires_memory(unit, condition, target)
+                || statement_requires_memory(unit, then_statement, target)
                 || else_statement
-                    .is_some_and(|statement| statement_requires_memory(unit, statement))
+                    .is_some_and(|statement| statement_requires_memory(unit, statement, target))
         }
         CHirStmt::Switch(expression, body, _) | CHirStmt::While(expression, body, _) => {
-            expression_requires_memory(unit, expression) || statement_requires_memory(unit, body)
+            expression_requires_memory(unit, expression, target)
+                || statement_requires_memory(unit, body, target)
         }
         CHirStmt::DoWhile(body, condition, _) => {
-            statement_requires_memory(unit, body) || expression_requires_memory(unit, condition)
+            statement_requires_memory(unit, body, target)
+                || expression_requires_memory(unit, condition, target)
         }
         CHirStmt::For(initializer, condition, step, body, _) => {
             let initializer_requires_memory = match initializer {
                 CHirForInit::Empty => false,
-                CHirForInit::Expression(expression) => expression_requires_memory(unit, expression),
+                CHirForInit::Expression(expression) => {
+                    expression_requires_memory(unit, expression, target)
+                }
                 CHirForInit::Declaration(declarations) => declarations
                     .iter()
-                    .any(|declaration| declaration_requires_memory(unit, declaration)),
+                    .any(|declaration| declaration_requires_memory(unit, declaration, target)),
             };
             initializer_requires_memory
-                || condition.is_some_and(|expression| expression_requires_memory(unit, expression))
-                || step.is_some_and(|expression| expression_requires_memory(unit, expression))
-                || statement_requires_memory(unit, body)
+                || condition
+                    .is_some_and(|expression| expression_requires_memory(unit, expression, target))
+                || step
+                    .is_some_and(|expression| expression_requires_memory(unit, expression, target))
+                || statement_requires_memory(unit, body, target)
         }
-        CHirStmt::Return(expression, _) => {
-            expression.is_some_and(|expression| expression_requires_memory(unit, expression))
-        }
+        CHirStmt::Return(expression, _) => expression
+            .is_some_and(|expression| expression_requires_memory(unit, expression, target)),
         CHirStmt::Compound(items, _, _) => items.iter().any(|item| match item {
             CHirBlockItem::Declaration(declaration) => {
-                declaration_requires_memory(unit, declaration)
+                declaration_requires_memory(unit, declaration, target)
             }
-            CHirBlockItem::Statement(statement) => statement_requires_memory(unit, statement),
+            CHirBlockItem::Statement(statement) => {
+                statement_requires_memory(unit, statement, target)
+            }
         }),
         CHirStmt::Label(_, child, _)
         | CHirStmt::Case(_, child, _)
         | CHirStmt::CaseRange(_, _, child, _)
-        | CHirStmt::Default(child, _) => statement_requires_memory(unit, child),
+        | CHirStmt::Default(child, _) => statement_requires_memory(unit, child, target),
         CHirStmt::Break(_)
         | CHirStmt::Continue(_)
         | CHirStmt::Goto(_, _)

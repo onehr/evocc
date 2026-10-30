@@ -768,13 +768,7 @@ impl<'a> FunctionLowerer<'a> {
             }
         }
         let mut result = match value {
-            Some(value)
-                if evocc_chir::expression_is_void(
-                    value,
-                    self.unit.symbols(),
-                    self.unit.types(),
-                ) =>
-            {
+            Some(value) if self.expression_is_void(value) => {
                 self.lower_discarded_expr(value, &mut continued)?;
                 None
             }

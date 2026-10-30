@@ -15,8 +15,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         facts: ExprFacts,
         target_span: SourceSpan,
     ) -> Result<(), InterpreterError> {
-        place
-            .validate_against(self.unit.symbols(), self.unit.types())
+        self.validate_memory_place(place)
             .map_err(|_| InterpreterError::UnsupportedExpression {
                 feature: "invalid typed memory place",
                 span: target_span,

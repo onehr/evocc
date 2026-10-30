@@ -42,12 +42,13 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 span: *operand_span,
             });
         }
-        let place = MemoryPlace::derive(
+        let place = MemoryPlace::derive_with_target(
             self.unit.symbols(),
             self.unit.types(),
             PlaceRoot::Object { symbol: *symbol },
             Vec::new(),
             facts.ty(),
+            &self.target,
         )
         .map_err(|_| InterpreterError::UnsupportedExpression {
             feature: "invalid address-of place",
@@ -77,7 +78,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
             .get(&(expression as *const CHirExpr<'_> as usize))
             .ok_or_else(unsupported)?;
         let ty = if decay {
-            PointerTypeDesc::from_expression(self.unit.symbols(), self.unit.types(), expression)
+            self.pointer_descriptor(expression)
                 .map_err(|_| unsupported())?
         } else {
             let array = literal
@@ -93,7 +94,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         expression: &CHirExpr<'arena>,
     ) -> Result<PointerTypeDesc, InterpreterError> {
         let span = expression.span();
-        PointerTypeDesc::from_expression(self.unit.symbols(), self.unit.types(), expression)
+        self.pointer_descriptor(expression)
             .map_err(|_| InterpreterError::UnsupportedExpression {
                 feature: "invalid pointer expression type",
                 span,
@@ -145,14 +146,15 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
         ) {
             return Ok(ValueType::Floating(kind));
         }
-        if let Ok(ty) =
-            crate::place::record_expression_type(self.unit.symbols(), self.unit.types(), expression)
-        {
+        if let Ok(ty) = crate::place::record_expression_type(
+            self.unit.symbols(),
+            self.unit.types(),
+            expression,
+            &self.target,
+        ) {
             return self.value_type(ty, expression.span());
         }
-        if let Ok(pointer) =
-            PointerTypeDesc::from_expression(self.unit.symbols(), self.unit.types(), expression)
-        {
+        if let Ok(pointer) = self.pointer_descriptor(expression) {
             return Ok(ValueType::Pointer(pointer));
         }
         self.infer_integer_type(expression).map(ValueType::Integer)
@@ -382,6 +384,34 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 feature: "pointer subtraction overflow",
                 span,
             },
+        )
+    }
+}
+
+impl Interpreter<'_, '_> {
+    pub(super) fn pointer_descriptor(
+        &self,
+        expression: &CHirExpr<'_>,
+    ) -> Result<PointerTypeDesc, crate::place::MemoryPlaceError> {
+        PointerTypeDesc::from_expression_with_target(
+            self.unit.symbols(),
+            self.unit.types(),
+            expression,
+            &self.target,
+        )
+    }
+    pub(super) fn validate_memory_place(
+        &self,
+        place: &MemoryPlace<'_>,
+    ) -> Result<(), crate::place::MemoryPlaceError> {
+        place.validate_against_with_target(self.unit.symbols(), self.unit.types(), &self.target)
+    }
+    pub(super) fn expression_is_void(&self, expression: &CHirExpr<'_>) -> bool {
+        crate::expression_is_void(
+            expression,
+            self.unit.symbols(),
+            self.unit.types(),
+            &self.target,
         )
     }
 }

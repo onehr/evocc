@@ -32,7 +32,7 @@ impl<'unit, 'arena> Interpreter<'unit, 'arena> {
                 Ok(None)
             }
             CHirStmt::Return(Some(expression), span) => {
-                if crate::expression_is_void(expression, self.unit.symbols(), self.unit.types()) {
+                if self.expression_is_void(expression) {
                     tasks.push(MachineTask::FinishVoidReturn(*span));
                     self.schedule_discarded_expression(expression, tasks)?;
                 } else {

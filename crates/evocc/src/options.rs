@@ -928,9 +928,7 @@ impl OptionParser {
         }
 
         let darwin_deployment = self.select_deployment(target, lenient)?;
-        // Apple's arm64 convention passes every anonymous argument on the stack,
-        // and its `va_list` is one pointer.
-        self.codegen.anonymous_on_stack = target.is_darwin();
+        self.codegen.anonymous_on_stack = target.platform().layout().anonymous_arguments_on_stack();
         if self.program_arguments.is_some() && mode != DriverMode::InterpretCHir {
             return Err("program arguments require --interpret-c-hir".into());
         }

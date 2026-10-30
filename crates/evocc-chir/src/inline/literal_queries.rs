@@ -135,9 +135,7 @@ impl<'a> Substitution<'a, '_> {
     ) -> Option<CInteger> {
         let (pointer, projections, value_ty, qualifiers) = match expression {
             CHirExpr::MemoryRead { place, .. } => {
-                place
-                    .validate_against(&self.unit.symbols, &self.unit.types)
-                    .ok()?;
+                self.validate_memory_place(place).ok()?;
                 let pointer = match place.root() {
                     PlaceRoot::PointerExpression { pointer, .. } => *pointer,
                     PlaceRoot::Object { symbol } => self.ident(*symbol, expression.span()),
@@ -151,9 +149,7 @@ impl<'a> Substitution<'a, '_> {
                 )
             }
             CHirExpr::Unary(UnaryOp::Deref, pointer, _) => {
-                let ty =
-                    PointerTypeDesc::from_expression(&self.unit.symbols, &self.unit.types, pointer)
-                        .ok()?;
+                let ty = self.pointer_descriptor(pointer).ok()?;
                 (*pointer, &[][..], ty.pointee(), ty.pointee_qualifiers())
             }
             _ => return None,
@@ -244,19 +240,14 @@ impl<'a> Substitution<'a, '_> {
                 self.literal_query_pointer(pointer, c, depth)
             }
             CHirExpr::Binary(op @ (BinaryOp::Add | BinaryOp::Sub), left, right, _) => {
-                let (pointer, index) =
-                    if PointerTypeDesc::from_expression(&self.unit.symbols, &self.unit.types, left)
-                        .is_ok()
-                    {
-                        (*left, *right)
-                    } else if *op == BinaryOp::Add {
-                        (*right, *left)
-                    } else {
-                        return None;
-                    };
-                let pointer_type =
-                    PointerTypeDesc::from_expression(&self.unit.symbols, &self.unit.types, pointer)
-                        .ok()?;
+                let (pointer, index) = if self.pointer_descriptor(left).is_ok() {
+                    (*left, *right)
+                } else if *op == BinaryOp::Add {
+                    (*right, *left)
+                } else {
+                    return None;
+                };
+                let pointer_type = self.pointer_descriptor(pointer).ok()?;
                 self.query_byte_type(pointer_type.pointee()).then_some(())?;
                 let (data, offset) = self.literal_query_pointer(pointer, c, depth)?;
                 let index = self.literal_query_index(index)?;

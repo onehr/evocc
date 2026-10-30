@@ -377,22 +377,9 @@ pub struct AllocationSiteManifest<'arena> {
     string_spans: BTreeMap<SpanKey, Vec<AllocationSiteOrdinal>>,
 }
 
-impl<'arena> AllocationSiteManifest<'arena> {
-    /// Derive the complete manifest without recursively walking host stack.
-    ///
-    /// The walk covers both written initializers and normalized scalar-plan
-    /// expressions. Expression and initializer identities act as
-    /// cycle/shared-node guards; declarations and statements instead undergo
-    /// occurrence validation, so mounting either node twice is a structural
-    /// error. Merged file objects select the initializer-bearing definition,
-    /// or the first tentative definition when no initializer exists, then use
-    /// that selected anchor's canonical traversal encounter to assign
-    /// module-wide order. `FileId` allocation order is never treated as
-    /// translation-unit source order.
-    pub fn derive(unit: &crate::CHirUnit<'arena>) -> Result<Self, AllocationSiteManifestError> {
-        Deriver::new(unit).derive()
-    }
+mod target;
 
+impl<'arena> AllocationSiteManifest<'arena> {
     #[must_use]
     pub fn sites(&self) -> &[AllocationSite<'arena>] {
         &self.sites
@@ -544,6 +531,7 @@ enum WorkItem<'arena> {
 
 struct Deriver<'unit, 'arena> {
     unit: &'unit crate::CHirUnit<'arena>,
+    target: &'unit evocc_types::TargetDataLayout,
     next_encounter: u64,
     objects: HashMap<SymbolId, PendingObject<'arena>>,
     strings: Vec<PendingSite<'arena>>,
@@ -559,9 +547,13 @@ struct Deriver<'unit, 'arena> {
 }
 
 impl<'unit, 'arena> Deriver<'unit, 'arena> {
-    fn new(unit: &'unit crate::CHirUnit<'arena>) -> Self {
+    fn new(
+        unit: &'unit crate::CHirUnit<'arena>,
+        target: &'unit evocc_types::TargetDataLayout,
+    ) -> Self {
         Self {
             unit,
+            target,
             next_encounter: 0,
             objects: HashMap::new(),
             strings: Vec::new(),
@@ -1532,11 +1524,9 @@ impl<'unit, 'arena> Deriver<'unit, 'arena> {
             CHirExpr::MemoryRead {
                 place, target_span, ..
             } => {
-                place
-                    .validate_against(self.unit.symbols(), self.unit.types())
-                    .map_err(|_| AllocationSiteManifestError::InvalidMemoryPlace {
-                        span: *target_span,
-                    })?;
+                self.validate_memory_place(place).map_err(|_| {
+                    AllocationSiteManifestError::InvalidMemoryPlace { span: *target_span }
+                })?;
                 for source in place.source_expressions().rev() {
                     work.push(WorkItem::Expression {
                         expression: source,
@@ -1550,11 +1540,9 @@ impl<'unit, 'arena> Deriver<'unit, 'arena> {
                 value,
                 ..
             } => {
-                place
-                    .validate_against(self.unit.symbols(), self.unit.types())
-                    .map_err(|_| AllocationSiteManifestError::InvalidMemoryPlace {
-                        span: *target_span,
-                    })?;
+                self.validate_memory_place(place).map_err(|_| {
+                    AllocationSiteManifestError::InvalidMemoryPlace { span: *target_span }
+                })?;
                 work.push(WorkItem::Expression {
                     expression: value,
                     current_function,
@@ -1575,11 +1563,9 @@ impl<'unit, 'arena> Deriver<'unit, 'arena> {
             CHirExpr::MemoryUpdate {
                 place, target_span, ..
             } => {
-                place
-                    .validate_against(self.unit.symbols(), self.unit.types())
-                    .map_err(|_| AllocationSiteManifestError::InvalidMemoryPlace {
-                        span: *target_span,
-                    })?;
+                self.validate_memory_place(place).map_err(|_| {
+                    AllocationSiteManifestError::InvalidMemoryPlace { span: *target_span }
+                })?;
                 for source in place.source_expressions().rev() {
                     work.push(WorkItem::Expression {
                         expression: source,
