@@ -1,20 +1,19 @@
-# Built with EvoCC: fifteen small, real demos
+# Showcase capture notes
 
-The README uses **five rows of three**. These are program-generated pixels,
-visualizations of real output, or verbatim excerpts of recorded test logs. They
-are not invented application windows. Rendering a chart does not imply the CLI
-program has a GUI. No benchmark verdict is changed by these small examples, and
-no kernel rebuild or large disk image is needed.
+The README gallery has fifteen images in five rows of three. Each image is program output, a plot
+of program output or a verbatim excerpt of a recorded test log. A chart of the output of a
+command-line program does not mean that the program has a graphical interface. The captures change
+no benchmark verdict, and they need no kernel rebuild and no large disk image.
 
-The six demo captures, the Doom frame and the five log cards were taken on
-2026-10-27. They use the builds and the logs of the release campaign and the
-kernel replay of that day, with the release compiler of commit `08bf09bd`. The
-three games are older captures (see below).
+The six demo captures, the Doom frame and the five log cards come from the builds and the logs of
+the release campaign and the kernel replay of 2026-10-27, with the release compiler of commit
+`08bf09bd`. The three game captures date from 2026-09-29
+([Three native C games](#three-native-c-games)).
 
 | Demo | What actually executes | Scope / results |
 |---|---|---|
 | Doom / Freedoom | Recorded demo1, repetition 0, frame 350 | [81 C units; paired headless demos](../../../tests/contracts/ladder-doom-receipt.json); no live input or audio |
-| TinyCC ray tracer | EvoCC-built TinyCC compiles a new C program; that program computes reflections and emits RGB pixels | [11-unit compiler](../../../tests/contracts/ladder-tinycc-receipt.json); ray tracer is compiled by TinyCC, not directly by EvoCC; platform libm |
+| TinyCC ray tracer | EvoCC-built TinyCC compiles a new C program; that program computes reflections and emits RGB pixels | [11-unit compiler](../../../tests/contracts/ladder-tinycc-receipt.json); TinyCC, not EvoCC, compiles the ray tracer; platform libm |
 | Lua fractal | EvoCC-built Lua performs Mandelbrot iteration and computes every displayed RGB pixel | [34 C units](../../../tests/contracts/ladder-lua-receipt.json); 192×108 image, up to 120 iterations per pixel |
 | SQLite tests | The accepted EvoCC build of `testfixture` ran SQLite's own `veryquick` suite: 0 errors out of 329,803 tests | [86 C units](../../../tests/contracts/ladder-sqlite-receipt.json); Tcl is reference-built; see [test-log cards](#test-log-cards) |
 | jq tests | `make check` ran jq's 9 test programs and Oniguruma's 21, and all passed | [70 C units](../../../tests/contracts/ladder-jq-receipt.json); the build creates a missing version stamp; see [test-log cards](#test-log-cards) |
@@ -31,68 +30,57 @@ three games are older captures (see below).
 
 ## Three native C games
 
-The new row was captured on September 29, 2026. The EvoCC build that emitted
-the game objects has the SHA-256 `5785fa7b1ba0…` ([`games.json`](games.json)).
-No record names its source commit; the capture commit is `91fce9c8`. The games
-were not built again for release 0.1.0, because their pinned sources and data
-are not retained offline. All game C objects were emitted
-by EvoCC, assembled/linked with the reference GNU toolchain, and run as AArch64
-Linux executables. SDL2, Mesa **llvmpipe**, libc/libm, image/font/audio libraries,
-Xvfb and the framebuffer observation adapter are reference-built dependencies.
-This is not a claim that EvoCC compiled the graphics stack or the running host
-kernel. Game music/audio, multiplayer and complete gameplay were **not tested**.
+The EvoCC build that emitted the game objects has the SHA-256 `5785fa7b1ba0…`
+([`games.json`](games.json)). No record names its source commit; the capture commit is `91fce9c8`.
+The games were not built again for release 0.1.0, because their pinned sources and data are not
+kept offline. EvoCC emitted all game C objects. The reference GNU toolchain assembled and linked
+them into AArch64 Linux executables. SDL2, Mesa llvmpipe, libc and libm, the image, font and audio
+libraries, Xvfb and the framebuffer adapter are reference-built. Game music and audio, multiplayer
+and complete gameplay were not tested.
 
-[`games.json`](games.json) retains original and EvoCC compile argv, compiler,
-source/header, assembly, object and executable hashes, both run commands,
-exit codes and frame hashes. [`games-packages.tsv`](games-packages.tsv) identifies
-the runtime packages. Upstream source commits and archive digests are pinned in
-[`games.py`](../../../tools/ladder/games.py); Tyrian 2.1 and LibreQuake v0.09-beta
-lite have separate data-archive hashes. Neverball's `.sol` geometry is generated
-by the GCC-built map compiler and separately hashed; game execution is EvoCC.
+[`games.json`](games.json) keeps the original and the EvoCC compile argv, the compiler, source,
+header, assembly, object and executable hashes, both run commands, the exit codes and the frame
+hashes. [`games-packages.tsv`](games-packages.tsv) identifies the runtime packages.
+[`games.py`](../../../tools/ladder/games.py) pins the upstream source commits and archive digests;
+Tyrian 2.1 and LibreQuake v0.09-beta lite have separate data-archive hashes. The GCC-built map
+compiler generates Neverball's `.sol` geometry, which has its own hash; EvoCC compiles the game.
 
-The reference and subject use **the same explicit demo build configuration**,
-not every project's default warning/tuning flags. OpenTyrian disables networking;
-Neverball retains its working curl build backend but uses `online 0` at runtime;
-Quakespasm disables MP3/Vorbis. Unsupported driver options are not silently erased.
+The reference and the subject use the same explicit demo build configuration, not the default
+warning and tuning flags of each project. OpenTyrian disables networking. Neverball keeps its curl
+build backend and uses `online 0` at runtime. Quakespasm disables MP3 and Vorbis. Unsupported
+driver options stay in the command line; the build does not remove them.
 
-The [small SDL adapter](../../../tools/showcase/sdl_capture.c) reads the actual
-framebuffer before presentation. It retains only presentations 180, 360 and 600,
-then requests normal shutdown with `SDL_QUIT` at 610. Neverball also receives an
-Enter key at 60. OpenTyrian uses its built-in attract replay; Quakespasm uses
-`+timedemo demo1`. PNGs show presentation 600, losslessly encoded without cropping,
-repainting, generated overlays or upstream screenshots. The checker reconstructs
-the captured PPM from each PNG and verifies its original hash.
+The [SDL adapter](../../../tools/showcase/sdl_capture.c) reads the framebuffer before
+presentation. It keeps only presentations 180, 360 and 600, then requests normal shutdown with
+`SDL_QUIT` at 610. Neverball also receives an Enter key at 60. OpenTyrian uses its built-in attract
+replay; Quakespasm uses `+timedemo demo1`. Each PNG shows presentation 600, losslessly encoded,
+without cropping, repainting, overlays or upstream screenshots. The checker reconstructs the
+captured PPM from each PNG and verifies its original hash.
 
-**Comparison boundary:** OpenTyrian's three saved frames match GCC byte-for-byte.
-Neverball and Quakespasm both render and exit successfully, but their captured
-frame hashes differ from GCC. This lane does **not** assert visual/semantic
-equivalence for those two games. Presentation count is not a synchronized
-simulation-state identifier; timing and animation remain potential causes, not
-a completed diagnosis. Their images establish native execution only, not a full
-benchmark PASS. No existing roadmap verdict is promoted by this row.
+OpenTyrian's three saved frames match GCC byte for byte. Neverball and Quakespasm render and exit
+with status 0, but their frame hashes differ from GCC. Their images show native execution, not
+equivalence with GCC and not a benchmark PASS. A presentation number does not identify a
+simulation state: timing and animation can cause the difference, and no diagnosis is complete.
 
 ### Neverball source correction
 
-The sole game-source change is the disclosed
-[`neverball-mtrl.patch`](../../../tools/showcase/neverball-mtrl.patch), applied to
-**both** GCC and EvoCC inputs. Upstream `tobyte(f)` omitted parentheses around
-its macro argument. In `toushort(40.0f)`, this produced `40 - 40 * 255 = -10160`,
-then converted it to an unsigned byte. GCC's `-fsanitize=float-cast-overflow`
-reports that conversion, and EvoCC correctly stops with E3063. The fix computes
-`(40 - 40) * 255` instead; it does not suppress the compiler's check. The
-[minimal regression](../../../tests/fixtures/neverball-material-conversion.c)
-tests original rejection and corrected execution in both interpreters.
+The one game-source change is
+[`neverball-mtrl.patch`](../../../tools/showcase/neverball-mtrl.patch), applied to the GCC and the
+EvoCC inputs. Upstream `tobyte(f)` has no parentheses around its macro argument. In
+`toushort(40.0f)`, this computes `40 - 40 * 255 = -10160` and converts it to an unsigned byte.
+GCC's `-fsanitize=float-cast-overflow` reports that conversion, and EvoCC stops with E3063. The
+patch computes `(40 - 40) * 255`; it does not suppress the check. The
+[minimal regression](../../../tests/fixtures/neverball-material-conversion.c) tests the refusal of
+the original and the execution of the corrected form in both interpreters.
 
-The game builds also exposed and fixed three compiler gaps: the ISO C99 option
-alias, missing `__TIME__`, and an include at EOF without a trailing newline.
-Each has a focused driver regression; the dependent Rust tests and Clippy were
-rerun. `__DATE__` and `__TIME__` now share one translation timestamp, honoring
-`SOURCE_DATE_EPOCH`.
+The game builds found three compiler gaps, each fixed with a driver regression test: the ISO C99
+option alias, the missing `__TIME__`, and an include at end of file without a final newline.
+`__DATE__` and `__TIME__` share one translation timestamp, which `SOURCE_DATE_EPOCH` sets.
 
 ### Game reproduction
 
-This is a separate, bounded graphics container; do not reuse a kernel disk image.
-Stage the five pinned archives under `.build/ladder/games/download/`:
+The games run in a separate graphics container. Do not reuse a kernel disk image. Stage the five
+pinned archives under `.build/ladder/games/download/`:
 
 - `opentyrian.tar.gz`: [pinned C source](https://codeload.github.com/opentyrian/opentyrian/tar.gz/5a9d8daa2811347bec3a0c42f8da87682378f3cb).
 - `neverball.tar.gz`: [pinned C source](https://codeload.github.com/Neverball/neverball/tar.gz/d9df382786d7e5635a1457b6b465ab943cf4fee6).
@@ -100,15 +88,14 @@ Stage the five pinned archives under `.build/ladder/games/download/`:
 - `tyrian21.zip`: [freeware game data](https://camanis.net/tyrian/tyrian21.zip).
 - `librequake-lite.zip`: [v0.09-beta lite data](https://github.com/lavenderdotpet/LibreQuake/releases/download/v0.09-beta/lite.zip).
 
-`python3 tools/ladder/games.py prepare` checks the pins, extracts locally and
-applies the disclosed Neverball patch. Use Python 3.12+ for safe tar extraction.
-Mount the repository read-only at `/repo` and `.build/ladder` writable at `/work`
-in `evo-nexlab:sealed`. Install these additional reference dependencies:
+`python3 tools/ladder/games.py prepare` checks the pins, extracts the archives and applies the
+Neverball patch. Use Python 3.12 or later for safe tar extraction. Mount the repository read-only at
+`/repo` and `.build/ladder` writable at `/work` in `evo-nexlab:sealed`. Install these additional
+reference dependencies:
 `libsdl2-dev libsdl2-ttf-dev libgl-dev libgl1-mesa-dri libpng-dev libjpeg-dev
 libvorbis-dev libcurl4-openssl-dev xvfb xauth pkg-config`.
-The frozen base uses historical Debian snapshot metadata; package versions from
-the measured container are retained in the package manifest, not inferred from
-whatever a future `apt-get` happens to install.
+The package versions of the measured container are in `games-packages.tsv`; a later `apt-get` can
+install other versions.
 
 Inside the container, on fresh trees:
 
@@ -124,15 +111,15 @@ gcc-14 -shared -fPIC -O2 -Wall -Wextra -I/usr/include/SDL2 \
   /repo/tools/showcase/sdl_capture.c -o /work/games/sdl_capture.so -lSDL2 -lGL -ldl
 ```
 
-On the host, emit each game's assembly using the current EvoCC binary:
+On the host, emit the assembly of each game with the EvoCC binary that you test:
 
 ```sh
-python3 tools/ladder/games.py emit opentyrian
-python3 tools/ladder/games.py emit neverball
-python3 tools/ladder/games.py emit quakespasm
+python3 tools/ladder/games.py emit opentyrian --evocc target/release/evocc
+python3 tools/ladder/games.py emit neverball --evocc target/release/evocc
+python3 tools/ladder/games.py emit quakespasm --evocc target/release/evocc
 ```
 
-Then inside the container, repeat these commands for each game name:
+Then, inside the container, run these commands for each game name:
 
 ```sh
 python3 /repo/tools/ladder/games.py link opentyrian --work /work/games
@@ -140,104 +127,68 @@ python3 /repo/tools/ladder/game_capture.py opentyrian gcc
 python3 /repo/tools/ladder/game_capture.py opentyrian evocc
 ```
 
-`python3 tools/showcase_games.py --publish` publishes validated captures on the
-host (also expects the retained LibreQuake notices in the work directory).
-`python3 tools/showcase.py --check` validates the entire committed gallery offline.
-The three new PNGs total about **1.6 MiB**; source/build/data scratch work was about
-**688 MiB**, not another kernel-sized image. No videos are retained.
+On the host, `python3 tools/showcase_games.py --publish` publishes the validated captures. It also
+needs the LibreQuake notices in the work directory. The three PNGs total 1.6 MiB. The capture used
+about 688 MiB of scratch space for sources, builds and data. No video is kept.
 
 ## Test-log cards
 
-The SQLite, jq, cJSON, Linux and Toybox cards quote the recorded logs of accepted
-runs. They run nothing new. `python3 tools/showcase.py --render-logs` reads each
-log from the local `.evidence` tree, checks the verdict in the receipt and copies
-whole lines. Where a receipt pins the log hash (Linux and Toybox), the log must
-match it. [`captures.json`](captures.json) records the source path, the log hash,
-the first line number of each excerpt and the lines themselves.
+The SQLite, jq, cJSON, Linux and Toybox cards quote the recorded logs of accepted runs. They run
+nothing new. `python3 tools/showcase.py --render-logs` reads each log from the local `.evidence`
+tree, checks the verdict in the receipt and copies whole lines. Where a receipt pins the log hash
+(Linux and Toybox), the log must match it. [`captures.json`](captures.json) records the source path,
+the log hash, the first line number of each excerpt and the lines themselves.
 
-The card text is verbatim. Only trailing spaces are removed. A line that is too
-long is clipped at the window edge. A line with an ellipsis marks lines that are
-left out between excerpts. The colors are ours: they mark result lines and dim
-progress lines and timestamps. `--check` draws each card again from
-`captures.json` and compares it with the committed SVG. Where the local log
-exists, it also compares the excerpt with the log.
+The card text is verbatim; only trailing spaces are removed. A line that is too long is clipped at
+the window edge. A line with an ellipsis marks lines that are left out between excerpts. The colors
+are ours: they mark result lines and dim progress lines and timestamps. `--check` draws each card
+again from `captures.json` and compares it with the committed SVG. Where the local log exists, it
+also compares the excerpt with the log.
 
-- **SQLite.** The receipt's test command runs
-  `testfixture test/testrunner.tcl --jobs 2 veryquick` as an unprivileged user.
-  All 86 C units of `testfixture` come from EvoCC. The Tcl library is
-  reference-built.
-- **jq.** Run `20261027T121424Z`: all 70 C units come from EvoCC, and the
-  original `make check V=1` passes 30 test programs, 9 from jq and 21 from
-  Oniguruma. The relink and test logs contain no compile command. The earlier
-  run counted only 69 units. Automake prints the compile rule for
-  `src/main.c` across continued lines, and the build-log parser skipped them,
-  so GCC compiled `main.c`. Also, the release ships `src/version.h` without its
-  `.remake-version-h` stamp, so every later `make` regenerated the header and
-  recompiled `main.c` with GCC. The parser now joins continued lines, and the
-  jq build creates the stamp with an old time. See B07a in
-  [TODO.md](../../../TODO.md).
-- **cJSON.** `./cJSON_test` prints the examples from the cJSON README. Then 26
-  Unity test programs run 216 tests: none fails, and upstream marks one as
-  ignored. The Unity framework itself is GCC-built.
-- **Linux.** The serial log comes from a kernel that Kbuild built directly
-  with `make ARCH=arm64 HOSTCC=gcc-14 CC=evocc`, Image `6df1602bbb74eef5…`, on
-  the host boot lane, on 2026-10-27. Its version banner names
-  `evocc 0.1.0 (08bf09bd7631 2026-10-27)`. All 2,799 target C objects and the
-  five C-to-assembly helpers come from one release compiler (`3520c267…`, the
-  Linux build of commit `08bf09bd`), in one full build in a fresh output tree.
-  The receipt ties each object to its compile command and compiler hash in the
-  build log. No GCC target C object remains. GNU tools
-  assemble the 67 assembly files, link the kernel, build the host programs and
-  preprocess one device-tree source. The configuration is the frozen GCC
-  kernel configuration after `olddefconfig` with EvoCC. Only compiler
-  capability probes differ, and the hardening features behind them are off in
-  the GCC configuration too. Both configurations ask for kernel return-address
-  signing. Kbuild passes `-mbranch-protection=pac-ret` to every target C
-  object. EvoCC signs a return address that leaves `x30`; an allocated leaf
-  that keeps it in `x30` does not need a signature. The host lane enables pointer
-  authentication, so this boot runs the signed code. Six compiler options
-  have no effect, and the receipt lists them. The kernel also boots on the TCG
-  lane, whose CPU model has no pointer authentication. Nine paired upstream
-  kselftest programs, with 125 subtests, pass on both the GCC and the EvoCC
-  kernel. Both lanes ran QEMU 11.1.2, which differs from the pinned
-  QEMU contract; the receipt allows and records this drift. The console prints
-  the kernel's earlier messages late, so the `EVO_*` lines of the test init
-  program appear before `Run /init` in the log. The card leaves them out. The
-  unchanged original KVM tests are reported separately: demand-paging and
-  memslot-stress pass all 10 modes on GCC, and on EvoCC both reach their
-  120-second limit after 6 of 10 modes. These are not part of the 125 passing
-  subtests. The older 7,008-unit build used object
-  substitution after a GCC Kbuild run; it
-  keeps its own receipt, but its raw configuration is no longer available.
-  Full kselftest and KUnit runs remain open.
-- **Toybox.** The original `make tests` recipe ran 1,669 tests: 1,648 pass, 1
-  fails and 20 skip. The PASS, FAIL and SKIP lines are identical to those of the
-  GCC build. The one failure, `tar ownership`, fails in both builds.
+- The SQLite card comes from the receipt's test command,
+  `testfixture test/testrunner.tcl --jobs 2 veryquick`, run as an unprivileged user. All 86 C units
+  of `testfixture` come from EvoCC. The Tcl library is reference-built.
+- The jq card comes from run `20261027T121424Z`. All 70 C units come from EvoCC, and the original
+  `make check V=1` passes 30 test programs, 9 from jq and 21 from Oniguruma. The relink and test
+  logs contain no compile command. The release ships `src/version.h` without its
+  `.remake-version-h` stamp, so each `make` would regenerate the header and compile `main.c` again
+  with GCC. The jq build creates the stamp with an old time (B07a in [TODO.md](../../../TODO.md)).
+- The cJSON card comes from `./cJSON_test`, which prints the examples of the cJSON README. Then 26
+  Unity test programs run 216 tests: none fails, and upstream marks one as ignored. The Unity
+  framework is GCC-built.
+- The Linux card comes from the serial log of the host boot lane on 2026-10-27, for the kernel that
+  Kbuild built with `make ARCH=arm64 HOSTCC=gcc-14 CC=evocc`, Image `6df1602bbb74eef5…`. Its
+  version banner names `evocc 0.1.0 (08bf09bd7631 2026-10-27)`. The console prints the earlier
+  kernel messages late, so the `EVO_*` lines of the test init program appear before `Run /init` in
+  the log. The card leaves them out. [Linux boot, kselftest and KUnit](../../evidence.md#linux-boot-kselftest-and-kunit)
+  gives the build, boot and test results of this kernel.
+- The Toybox card comes from the original `make tests` recipe, which ran 1,669 tests: 1,648 pass,
+  1 fails and 20 skip. The PASS, FAIL and SKIP lines are identical to those of the GCC build. The
+  one failure, `tar ownership`, fails in both builds.
 
 ## Source and identity
 
-Six cases are fresh executions of existing measured builds. Doom reuses a named
-recorded output, and five cards quote recorded test logs. The TinyCC executable
-hash matches its original receipt. Other installed EvoCC object hashes are
-checked against the original records. For the crypto adapter, **every archive
-member** must match an audited EvoCC object before linking.
-All invoked application executable hashes are checked before/after execution;
-new adapter hashes and compiler commands are recorded too. Those new hashes
-identify these captures, not retroactive binary hashes for older receipts.
+Six cases are fresh executions of existing measured builds. Doom reuses a named recorded output,
+and five cards quote recorded test logs. The TinyCC executable hash matches its original receipt.
+The other installed EvoCC object hashes are checked against the original records. For the crypto
+adapter, every archive member must match an audited EvoCC object before linking. Each invoked
+application executable hash is checked before and after execution; the new adapter hashes and
+compiler commands are recorded too. These new hashes identify these captures. They are not binary
+hashes of the older receipts.
 
-Runtime/CRT, libm and reference adapters remain explicit dependencies. The
-application container is not the EvoCC-built kernel shown in the boot tile.
-[`captures.json`](captures.json) preserves commands, complete stdout/stderr,
-fixture and executable hashes, measurements and asset hashes. Separate text
-files retain raw output. The [demo sources](../../../tools/showcase) are small;
-the [renderer](../../../tools/showcase_visuals.py) only plots their results.
-PNG embedding preserves emitted RGB bytes exactly; palette/diagram choices for
-structured data are presentation, not extra measurements.
+The runtime and CRT, libm and the reference adapters stay explicit dependencies. The application
+container is not the EvoCC-built kernel of the boot tile. [`captures.json`](captures.json) keeps
+the commands, the complete stdout and stderr, the fixture and executable hashes, the measurements
+and the asset hashes. Separate text files keep the raw output. The
+[demo sources](../../../tools/showcase) are small; the
+[renderer](../../../tools/showcase_visuals.py) only plots their results. PNG embedding keeps the
+emitted RGB bytes exactly; the palette and diagram choices for structured data are presentation,
+not measurements.
 
 ## Reproduce
 
-From the repository root, with existing `.build/ladder` artifacts and the sealed
-`evo-nexlab:sealed` image available (no downloads or full rebuilds):
+From the repository root, with the existing `.build/ladder` artifacts and the sealed
+`evo-nexlab:sealed` image (no downloads or full rebuilds):
 
 ```sh
 container run --rm --platform linux/arm64 --network none --cpus 2 --memory 1G \
@@ -248,26 +199,27 @@ python3 tools/showcase.py --render --check
 ```
 
 `--render` also draws the test-log cards. To draw only those cards, run
-`python3 tools/showcase.py --render-logs --check`. Both need the local
-`.evidence` tree that the receipts name.
+`python3 tools/showcase.py --render-logs --check`. Both need the local `.evidence` tree that the
+receipts name. `python3 tools/showcase.py --check` alone needs only Python and the committed files:
 
-The container creates temporary demo executables/data and is removed on exit.
-Results are published only after all six cases succeed. The numerical image
-data is retained; no video or heavyweight build tree is added. Renderer uses
-ImageMagick only to compare the existing Doom PNG against its PPM; the PPM is
-also reconstructed to BGRA and matched against the accepted exact frame hash.
-`--check` alone needs only Python and committed files.
+```console
+$ python3 tools/showcase.py --check
+Showcase: 15 images, 6 output demos, 5 log excerpts and 3 paired game captures verified
+```
+
+The container makes temporary demo executables and data and is removed on exit. The capture
+publishes results only after all six cases succeed. The numerical image data is kept; no video or
+large build tree is added. The renderer uses ImageMagick only to compare the existing Doom PNG with
+its PPM; it also reconstructs the PPM as BGRA and matches it against the accepted frame hash.
 
 ## Artwork
 
-Doom's screenshot uses **Freedoom 0.13.0 Phase 1**, not commercial Doom game
-data. Its notices remain in [FREEDOOM-COPYING.txt](FREEDOOM-COPYING.txt) and
-[FREEDOOM-CREDITS.txt](FREEDOOM-CREDITS.txt). LibreQuake notices are in
-[LIBREQUAKE-COPYING.txt](LIBREQUAKE-COPYING.txt) and
-[LIBREQUAKE-CREDITS.txt](LIBREQUAKE-CREDITS.txt). Neverball retains its
-[license/exceptions](NEVERBALL-LICENSE.md) and [GPL text](NEVERBALL-COPYING.txt).
-OpenTyrian's screenshot depicts the original **Tyrian 2.1 freeware** artwork;
-freeware game data is not being relicensed as EvoCC-owned art. Game/project names
-and artwork remain their respective owners' work; these captures imply no
-endorsement. Other scenes and demo inputs are repository-owned procedural
-examples. No AI-generated imagery is used.
+Doom's screenshot uses Freedoom 0.13.0 Phase 1, not commercial Doom game data. Its notices are in
+[FREEDOOM-COPYING.txt](FREEDOOM-COPYING.txt) and [FREEDOOM-CREDITS.txt](FREEDOOM-CREDITS.txt).
+LibreQuake notices are in [LIBREQUAKE-COPYING.txt](LIBREQUAKE-COPYING.txt) and
+[LIBREQUAKE-CREDITS.txt](LIBREQUAKE-CREDITS.txt). Neverball keeps its
+[license and exceptions](NEVERBALL-LICENSE.md) and [GPL text](NEVERBALL-COPYING.txt).
+OpenTyrian's screenshot shows the original Tyrian 2.1 freeware artwork; EvoCC does not relicense
+freeware game data as its own art. Game and project names and artwork stay the work of their
+owners; these captures imply no endorsement. The other scenes and demo inputs are
+repository-owned procedural examples. No AI-generated imagery is used.

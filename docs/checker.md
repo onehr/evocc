@@ -1,83 +1,58 @@
 # Check an executed C path
 
-`evocc --check` preprocesses and lowers one C translation unit, then runs the
-existing EvoIR program interpreter. It does not invoke a native compiler or
-produce an executable.
+`evocc --check FILE.c` preprocesses one translation unit, lowers it to EvoIR and runs `main` in the
+EvoIR interpreter. It invokes no native compiler and writes no executable. `evo check FILE.c` runs
+this command.
+
+```console
+$ target/release/evocc --check tests/ui/check/division.c
+error[E3002]: integer-division-by-zero
+  --> tests/ui/check/division.c:1:39
+   |
+ 1 | int main(void) { int zero = 0; return 1 / zero; }
+   |                                       ^^^^^^^^ integer-division-by-zero
+   |
+   = note: this operation failed on the executed path
+   = help: check the divisor before the division or remainder operation
+```
+
+- `main` has no parameters, or `int argc, char **argv` with `argc` 1 and `argv[0]` the input path.
+- Constructors, `main` and destructors share one memory state and one budget of 100,000
+  interpreter steps.
+- Preprocessing and language options such as `-I`, `-D` and `-std=gnu11` keep their meanings.
+  `--check` refuses a second action mode and the native-only options `--ub-checks`, `--frame-opt`,
+  `--isel-opt` and `--regalloc-opt`.
+- Exit status 0: the executed path completed with no finding. A nonzero return value of `main` is
+  not a failure. Exit status 1: a diagnostic stopped compilation or execution.
+- The step limit (`E3008`) and a call that the interpreter cannot run (`E3039`) end an incomplete
+  check. An incomplete check is not a pass and not a finding of undefined behavior.
+
+[`spec/diagnostics.md`](../spec/diagnostics.md) defines the text and JSON forms of a diagnostic and
+the completion record. [Undefined behavior](../book/src/undefined-behavior.md) runs the command on
+example programs and states what a completed check does not show. A completed check also does not
+replace native or multithreaded tests.
+
+## Explanations
+
+`evocc --explain CODE` prints `crates/evocc/explain/CODE.md`. The build takes the codes from
+[EvoIR section 6.3](../spec/evoir.md#63-diagnostic-authority) and embeds one page for each code, so
+the binary needs no source checkout. A code without a row there is refused with exit status 1.
+`crates/evocc/explain/hints.txt` holds the one-line repair hints.
+`crates/evocc/tests/explain_pages.rs` runs the examples of each page, and
+`python3 tools/gen-error-index.py` copies the pages into the
+[error index](../book/src/error-index.md).
+
+## UI fixtures
+
+Each `tests/ui/check/NAME.c` has two blessed outputs: `NAME.stderr` for `--error-format=text` and
+`NAME.json` for `--error-format=json`. A `// flags:` line in the source replaces the default flag
+`--check`, and a `// exit:` line replaces the expected exit status 1.
 
 ```sh
-target/debug/evocc --check tests/ui/check/division.c
-# tests/ui/check/division.c: error[E3002]: integer-division-by-zero
-
-target/debug/evocc --explain E3002
-target/debug/evocc --check --error-format=json tests/ui/check/division.c
+cargo test --offline -p evocc --test check_product
+UPDATE_EXPECT=1 cargo test --offline -p evocc --test check_product
 ```
 
-The entry is the existing zero-source-argument `main` interface. Constructors,
-`main`, and destructors share the interpreter's existing memory state and
-100,000-step budget. Normal preprocessing and language options (`-I`, `-D`,
-`-std=gnu11`, and so on) retain their existing meanings. `--check` cannot be
-combined with another action mode or with native-only `--ub-checks`.
-
-Exit 0 means the admitted, executed path completed without a finding. A
-nonzero integer returned by `main` is reported but is not itself a checker
-failure. Exit 1 means a diagnostic stopped compilation or execution. Resource
-exhaustion and unmodeled operations are **incomplete checks**, not successful
-checks and not automatically undefined behavior. The checker does not invent
-results for unresolved external calls.
-
-This is not a static proof about other inputs, a whole-program absence-of-UB
-claim, or a replacement for native or multithreaded testing. Unsupported
-library calls, `main` arguments, system interactions and interpreter limits
-retain the existing refusal boundary. The new interface changes no interpreter
-semantics. Runtime EvoIR currently lacks source-span mappings: a runtime
-diagnostic therefore shows the input filename without an invented `1:1`
-location. Front-end diagnostics retain their actual line and column. The
-legacy interpreter command's text output remains unchanged.
-
-## Editor output
-
-`--error-format=json` emits one JSON diagnostic per stderr line. The stable
-`evocc.diagnostic.v1` record has these fields:
-
-| Field | Meaning |
-| --- | --- |
-| `schema`, `kind` | `evocc.diagnostic.v1`, `diagnostic` |
-| `severity` | `error` |
-| `code` | Existing E-code, or `null` for a driver usage error |
-| `message` | Existing diagnostic text; JSON escaping preserves its contents |
-| `phase` | Input, lexing, preprocessing, parsing, lowering, codegen, execution or driver |
-| `category` | Compilation, driver, undefined-behavior, resource-limit, unsupported-execution or execution-contract |
-| `source` | Source filename, or `null` if none applies |
-| `location` | Actual `{ "line": N, "column": N }`, or `null` when unavailable |
-| `explanation` | `available`, `todo` or `unavailable` |
-
-All enumerated strings are lowercase, hyphenated where shown. The category
-describes the existing diagnostic rather than redefining its semantic meaning;
-unclassified execution errors conservatively use `execution-contract`.
-`--survey` retains its parser recovery and emits independent JSON records.
-Successful `--check --error-format=json` writes a separate stdout record:
-
-```json
-{"schema":"evocc.check.v1","kind":"check","status":"completed","main_return":"7","claim":"executed-path-only","scope":"No finding from the implemented checks on the executed path. Pointer subtraction and ordering obligations are not checked. This does not check that the results are correct."}
-```
-
-Failure writes no completion record. Other action modes keep their existing
-stdout protocol; JSON affects their diagnostics only.
-
-## Explanation authority and UI fixtures
-
-The build derives `--explain` entries from
-[EvoIR section 6.3](../spec/evoir.md#63-diagnostic-authority), preserving the
-authoritative message and retired/withdrawn annotations. Named codes found
-elsewhere in the spec or compiler sources receive an explicit explanation
-TODO when the authority table has no row; an unknown code is rejected. The
-catalogue is embedded in the binary and does not need a source checkout at
-runtime. These are short authority pages, not a claim that every diagnostic
-already has a tutorial.
-
-The reviewed `.stderr` files in `tests/ui/check/` are blessed expected output.
-`cargo test --offline -p evocc --test check_product` compares them exactly and
-validates the public JSON channel with Python's standard JSON parser. There is
-no automatic blessing: a diagnostic change requires an explicit fixture edit
-and review of the underlying semantics. Existing legacy diagnostic suites also
-remain part of the full-workspace gate.
+The first command compares both outputs byte for byte and checks each JSON record with
+`tests/ui/check/validate.py`. The second rewrites the outputs. Review each changed output and the
+rule behind it before you commit it.
