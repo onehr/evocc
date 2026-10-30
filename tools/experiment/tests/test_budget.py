@@ -416,7 +416,9 @@ class BudgetTests(unittest.TestCase):
     def test_output_inside_the_repository_must_be_ignored(self):
         with self.assertRaisesRegex(budget.Failure, "output_must_be_ignored"):
             budget.fresh(ROOT / "tools/experiment/budget-output-that-git-tracks")
-        self.assertEqual(budget.fresh(ROOT / ".evidence/budget-unit-never-created"), ROOT / ".evidence/budget-unit-never-created")
+        # fresh() resolves the path; a worktree can link .evidence to another checkout.
+        self.assertEqual(budget.fresh(ROOT / ".evidence/budget-unit-never-created"),
+                         (ROOT / ".evidence/budget-unit-never-created").resolve())
         with self.assertRaisesRegex(budget.Failure, "output_directory_already_exists"):
             budget.fresh(HERE)
 
