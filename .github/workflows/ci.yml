@@ -25,7 +25,7 @@ jobs:
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 120
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - name: Export sealed Linux headers
         run: |
           docker build --platform linux/arm64 -t evo-nexlab:sealed -f .toolchain/Dockerfile.nexlab .toolchain
@@ -48,7 +48,7 @@ jobs:
       CARGO_PROFILE_DEV_DEBUG: line-tables-only
       CARGO_PROFILE_TEST_DEBUG: line-tables-only
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: actions/download-artifact@v4
         with: {name: linux-headers}
       - run: tar -xzf linux-headers.tar.gz
@@ -97,7 +97,7 @@ jobs:
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 120
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       # elan installs the toolchain that lean/lean-toolchain pins.
       - name: Install elan
         run: |
@@ -128,7 +128,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - name: Source size limits
         run: python3 tools/check-size.py
       - name: docs/status.md matches the receipts
